@@ -1,15 +1,5 @@
 /* eslint-disable no-unused-vars */
 /* eslint-disable no-undef */
-/**
- * Email utilities (professional, safe defaults, plaintext fallback, retry/backoff)
- *
- * - Uses import.meta.env.VITE_EMAIL_API_URL as API base if present
- * - Does NOT hardcode real credentials (defaults are empty). Store credentials in env or localStorage
- * - Sends multipart email (text + html)
- * - Plaintext is auto-generated from the HTML report for mail clients that prefer text
- * - Retry with exponential backoff on transient failures
- * - Masked logging for sensitive fields
- */
 
 const normalizeApiBase = (baseUrl) => {
   if (!baseUrl) return '/api';
@@ -19,6 +9,29 @@ const normalizeApiBase = (baseUrl) => {
 const EMAIL_API_BASE_URL = normalizeApiBase(import.meta.env.VITE_EMAIL_API_URL);
 const DEFAULT_RETRY = 3;
 const RETRY_BASE_MS = 800;
+
+const cleanValue = (value = '', { stripAllSpaces = false } = {}) => {
+  if (value == null) return '';
+  const str = typeof value === 'string' ? value : String(value);
+  const trimmed = str.trim();
+  return stripAllSpaces ? trimmed.replace(/\s+/g, '') : trimmed;
+};
+
+const normalizeSMTPConfig = (config = {}) => {
+  return {
+    host: cleanValue(config.host),
+    port: cleanValue(config.port || ''),
+    email: cleanValue(config.email),
+    password: cleanValue(config.password, { stripAllSpaces: true }),
+    security: config.security || 'tls'
+  };
+};
+
+const hasSMTPFields = (config) => {
+  if (!config) return false;
+  const { host, port, email, password } = normalizeSMTPConfig(config);
+  return !!host && !!port && !!email && !!password;
+};
 
 const mask = (value = '') => {
   if (!value) return '';
@@ -33,25 +46,46 @@ const mask = (value = '') => {
 export const getSMTPConfig = () => {
   try {
     const savedConfig = localStorage.getItem('smtpConfig');
-    if (savedConfig) return JSON.parse(savedConfig);
+    if (savedConfig) {
+      const parsed = normalizeSMTPConfig(JSON.parse(savedConfig));
+      if (hasSMTPFields(parsed)) {
+        console.log('📧 Loaded SMTP config from localStorage:', {
+          host: parsed.host,
+          port: parsed.port,
+          email: mask(parsed.email),
+          security: parsed.security
+        });
+        return parsed;
+      }
+      console.warn('⚠️ Invalid saved SMTP config, removing...');
+      localStorage.removeItem('smtpConfig');
+    }
   } catch (err) {
-    // ignore parse errors and fall back to defaults
+    console.error('❌ Error loading SMTP config:', err);
   }
 
-  // DO NOT include real credentials here. Use env or saved config.
-  return {
+  const envConfig = normalizeSMTPConfig({
     host: import.meta.env.VITE_SMTP_HOST || 'smtp.gmail.com',
     port: import.meta.env.VITE_SMTP_PORT || '587',
     email: import.meta.env.VITE_SMTP_EMAIL || '',
-    password: import.meta.env.VITE_SMTP_PASS || '',
-    security: import.meta.env.VITE_SMTP_SECURITY || 'tls' // 'tls' or 'ssl' or 'none'
-  };
+    password: import.meta.env.VITE_SMTP_PASSWORD || import.meta.env.VITE_SMTP_PASS || '',
+    security: import.meta.env.VITE_SMTP_SECURITY || 'tls'
+  });
+
+  console.log('📧 Using environment SMTP config:', {
+    host: envConfig.host,
+    port: envConfig.port,
+    email: mask(envConfig.email),
+    security: envConfig.security
+  });
+
+  return envConfig;
 };
 
 export const validateSMTPConfig = (config) => {
-  if (!config) return false;
-  const { host, port, email, password } = config;
-  return !!host && !!port && !!email && !!password;
+  const isValid = hasSMTPFields(config);
+  console.log('🔍 SMTP config validation:', { isValid, config: { ...config, password: mask(config.password) } });
+  return isValid;
 };
 
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
@@ -60,26 +94,33 @@ const sendRequestWithRetry = async (url, options = {}, retries = DEFAULT_RETRY) 
   let attempt = 0;
   while (attempt <= retries) {
     try {
+      console.log(`📤 Attempt ${attempt + 1}/${retries + 1} to send email`);
       const resp = await fetch(url, options);
       const json = await resp.json().catch(() => null);
+      
       if (resp.ok && json && (json.success === undefined || json.success === true)) {
+        console.log('✅ Email sent successfully');
         return { ok: true, response: json };
       }
-      // non-200, treat as error to potentially retry for server errors
+      
       const err = new Error(json?.message || `HTTP ${resp.status}`);
       err.status = resp.status;
       err.body = json;
+      if (json?.hint) err.hint = json.hint;
+      if (json?.error) err.serverError = json.error;
       throw err;
     } catch (err) {
       attempt += 1;
       const isRetryable = !err.status || (err.status >= 500 && err.status < 600);
-      // if not retryable or out of attempts -> throw
+      console.log(`❌ Attempt ${attempt} failed:`, { error: err.message, retryable: isRetryable });
+      
       if (!isRetryable || attempt > retries) {
         throw err;
       }
+      
       const backoff = RETRY_BASE_MS * Math.pow(2, attempt - 1);
-      // small jitter
       const jitter = Math.floor(Math.random() * 200);
+      console.log(`⏳ Retrying in ${backoff + jitter}ms...`);
       await delay(backoff + jitter);
     }
   }
@@ -109,14 +150,12 @@ const generatePlaintextFromSummary = (employee, summary, percentage) => {
 };
 
 export const generateAttendanceReport = (employee, summary) => {
-  // keep calculation deterministic here
   const present = Number(summary.presentDays || 0);
   const daysInPeriod = 31;
   const percentage = ((present / daysInPeriod) * 100).toFixed(1);
   const status = percentage >= 75 ? 'Excellent' : percentage >= 50 ? 'Good' : 'Needs Improvement';
   const statusColor = percentage >= 75 ? '#059669' : percentage >= 50 ? '#d97706' : '#dc2626';
 
-  // Professional HTML layout (no emoji, clear language)
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -206,6 +245,7 @@ export const generateAttendanceReport = (employee, summary) => {
 };
 
 export const sendEmail = async (to, subject, htmlContent, employeeName = '', options = {}) => {
+  // ALWAYS get fresh config from localStorage
   const config = getSMTPConfig();
 
   if (!validateSMTPConfig(config)) {
@@ -222,7 +262,6 @@ export const sendEmail = async (to, subject, htmlContent, employeeName = '', opt
   const fromAddress = options.from || `"APFRS Reports" <${config.email}>`;
   const replyToAddress = options.replyTo || config.email;
 
-  // email payload shaped for your server endpoint
   const payload = {
     config: {
       host: config.host,
@@ -236,22 +275,21 @@ export const sendEmail = async (to, subject, htmlContent, employeeName = '', opt
       to,
       subject,
       html: resolvedHtml,
-      // plain text fallback - best practice
       text: resolvedText,
       replyTo: replyToAddress
     }
   };
 
-  // log masked config for debugging only
-  console.info('Sending email', {
+  console.log('📧 Sending email request:', {
     to,
     subject,
+    from: fromAddress,
     smtpHost: config.host,
     smtpPort: config.port,
-    smtpUser: mask(config.email)
+    smtpUser: mask(config.email),
+    hasPassword: !!config.password
   });
 
-  // attempt with retry/backoff
   const res = await sendRequestWithRetry(`${EMAIL_API_BASE_URL}/send-email`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -261,17 +299,32 @@ export const sendEmail = async (to, subject, htmlContent, employeeName = '', opt
   return res.response;
 };
 
-// convenience wrapper that accepts employee object and summary computing
+// Import calculateSummary from your utils
+const calculateSummary = (employee) => {
+  // Your existing calculateSummary implementation
+  const presentDays = employee.attendance?.filter(a => a.status === 'Present').length || 0;
+  const absentDays = employee.attendance?.filter(a => a.status === 'Absent').length || 0;
+  const totalHours = employee.attendance?.reduce((sum, a) => sum + (parseFloat(a.hours) || 0), 0) || 0;
+  
+  return {
+    presentDays,
+    absentDays,
+    totalHours: totalHours.toFixed(1)
+  };
+};
+
+// Convenience wrapper for individual reports
 export const sendIndividualReport = async (employee) => {
-  const summary = calculateSummary(employee); // keep your implementation
+  console.log(`📤 Sending individual report to: ${employee.name} <${employee.email}>`);
+  const summary = calculateSummary(employee);
   const { html, text, subject, percentage } = generateAttendanceReport(employee, summary);
   const emailSubject = subject;
   return await sendEmail(employee.email, emailSubject, html, employee.name, { text });
 };
 
-// Bulk report sender with concurrency control (default sequential)
-// onProgress receives { current, total, name, status, error? }
+// Bulk report sender
 export const sendBulkReports = async (employees, onProgress = () => {}, concurrency = 1) => {
+  console.log(`📧 Starting bulk email to ${employees.length} employees`);
   const results = [];
   const queue = [...employees];
 
@@ -286,26 +339,38 @@ export const sendBulkReports = async (employees, onProgress = () => {}, concurre
 
     try {
       if (!emp.email || emp.email === 'N/A') {
-        throw new Error('No valid email');
+        throw new Error('No valid email address');
       }
       const r = await sendIndividualReport(emp);
       results.push({ employee: emp.name, email: emp.email, success: true, data: r });
       onProgress({ current: pos, total: employees.length, employee: emp.name, status: 'sent' });
     } catch (err) {
-      results.push({ employee: emp.name, email: emp.email, success: false, error: err?.message || String(err) });
-      onProgress({ current: pos, total: employees.length, employee: emp.name, status: 'error', error: err?.message || String(err) });
+      results.push({ 
+        employee: emp.name, 
+        email: emp.email, 
+        success: false, 
+        error: err?.message || String(err),
+        hint: err?.hint 
+      });
+      onProgress({ 
+        current: pos, 
+        total: employees.length, 
+        employee: emp.name, 
+        status: 'error', 
+        error: err?.message || String(err) 
+      });
     } finally {
       active -= 1;
       if (queue.length > 0) await next();
     }
   };
 
-  // start N workers
   const workers = Array.from({ length: Math.max(1, concurrency) }, () => {
     active += 1;
     return next();
   });
 
   await Promise.allSettled(workers);
+  console.log(`📧 Bulk email completed: ${results.filter(r => r.success).length}/${employees.length} successful`);
   return results;
 };

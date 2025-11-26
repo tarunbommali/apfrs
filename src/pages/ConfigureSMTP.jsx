@@ -1,14 +1,22 @@
 import React, { useState, useEffect } from 'react';
 
-const EMAIL_API_BASE_URL = '/api';
+const EMAIL_API_BASE_URL = import.meta.env.VITE_EMAIL_API_URL || '/email-send';
 
-const ENV_DEFAULT_SMTP_CONFIG = {
+const normalizeFormConfig = (cfg = {}) => ({
+  host: (cfg.host || '').trim(),
+  port: (cfg.port || '587').toString().trim() || '587',
+  email: (cfg.email || '').trim(),
+  password: typeof cfg.password === 'string' ? cfg.password.replace(/\s+/g, '') : '',
+  security: cfg.security || 'tls'
+});
+
+const ENV_DEFAULT_SMTP_CONFIG = normalizeFormConfig({
   host: import.meta.env.VITE_SMTP_HOST || 'smtp.gmail.com',
   port: import.meta.env.VITE_SMTP_PORT || '587',
   email: import.meta.env.VITE_SMTP_EMAIL || '',
-  password: import.meta.env.VITE_SMTP_PASSWORD || '',
+  password: import.meta.env.VITE_SMTP_PASSWORD || import.meta.env.VITE_SMTP_PASS || '',
   security: import.meta.env.VITE_SMTP_SECURITY || 'tls'
-};
+});
 
 const ConfigureSMTP = () => {
   const [config, setConfig] = useState({
@@ -29,7 +37,7 @@ const ConfigureSMTP = () => {
     // Load saved configuration from localStorage
     const savedConfig = localStorage.getItem('smtpConfig');
     if (savedConfig) {
-      setConfig(JSON.parse(savedConfig));
+      setConfig(normalizeFormConfig(JSON.parse(savedConfig)));
     } else {
       // Pre-fill with Gmail configuration
       setConfig({ ...defaultGmailConfig });
@@ -57,8 +65,10 @@ const ConfigureSMTP = () => {
     setSaveStatus('saving');
     
     try {
+      const normalizedConfig = normalizeFormConfig(config);
       // Save to localStorage
-      localStorage.setItem('smtpConfig', JSON.stringify(config));
+      localStorage.setItem('smtpConfig', JSON.stringify(normalizedConfig));
+      setConfig(normalizedConfig);
       setSaveStatus('success');
       setSaveMessage('SMTP configuration saved successfully!');
       
@@ -86,7 +96,10 @@ const ConfigureSMTP = () => {
     setConfig({ ...defaultGmailConfig });
   };
 
-  const isConfigComplete = (cfg) => cfg.host && cfg.port && cfg.email && cfg.password;
+  const isConfigComplete = (cfg) => {
+    const normalized = normalizeFormConfig(cfg);
+    return normalized.host && normalized.port && normalized.email && normalized.password;
+  };
 
   const testSMTPConfiguration = async () => {
     if (!isConfigComplete(config)) {
@@ -99,16 +112,17 @@ const ConfigureSMTP = () => {
     setTestMessage('Sending test email...');
 
     try {
+      const normalizedConfig = normalizeFormConfig(config);
       const response = await fetch(`${EMAIL_API_BASE_URL}/send-email`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          config,
+          config: normalizedConfig,
           emailData: {
-            from: `"SMTP Test" <${config.email}>`,
-            to: config.email,
+            from: `"SMTP Test" <${normalizedConfig.email}>`,
+            to: normalizedConfig.email,
             subject: 'SMTP Test Email - Faculty Attendance System',
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -117,10 +131,10 @@ const ConfigureSMTP = () => {
                 <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0;">
                   <h3 style="color: #374151; margin-top: 0;">Configuration Details:</h3>
                   <ul style="color: #6b7280;">
-                    <li><strong>Host:</strong> ${config.host}</li>
-                    <li><strong>Port:</strong> ${config.port}</li>
-                    <li><strong>Security:</strong> ${config.security}</li>
-                    <li><strong>Email:</strong> ${config.email}</li>
+                    <li><strong>Host:</strong> ${normalizedConfig.host}</li>
+                    <li><strong>Port:</strong> ${normalizedConfig.port}</li>
+                    <li><strong>Security:</strong> ${normalizedConfig.security}</li>
+                    <li><strong>Email:</strong> ${normalizedConfig.email}</li>
                   </ul>
                 </div>
                 <p style="color: #6b7280; font-size: 14px; text-align: center;">
@@ -136,14 +150,21 @@ const ConfigureSMTP = () => {
       const result = await response.json().catch(() => ({ success: false, message: 'Invalid server response' }));
 
       if (!response.ok || !result.success) {
-        throw new Error(result?.message || 'Failed to send test email');
+        const composedMessage = [result?.message, result?.hint, result?.error]
+          .filter(Boolean)
+          .join(' — ');
+        const err = new Error(composedMessage || 'Failed to send test email');
+        if (result?.hint) err.hint = result.hint;
+        throw err;
       }
 
       setTestStatus('success');
       setTestMessage('Test email sent successfully! Please check your inbox (and spam folder).');
     } catch (error) {
+      const hint = error?.hint;
+      const detailedMessage = [error?.message, hint].filter(Boolean).join(' — ');
       setTestStatus('error');
-      setTestMessage(error.message || 'Failed to send test email. Please check your configuration and try again.');
+      setTestMessage(detailedMessage || 'Failed to send test email. Please check your configuration and try again.');
     }
   };
 
@@ -183,7 +204,7 @@ const ConfigureSMTP = () => {
           <div className="lg:col-span-2">
             <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
               {/* Form Header */}
-              <div className="bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4">
+              <div className="bg-linear-to-r from-indigo-500 to-purple-600 px-6 py-4">
                 <h2 className="text-xl font-bold text-white">SMTP Server Configuration</h2>
                 <p className="text-indigo-100 text-sm mt-1">
                   Enter your email provider's SMTP settings
