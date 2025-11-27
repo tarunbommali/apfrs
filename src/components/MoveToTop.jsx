@@ -32,7 +32,7 @@ const MoveToTop = () => {
   return (
     <button
       onClick={scrollToTop}
-      className="fixed bottom-6 right-6 z-50 flex items-center justify-center w-12 h-12 bg-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 group"
+      className="fixed bottom-6 right-6 z-50 flex items-center justify-center w-12 h-12 bg-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 group border border-slate-200"
       aria-label="Scroll to top"
     >
       {/* Circular progress border - SVG approach */}
@@ -51,7 +51,7 @@ const MoveToTop = () => {
             cy="50"
             r="45"
             fill="none"
-            stroke="#3b82f6"
+            stroke="#0ea5e9" // sky-500
             strokeWidth="4"
             strokeDasharray={283} // 2 * π * 45 ≈ 283
             strokeDashoffset={283 - (scrollProgress / 100) * 283}

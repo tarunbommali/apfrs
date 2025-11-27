@@ -1,5 +1,6 @@
 /* eslint-disable no-unused-vars */
 import React from 'react';
+import { calculateSummary } from '../../utils/attendanceUtils';
 
 const SummaryHeader = ({ 
   title, 
@@ -7,24 +8,31 @@ const SummaryHeader = ({
   filters, 
   overallStats, 
   filteredCount, 
-  totalCount 
+  totalCount,
+  attendanceData 
 }) => {
   const hasActiveFilters = filters.department || filters.designation || filters.status || filters.search;
+  
+  // Calculate statistics from attendanceData
+  const totalFaculty = filteredCount;
+  const totalPresent = overallStats.totalPresent;
+  const totalAbsent = overallStats.totalAbsent;
   const overallPercentage = filteredCount > 0 
-    ? ((overallStats.totalPresent / (filteredCount * 31)) * 100).toFixed(1)
+    ? ((totalPresent / (filteredCount * 31)) * 100).toFixed(1)
     : '0.0';
 
   return (
-    <div className="bg-white rounded-2xl p-6 shadow-lg border-l-4 border-indigo-500">
+    <div className="bg-white rounded-xl p-6 shadow-md border border-slate-200 mb-6">
+      {/* Header Title and Subtitle */}
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">
+        <h2 className="text-lg font-bold text-slate-800">
           {title}
         </h2>
-        <p className="text-gray-600 mt-1">
-          {filteredCount} of {totalCount} faculty members • {subtitle}
+        <p className="text-slate-600 text-[11px]  mt-1">
+          {subtitle}
         </p>
         {hasActiveFilters && (
-          <p className="text-sm text-indigo-600 mt-1">
+          <p className="text-sm text-sky-600 mt-1">
             🔍 Filters applied: 
             {filters.department && ` Department: ${filters.department}`}
             {filters.designation && ` Designation: ${filters.designation}`}
@@ -35,24 +43,26 @@ const SummaryHeader = ({
       </div>
 
       {/* Overall Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-blue-50 rounded-xl p-4 text-center">
-          <div className="text-2xl font-bold text-blue-700">{filteredCount}</div>
-          <div className="text-blue-600 text-sm font-medium">Total Faculty</div>
+      <section className="  bg-white ">
+         <div className="space-y-3 text-sm">
+          <div className="flex justify-between items-center">
+            <span className="text-slate-600">Total Faculty</span>
+            <span className="font-semibold text-slate-900">{totalFaculty}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-slate-600">Total Present Days</span>
+            <span className="font-semibold text-emerald-600">{totalPresent}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-slate-600">Total Absent Days</span>
+            <span className="font-semibold text-rose-600">{totalAbsent}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-slate-600">Overall Percentage</span>
+            <span className="font-semibold text-sky-600">{overallPercentage}%</span>
+          </div>
         </div>
-        <div className="bg-green-50 rounded-xl p-4 text-center">
-          <div className="text-2xl font-bold text-green-700">{overallStats.totalPresent}</div>
-          <div className="text-green-600 text-sm font-medium">Total Present Days</div>
-        </div>
-        <div className="bg-red-50 rounded-xl p-4 text-center">
-          <div className="text-2xl font-bold text-red-700">{overallStats.totalAbsent}</div>
-          <div className="text-red-600 text-sm font-medium">Total Absent Days</div>
-        </div>
-        <div className="bg-purple-50 rounded-xl p-4 text-center">
-          <div className="text-2xl font-bold text-purple-700">{overallPercentage}%</div>
-          <div className="text-purple-600 text-sm font-medium">Overall Attendance</div>
-        </div>
-      </div>
+      </section>
     </div>
   );
 };

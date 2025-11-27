@@ -5,7 +5,6 @@ import ErrorDisplay from './components/ErrorDisplay';
 
 import { processAttendanceData } from './utils/attendanceUtils';
 import Header from './components/Header';
-import Footer from './components/Footer';
 import MoveToTop from './components/MoveToTop';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
@@ -113,14 +112,6 @@ const App = () => {
     }
   }, []);
 
-  const withPageLayout = (content) => (
-    <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100">
-      <div className="container mx-auto px-4 py-8 pt-28">
-        {content}
-      </div>
-    </div>
-  );
-
   return (
     <Router>
       <Header
@@ -153,36 +144,30 @@ const App = () => {
           path="/summary"
           element={
             attendanceData.length > 0 ? (
-              withPageLayout(
-                <FacultySummary
-                  attendanceData={attendanceData}
-                  fileName={fileName}
-                  onReset={resetData}
-                />
-              )
+              <FacultySummary
+                attendanceData={attendanceData}
+                fileName={fileName}
+                onReset={resetData}
+              />
             ) : (
               <Navigate to="/" replace />
             )
           }
-
-
         />
 
 
-        <Route path="/docs" element={withPageLayout(<Docs />)} />
+        <Route path="/docs" element={<Docs />} />
 
         {/* Detailed View Page */}
         <Route
           path="/detailed"
           element={
             attendanceData.length > 0 ? (
-              withPageLayout(
-                <DetailedView
-                  attendanceData={attendanceData}
-                  fileName={fileName}
-                  onReset={resetData}
-                />
-              )
+              <DetailedView
+                attendanceData={attendanceData}
+                fileName={fileName}
+                onReset={resetData}
+              />
             ) : (
               <Navigate to="/" replace />
             )
@@ -200,9 +185,8 @@ const App = () => {
 
       </Routes>
 
-              <MoveToTop />
-          
-      <Footer />
+      <MoveToTop />
+
 
     </Router>
   );

@@ -68,7 +68,11 @@ Set `VITE_EMAIL_API_URL=/api` (already the default) to keep the frontend and bac
 - `GET /api/health` - Health check
 - `POST /api/send-email` - Send email via SMTP
 
-## Recent Changes
-- November 26, 2025: Added `npm run dev:full` to start frontend and backend together via concurrently
-- November 26, 2025: Defaulted email API base to `/api` for working proxy/Vercel deployments
-- November 26, 2025: Added docs for the `VITE_EMAIL_API_URL` override and deployment notes
+## Email API Flow
+- The Configure SMTP page reads defaults from `VITE_SMTP_*` env vars and lets users save overrides into `localStorage.smtpConfig`. Those values flow into `src/utils/emailUtils.jsx` so every email request carries the chosen SMTP credentials.
+- Frontend requests point to `${VITE_EMAIL_API_URL || '/api'}/send-email`. In dev we leave this as `/api`, allowing Vite to proxy the call to the Express relay (running on `SMTP_SERVER_PORT`, default 4000) without CORS issues.
+- The backend merges the posted `config` with the `.env` `SMTP_*` values (`mergeSMTPConfig`) and normalizes whitespace before giving Nodemailer the final credentials. Missing fields fall back to the server defaults automatically.
+- Gmail and other providers expect either an app password (with 2FA enabled) or XOAUTH2. If authentication fails the API returns a 401 plus the provider hint, which the UI surfaces to guide the user.
+- After changing `.env` or the saved SMTP config, restart `npm run dev:full` (or both `npm run dev` and `npm run server`) so Vite rebuilds with the new env vars and the relay reloads its credentials.
+
+ 

@@ -41,13 +41,13 @@ const Header = ({ fileName, attendanceData = [], onReset, onFileUpload, loading 
 
     return (
         <header className="fixed inset-x-0 top-0 z-50">
-            <div className="backdrop-blur-md bg-white/60 border-b border-slate-200">
+            <div className="backdrop-blur-md bg-white/70 border-b border-slate-200">
                 <div className="container mx-auto px-4">
                     <div className="flex items-center justify-between gap-4 py-3">
                         {/* Brand */}
                         <div className="flex items-center gap-3">
                             <Link to="/" className="flex items-center gap-3">
-                                <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-gradient-to-tr from-indigo-600 to-sky-500 shadow-md">
+                                <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-linear-to-tr from-indigo-600 to-sky-500 shadow-lg shadow-indigo-500/20">
                                     {/* Subtle SVG logo */}
                                     <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" aria-hidden>
                                         <path d="M4 7a2 2 0 012-2h12" stroke="rgba(255,255,255,0.9)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -61,37 +61,30 @@ const Header = ({ fileName, attendanceData = [], onReset, onFileUpload, loading 
                                     <span className="text-xs text-slate-500">Report Management System</span>
                                 </div>
                             </Link>
-
-
                         </div>
 
-                        {/* Desktop nav - ALWAYS VISIBLE now */}
+                        {/* Desktop nav */}
                         <nav className="hidden md:flex items-center gap-2">
                             <NavLink to="/" active={isActiveRoute('/')} label="Home" />
                             <NavLink to="/summary" active={isActiveRoute('/summary')} label="Summary" primary disabled={!fileName} />
                             <NavLink to="/detailed" active={isActiveRoute('/detailed')} label="Detailed" primary disabled={!fileName} />
                             <Link
                                 to="/configure-smtp"
-                                className={`px-3 py-2 rounded-md text-sm font-medium transition ${isActiveRoute('/configure-smtp') ? ' text-indigo-700' : 'text-slate-700 hover:bg-slate-100'}`}
+                                className={`px-3 py-2 rounded-md text-sm font-medium transition ${isActiveRoute('/configure-smtp') ? 'text-sky-600' : 'text-slate-700 hover:bg-slate-100'}`}
                             >
                                 Configure SMTP
                             </Link>
                             <NavLink to="/docs" active={isActiveRoute('/docs')} label="Docs" />
-
-
-
                         </nav>
 
-                        {/* Actions: upload (icon-only) + mobile menu toggle */}
+                        {/* Actions */}
                         <div className="flex items-center gap-2">
-                            {/* Upload button: icon-only, no background */}
                             <div className="flex items-center gap-2">
-                                {/* small current file chip (hidden on small screens) */}
                                 {fileName && (
                                     <a
                                         href={uploadedFileUrl}
                                         download
-                                        className="hidden md:inline-flex items-center gap-2 ml-3 px-3 py-1 rounded-full bg-sky-50 border border-sky-100 text-sky-700 text-sm shadow-sm hover:shadow-md transition"
+                                        className="hidden md:inline-flex items-center gap-2 ml-3 px-3 py-1 rounded-full bg-sky-100 border border-sky-200 text-sky-700 text-sm shadow-sm hover:shadow-md transition"
                                         title={fileName}
                                     >
                                         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -105,7 +98,7 @@ const Header = ({ fileName, attendanceData = [], onReset, onFileUpload, loading 
                                     disabled={loading}
                                     aria-label="Upload file"
                                     title={loading ? 'Uploading...' : fileSelected ? 'File loaded — Upload new' : 'Upload file'}
-                                    className={`p-2 rounded-lg focus:ring-2 focus:ring-offset-2 focus:ring-sky-300 transition ${loading ? 'animate-pulse' : 'hover:bg-slate-50'}`}
+                                    className={`p-2 rounded-lg focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 transition ${loading ? 'animate-pulse' : 'hover:bg-slate-100'}`}
                                 >
                                     <svg
                                         className={`w-6 h-6 ${loading ? 'text-emerald-500' : fileSelected ? 'text-emerald-600' : 'text-slate-400'}`}
@@ -122,7 +115,6 @@ const Header = ({ fileName, attendanceData = [], onReset, onFileUpload, loading 
                                     </svg>
                                 </button>
 
-                                {/* hidden file input */}
                                 <input
                                     type="file"
                                     ref={fileInputRef}
@@ -131,11 +123,10 @@ const Header = ({ fileName, attendanceData = [], onReset, onFileUpload, loading 
                                     className="hidden"
                                 />
 
-                                {/* Reset button - ALWAYS VISIBLE but disabled when no data */}
                                 <button
                                     onClick={onReset}
                                     disabled={!fileName}
-                                    className={`ml-1 px-3 py-2 rounded-md text-sm font-medium transition-shadow shadow-sm flex items-center gap-2 ${fileName ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-red-100 text-red-500 cursor-not-allowed'}`}
+                                    className={`ml-1 px-3 py-2 rounded-md text-sm font-medium transition-shadow shadow-sm flex items-center gap-2 ${fileName ? 'bg-rose-600 text-white hover:bg-rose-700' : 'bg-rose-200 text-rose-500 cursor-not-allowed'}`}
                                     title={attendanceData && attendanceData.length > 0 ? 'Reset' : 'No data to reset'}
                                 >
                                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">
@@ -148,10 +139,9 @@ const Header = ({ fileName, attendanceData = [], onReset, onFileUpload, loading 
                                 </button>
                             </div>
 
-                            {/* Mobile menu toggle */}
                             <button
                                 onClick={() => setMobileOpen(prev => !prev)}
-                                className="md:hidden p-2 rounded-lg hover:bg-slate-50 transition"
+                                className="md:hidden p-2 rounded-lg hover:bg-slate-100 transition"
                                 aria-expanded={mobileOpen}
                                 aria-label="Toggle navigation"
                             >
@@ -167,25 +157,22 @@ const Header = ({ fileName, attendanceData = [], onReset, onFileUpload, loading 
                     </div>
                 </div>
 
-                {/* Mobile navigation panel */}
-                <div className={`md:hidden ${mobileOpen ? 'block' : 'hidden'} border-t border-slate-200 bg-white/70 backdrop-blur`}>
+                <div className={`md:hidden ${mobileOpen ? 'block' : 'hidden'} border-t border-slate-200 bg-white/80 backdrop-blur`}>
                     <div className="px-4 py-3 space-y-2">
                         <MobileNavLink to="/" active={isActiveRoute('/')} label="Home" onClick={() => setMobileOpen(false)} />
                         <MobileNavLink to="/summary" active={isActiveRoute('/summary')} label="Summary" disabled={!fileName} onClick={() => setMobileOpen(false)} />
                         <MobileNavLink to="/detailed" active={isActiveRoute('/detailed')} label="Detailed" disabled={!fileName} onClick={() => setMobileOpen(false)} />
                         <MobileNavLink to="/configure-smtp" active={isActiveRoute('/configure-smtp')} label="Configure SMTP" onClick={() => setMobileOpen(false)} />
 
-                        {/* Reset - always visible on mobile, disabled when no data */}
                         <button
                             onClick={() => { if (fileName) onReset(); setMobileOpen(false); }}
-                            className={`w-full text-left px-3 py-2 rounded-md font-medium transition ${attendanceData && attendanceData.length > 0 ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-red-100 text-red-500 cursor-not-allowed'}`}
+                            className={`w-full text-left px-3 py-2 rounded-md font-medium transition ${attendanceData && attendanceData.length > 0 ? 'bg-rose-600 text-white hover:bg-rose-700' : 'bg-rose-200 text-rose-500 cursor-not-allowed'}`}
                         >
                             Reset
                         </button>
 
-                        {/* show file info on mobile */}
                         {fileName && (
-                            <a href={uploadedFileUrl} download className="block mt-1 px-3 py-2 rounded-md bg-sky-50 border border-sky-100 text-sky-700 text-sm">
+                            <a href={uploadedFileUrl} download className="block mt-1 px-3 py-2 rounded-md bg-slate-100 border border-slate-200 text-sky-700 text-sm">
                                 <div className="truncate">{fileName}</div>
                                 <div className="text-xs text-slate-500">Tap to download</div>
                             </a>
@@ -201,7 +188,7 @@ const Header = ({ fileName, attendanceData = [], onReset, onFileUpload, loading 
 const NavLink = ({ to, label, active, primary, disabled }) => (
     <Link
         to={to}
-        className={`px-3 py-2 rounded-md text-sm font-medium transition flex items-center gap-2 ${disabled ? 'cursor-not-allowed text-slate-400 pointer-events-none' : active ? 'text-indigo-600 font-semibold' : 'text-slate-700 hover:text-indigo-600'}`}
+        className={`px-3 py-2 rounded-md text-sm font-medium transition flex items-center gap-2 ${disabled ? 'cursor-not-allowed text-slate-500 pointer-events-none' : active ? 'text-sky-600 font-semibold' : 'text-slate-700 hover:text-sky-600'}`}
     >
         <span>{label}</span>
     </Link>
@@ -211,7 +198,7 @@ const MobileNavLink = ({ to, label, active, onClick, disabled }) => (
     <Link
         to={to}
         onClick={onClick}
-        className={`block px-3 py-2 rounded-md text-sm font-medium transition ${disabled ? 'cursor-not-allowed text-slate-400 pointer-events-none' : ''} ${active ? 'bg-indigo-100 text-indigo-700' : 'text-slate-700 hover:bg-slate-50'
+        className={`block px-3 py-2 rounded-md text-sm font-medium transition ${disabled ? 'cursor-not-allowed text-slate-500 pointer-events-none' : ''} ${active ? 'bg-indigo-100 text-indigo-700' : 'text-slate-700 hover:bg-slate-100'
             }`}
     >
         {label}

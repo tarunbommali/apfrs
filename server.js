@@ -4,11 +4,12 @@ import express from 'express';
 import cors from 'cors';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
+import portfinder from 'portfinder';
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.SMTP_SERVER_PORT || 3000;
+const PORT = process.env.SMTP_SERVER_PORT || 4000;
 
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
@@ -212,8 +213,16 @@ app.post('/api/send-email', async (req, res) => {
   }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 SMTP relay server listening on port ${PORT}`);
-  console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`📧 Default SMTP host: ${getEnvSMTPDefaults().host}`);
+portfinder.basePort = PORT;
+portfinder.getPort((err, port) => {
+  if (err) {
+    console.error('❌ Could not find an open port:', err);
+    process.exit(1);
+  }
+
+  app.listen(port, '0.0.0.0', () => {
+    console.log(`🚀 SMTP relay server listening on port ${port}`);
+    console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`📧 Default SMTP host: ${getEnvSMTPDefaults().host}`);
+  });
 });

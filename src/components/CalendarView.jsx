@@ -2,8 +2,8 @@ import React from 'react';
 
 const CalendarView = ({ attendance }) => {
   return (
-    <div className="p-6 border-b">
-      <h4 className="text-lg font-semibold text-gray-800 mb-4">Monthly Calendar</h4>
+    <div className="p-6 border-b border-slate-200">
+      <h4 className="text-lg font-semibold text-slate-700 mb-4">Monthly Calendar</h4>
       <div className="grid grid-cols-7 md:grid-cols-10 lg:grid-cols-15 gap-2">
         {attendance.map((day, dayIndex) => (
           <div 
@@ -11,10 +11,10 @@ const CalendarView = ({ attendance }) => {
             className={`
               relative p-2 rounded-lg text-center text-sm font-medium cursor-help
               ${day.status === 'P' 
-                ? 'bg-green-100 text-green-800 border border-green-200' 
+                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
                 : day.status === 'A'
-                ? 'bg-red-100 text-red-800 border border-red-200'
-                : 'bg-gray-100 text-gray-600 border border-gray-200'
+                ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                : 'bg-slate-100 text-slate-600 border border-slate-200'
               }
             `}
             title={`Day ${day.day}: ${day.inTime || 'No In Time'} - ${day.outTime || 'No Out Time'} (${day.duration || 'No Duration'})`}

@@ -9,17 +9,17 @@ export const persons = [
   {
     name: "Vemuri KrishnaAnila",
     cfms_id: "15071465",
-    email: "jntugv.mca@gmail.com",
+    email: "tyashwanthkumar1@gmail.com",
     designation: "Assistant Professor",
     department: "IT",
   },
-  // {
-  //   name: "Sri.K.Srinivasa Rao",
-  //   cfms_id: "14062301",
-  //   email: "jntugv.IT@gmail.com",
-  //   designation: "Assistant Professor",
-  //   department: "IT",
-  // },
+  {
+    name: "Sri.K.Srinivasa Rao",
+    cfms_id: "14062301",
+    email: "venkateshtaddi548@gmail.com",
+    designation: "Assistant Professor",
+    department: "IT",
+  },
   // {
   //   name: "Dr.V.S.Vakula",
   //   cfms_id: "15040168",
