@@ -17,6 +17,7 @@ import WeeklyReport from './pages/WeeklyReport';
 import DepartmentReport from './pages/DepartmentReport';
 import DailyReport from './pages/DailyReport';
 import EmailPreview from './pages/EmailPreview';
+import StatusDashboard from './pages/StatusDashboard';
 
 const ProtectedRoute = ({ children }) => {
   const { ready, hasData } = useAttendance();
