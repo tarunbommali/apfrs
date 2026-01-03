@@ -1,14 +1,20 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useAttendance } from '../contexts/AttendanceContext';
 import EmailTemplate from '../utils/EmailTemplate';
 import PageLayout from './PageLayout';
-import { Mail, Eye, Download, Send, AlertCircle } from 'lucide-react';
+import { Mail, Eye, Download, Send, AlertCircle, FileSpreadsheet, FileText, Loader2, CheckCircle } from 'lucide-react';
 import { calculateSummary } from '../utils/attendanceUtils';
 import { getActiveSMTPConfig } from '../utils/smtpConfigStore';
+import { downloadReport } from '../utils/reportGenerator';
+import { sendIndividualReport } from '../utils/emailService';
 
 const EmailPreview = () => {
     const { attendanceData, selectedMonth, selectedYear, ready, hasData } = useAttendance();
     const activeConfig = useMemo(() => getActiveSMTPConfig(), []);
+    const [isDownloading, setIsDownloading] = useState(false);
+    const [isSending, setIsSending] = useState(false);
+    const [sendStatus, setSendStatus] = useState(null);
+    const [downloadFormat, setDownloadFormat] = useState('pdf');
 
     // Pick the first employee as a sample
     const sampleEmployee = useMemo(() => {
@@ -23,22 +29,19 @@ const EmailPreview = () => {
 
     const periodLabel = `${monthNames[selectedMonth - 1]} ${selectedYear}`;
 
-    const emailData = useMemo(() => {
+    const summary = useMemo(() => {
         if (!sampleEmployee) return null;
+        return calculateSummary(sampleEmployee, selectedMonth, selectedYear);
+    }, [sampleEmployee, selectedMonth, selectedYear]);
 
-        // In a real scenario, these would be passed from the actual calculation logic
-        // For preview, we calculate them on the fly
-        const workingDays = []; // This should be fetched from context or utils
-        // For simplicity in preview, we'll use 22 days as a default if not fully available
-        const mockWorkingDays = Array.from({ length: 22 }, (_, i) => i + 1);
-
-        const summary = calculateSummary(sampleEmployee, selectedMonth, selectedYear);
+    const emailData = useMemo(() => {
+        if (!sampleEmployee || !summary) return null;
 
         return {
             employee: sampleEmployee,
             summary: {
                 ...summary,
-                holidays: 2, // Mock holiday count
+                holidays: 2,
             },
             config: {
                 companyName: activeConfig?.fromName?.split(' ')[0] || 'JNTU-GV Vizianagaram',
@@ -50,10 +53,54 @@ const EmailPreview = () => {
                 averageLateTime: 15
             },
             calculatedPercentage: summary.attendancePercentage,
-            workingDaysCount: mockWorkingDays.length,
+            workingDaysCount: summary.workingDays || 22,
             periodLabel
         };
-    }, [sampleEmployee, selectedMonth, periodLabel, activeConfig]);
+    }, [sampleEmployee, summary, selectedMonth, selectedYear, periodLabel, activeConfig]);
+
+    const handleDownload = async (format) => {
+        if (!sampleEmployee || !summary) return;
+        
+        setIsDownloading(true);
+        setDownloadFormat(format);
+        
+        try {
+            await downloadReport({
+                employee: sampleEmployee,
+                summary,
+                month: selectedMonth,
+                year: selectedYear,
+                periodLabel
+            }, format);
+        } catch (error) {
+            console.error('Download failed:', error);
+            alert('Failed to download report: ' + error.message);
+        } finally {
+            setIsDownloading(false);
+        }
+    };
+
+    const handleSendSample = async () => {
+        if (!sampleEmployee || !activeConfig) {
+            alert('Please configure SMTP settings first');
+            return;
+        }
+
+        setIsSending(true);
+        setSendStatus(null);
+
+        try {
+            await sendIndividualReport(sampleEmployee, activeConfig, selectedMonth, selectedYear);
+            setSendStatus({ success: true, message: 'Sample email sent successfully!' });
+        } catch (error) {
+            console.error('Send failed:', error);
+            setSendStatus({ success: false, message: error.message });
+        } finally {
+            setIsSending(false);
+            // Clear status after 5 seconds
+            setTimeout(() => setSendStatus(null), 5000);
+        }
+    };
 
     const bodyContent = (
         <div className="space-y-8 max-w-5xl mx-auto">
@@ -69,16 +116,81 @@ const EmailPreview = () => {
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-slate-700 font-medium hover:bg-slate-50 transition-all shadow-sm">
-                        <Download className="w-4 h-4" />
-                        Download PDF
-                    </button>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20">
-                        <Send className="w-4 h-4" />
-                        Send Sample
+                    {/* Download Dropdown */}
+                    <div className="relative group">
+                        <button 
+                            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-slate-700 font-medium hover:bg-slate-50 transition-all shadow-sm"
+                            disabled={!hasData || isDownloading}
+                            data-testid="download-btn"
+                        >
+                            {isDownloading ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                                <Download className="w-4 h-4" />
+                            )}
+                            Download
+                        </button>
+                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                            <button
+                                onClick={() => handleDownload('pdf')}
+                                disabled={!hasData || isDownloading}
+                                className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-50 rounded-t-xl"
+                                data-testid="download-pdf-btn"
+                            >
+                                <FileText className="w-4 h-4 text-red-500" />
+                                Download PDF
+                            </button>
+                            <button
+                                onClick={() => handleDownload('excel')}
+                                disabled={!hasData || isDownloading}
+                                className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-50"
+                                data-testid="download-excel-btn"
+                            >
+                                <FileSpreadsheet className="w-4 h-4 text-green-500" />
+                                Download Excel
+                            </button>
+                            <button
+                                onClick={() => handleDownload('csv')}
+                                disabled={!hasData || isDownloading}
+                                className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-50 rounded-b-xl"
+                                data-testid="download-csv-btn"
+                            >
+                                <FileText className="w-4 h-4 text-blue-500" />
+                                Download CSV
+                            </button>
+                        </div>
+                    </div>
+                    <button 
+                        onClick={handleSendSample}
+                        disabled={!hasData || isSending || !activeConfig}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                        data-testid="send-sample-btn"
+                    >
+                        {isSending ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <Send className="w-4 h-4" />
+                        )}
+                        {isSending ? 'Sending...' : 'Send Sample'}
                     </button>
                 </div>
             </header>
+
+            {/* Send Status Banner */}
+            {sendStatus && (
+                <div className={`rounded-xl p-4 flex items-center gap-3 ${
+                    sendStatus.success 
+                        ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' 
+                        : 'bg-rose-50 border border-rose-200 text-rose-800'
+                }`}>
+                    {sendStatus.success ? (
+                        <CheckCircle className="w-5 h-5" />
+                    ) : (
+                        <AlertCircle className="w-5 h-5" />
+                    )}
+                    <span className="font-medium">{sendStatus.message}</span>
+                </div>
+            )}
 
             {!hasData ? (
                 <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center">
@@ -97,16 +209,28 @@ const EmailPreview = () => {
                             <div className="space-y-4">
                                 <div>
                                     <p className="text-xs text-slate-500 uppercase font-semibold">Sample Faculty</p>
-                                    <p className="text-sm font-medium text-slate-900">{sampleEmployee.name}</p>
+                                    <p className="text-sm font-medium text-slate-900">{sampleEmployee?.name}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-slate-500 uppercase font-semibold">Email</p>
+                                    <p className="text-sm font-medium text-slate-700">{sampleEmployee?.email || 'N/A'}</p>
                                 </div>
                                 <div>
                                     <p className="text-xs text-slate-500 uppercase font-semibold">Period</p>
                                     <p className="text-sm font-medium text-slate-900">{periodLabel}</p>
                                 </div>
                                 <div>
-                                    <p className="text-xs text-slate-500 uppercase font-semibold">Status</p>
-                                    <span className="inline-flex items-center px-2 py-1 rounded-md bg-green-100 text-green-700 text-xs font-bold mt-1">
-                                        READY TO SEND
+                                    <p className="text-xs text-slate-500 uppercase font-semibold">Attendance</p>
+                                    <p className="text-sm font-medium text-slate-900">{summary?.attendancePercentage || 0}%</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-slate-500 uppercase font-semibold">SMTP Status</p>
+                                    <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-bold mt-1 ${
+                                        activeConfig 
+                                            ? 'bg-green-100 text-green-700' 
+                                            : 'bg-amber-100 text-amber-700'
+                                    }`}>
+                                        {activeConfig ? 'CONFIGURED' : 'NOT CONFIGURED'}
                                     </span>
                                 </div>
                             </div>
@@ -119,10 +243,41 @@ const EmailPreview = () => {
                             </h3>
                             <ul className="text-sm text-indigo-800 space-y-2 list-disc pl-4">
                                 <li>Colors update based on performance</li>
-                                <li>Holidays are automatically excluded</li>
+                                <li>PDF attachment included with email</li>
                                 <li>Responsive design for mobile viewing</li>
                                 <li>Unique report ID for tracking</li>
                             </ul>
+                        </div>
+
+                        {/* Export Options */}
+                        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4">Export Options</h3>
+                            <div className="space-y-2">
+                                <button
+                                    onClick={() => handleDownload('pdf')}
+                                    disabled={isDownloading}
+                                    className="w-full flex items-center gap-3 px-4 py-3 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors"
+                                >
+                                    <FileText className="w-5 h-5 text-red-500" />
+                                    <span className="text-sm font-medium text-slate-700">PDF Report</span>
+                                </button>
+                                <button
+                                    onClick={() => handleDownload('excel')}
+                                    disabled={isDownloading}
+                                    className="w-full flex items-center gap-3 px-4 py-3 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors"
+                                >
+                                    <FileSpreadsheet className="w-5 h-5 text-green-500" />
+                                    <span className="text-sm font-medium text-slate-700">Excel Report</span>
+                                </button>
+                                <button
+                                    onClick={() => handleDownload('csv')}
+                                    disabled={isDownloading}
+                                    className="w-full flex items-center gap-3 px-4 py-3 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors"
+                                >
+                                    <FileText className="w-5 h-5 text-blue-500" />
+                                    <span className="text-sm font-medium text-slate-700">CSV Report</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -137,7 +292,7 @@ const EmailPreview = () => {
                                             <span className="font-bold text-slate-500">From:</span> {activeConfig?.fromName || 'APFRS Reports'} ({activeConfig?.user || 'attendance@jntugv.edu.in'})
                                         </p>
                                         <p className="text-sm">
-                                            <span className="font-bold text-slate-500">To:</span> {sampleEmployee.email || (sampleEmployee.name.toLowerCase().replace(' ', '.') + '@jntugv.edu.in')}
+                                            <span className="font-bold text-slate-500">To:</span> {sampleEmployee?.email || (sampleEmployee?.name?.toLowerCase().replace(' ', '.') + '@jntugv.edu.in')}
                                         </p>
                                         <p className="text-sm font-bold text-slate-900 mt-2">
                                             Subject: {activeConfig?.subject || 'Attendance Performance Report'} - {periodLabel}
@@ -277,7 +432,7 @@ const EmailPreview = () => {
                     .email-template .footer-content { font-size: 13px; color: #64748b; }
                     .email-template .footer-note { font-size: 11px; margin-top: 10px; color: #94a3b8; }
                   `}</style>
-                                    <EmailTemplate {...emailData} />
+                                    {emailData && <EmailTemplate {...emailData} />}
                                 </div>
                             </div>
                         </div>
