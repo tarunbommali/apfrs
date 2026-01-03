@@ -98,6 +98,14 @@ const AppContent = () => {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/status-dashboard"
+          element={
+            <ProtectedRoute>
+              <StatusDashboard />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/import" element={<ImportData />} />
         <Route path="/calendar" element={<AcademicCalendar />} />
         <Route path="/admin" element={<Administration />} />
