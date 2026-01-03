@@ -9,7 +9,8 @@ import {
     Calendar,
     Home,
     Mail,
-    X
+    X,
+    BarChart3
 } from 'lucide-react';
 
 const SidebarItem = ({ to, icon: Icon, label, disabled }) => (
