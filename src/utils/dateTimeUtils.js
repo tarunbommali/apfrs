@@ -7,42 +7,68 @@ const normalizeMonth = (monthNumber) => {
   return normalized;
 };
 
-export const getHardcodedWorkingDays = (monthNumber, totalDaysInMonth = 31, year = 2025) => {
+/**
+ * Calculates working days for a given month dynamically using CALENDAR_CONFIG.
+ * 
+ * IMPORTANT: This function relies EXCLUSIVELY on calendar.js CALENDAR_CONFIG.
+ * - All holidays (general, optional, Sundays, second Saturdays) come from the config
+ * - NO hardcoded holiday logic exists in this function
+ * - Automatically adapts to any changes in CALENDAR_CONFIG
+ * 
+ * @param {number} monthNumber - Month number (1-12)
+ * @param {number} totalDaysInMonth - Days in the attendance data (e.g., from Excel)
+ * @param {number} year - Year for which to calculate working days
+ * @returns {Array<number>} Array of working day numbers (e.g., [1, 2, 4, 5, ...])
+ */
+export const getHardcodedWorkingDays = (monthNumber, totalDaysInMonth = 31, year = new Date().getFullYear()) => {
   const normalizedMonth = normalizeMonth(monthNumber);
+
+  // STEP 1: Get ALL holidays from CALENDAR_CONFIG (includes Sundays, second Saturdays, etc.)
+  // This is the ONLY source of truth for what constitutes a holiday
   const holidayDays = getHolidayDays(normalizedMonth, year);
 
-  // Calculate working days by excluding holidays and Sundays
+  // STEP 2: Calculate actual days in the calendar month to prevent invalid dates
+  // e.g., February only has 28/29 days, not 31
+  const daysInMonthDate = new Date(year, normalizedMonth, 0).getDate();
+  const limitDay = Math.min(totalDaysInMonth, daysInMonthDate);
+
+  // STEP 3: Calculate working days by EXCLUDING all holidays from CALENDAR_CONFIG
+  // Working Day = Any day that is NOT in the holidayDays array
   const workingDays = [];
-  for (let day = 1; day <= totalDaysInMonth; day++) {
-    // Check if it's a holiday
+
+  for (let day = 1; day <= limitDay; day++) {
+    // If this day is in the holiday list from CALENDAR_CONFIG, skip it
     if (holidayDays.includes(day)) continue;
 
-    // Check if it's a Sunday
-    const date = new Date(year, normalizedMonth - 1, day);
-    if (date.getDay() === 0) continue;
-
-    // It's a working day
+    // Otherwise, it's a working day
     workingDays.push(day);
   }
 
   return workingDays;
 };
 
+/**
+ * Retrieves all holidays for a given month dynamically from CALENDAR_CONFIG.
+ * 
+ * This function is the complement to getHardcodedWorkingDays and uses the SAME
+ * source of truth (calendar.js CALENDAR_CONFIG) to determine holidays.
+ * 
+ * @param {number} monthNumber - Month number (1-12)
+ * @param {number} totalDaysInMonth - Days in the attendance data
+ * @param {number} year - Year for which to retrieve holidays
+ * @returns {Array<number>} Sorted array of holiday day numbers
+ */
 export const getHolidays = (monthNumber, totalDaysInMonth = 31, year = new Date().getFullYear()) => {
   const normalizedMonth = normalizeMonth(monthNumber);
+
+  // Get all holidays directly from CALENDAR_CONFIG (includes all holiday types)
   const holidayDays = getHolidayDays(normalizedMonth, year);
 
-  const allHolidays = [...holidayDays];
+  // Ensure we don't return holidays beyond the actual calendar month length
+  const daysInMonthDate = new Date(year, normalizedMonth, 0).getDate();
+  const limitDay = Math.min(totalDaysInMonth, daysInMonthDate);
 
-  // Add Sundays to the list of holidays
-  for (let day = 1; day <= totalDaysInMonth; day++) {
-    const date = new Date(year, normalizedMonth - 1, day);
-    if (date.getDay() === 0 && !allHolidays.includes(day)) {
-      allHolidays.push(day);
-    }
-  }
-
-  return allHolidays.sort((a, b) => a - b).filter((day) => day <= totalDaysInMonth);
+  return holidayDays.sort((a, b) => a - b).filter((day) => day <= limitDay);
 };
 
 export const getWorkingDays = (attendanceData, monthNumber = 11, totalDaysOverride = null, year = new Date().getFullYear()) => {

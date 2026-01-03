@@ -122,233 +122,279 @@ const ManageCalendar = () => {
   return (
     <div className="manage-calendar-container">
       <style>{`
-        .manage-calendar-container {
-          max-width: 100%;
-          margin: 0 auto;
-          padding: 0;
-        }
+  :root {
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --border: #e2e8f0;
+    --text: #0f172a;
+    --muted: #64748b;
 
-        .calendar-grid {
-          display: grid;
-          grid-template-columns: 1fr 320px;
-          gap: 2rem;
-        }
+    --public: #dc2626;
+    --optional: #d97706;
+    --sunday: #ea580c;
+    --primary: #4f46e5;
+  }
 
-        @media (max-width: 1024px) {
-          .calendar-grid {
-            grid-template-columns: 1fr;
-          }
-        }
+  body {
+    background: var(--bg);
+  }
 
-        .calendar-section {
-          background: white;
-          border-radius: 1rem;
-          padding: 1.5rem;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
+  .manage-calendar-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 1rem;
+  }
 
-        .react-calendar {
-          width: 100%;
-          border: none;
-          font-family: inherit;
-        }
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 1.25rem;
+  }
 
-        .react-calendar__tile {
-          position: relative;
-          padding: 1rem 0.5rem;
-          aspect-ratio: 1;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          border-radius: 0.5rem;
-          transition: all 0.2s;
-        }
+  @media (max-width: 1024px) {
+    .calendar-grid {
+      grid-template-columns: 1fr;
+    }
+  }
 
-        .react-calendar__tile:hover {
-          background: #f8fafc;
-        }
+  .calendar-section,
+  .sidebar-section,
+  .legend-section {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 1.25rem;
+    border: 1px solid var(--border);
+  }
 
-        .react-calendar__tile--active {
-          background: #8b5cf6 !important;
-          color: white;
-        }
+  /* ================= CALENDAR ================= */
 
-        .react-calendar__tile--now {
-          background: #fef3c7;
-        }
+  .react-calendar {
+    width: 100%;
+    border: none;
+    font-family: system-ui, sans-serif;
+  }
 
-        .tile-content {
-          display: flex;
-          gap: 0.25rem;
-          margin-top: 0.25rem;
-        }
+  .react-calendar__navigation {
+    margin-bottom: 0.75rem;
+  }
 
-        .holiday-indicator,
-        .sunday-indicator {
-          font-size: 1rem;
-        }
+  .react-calendar__navigation button {
+    font-weight: 700;
+    color: var(--text);
+    border-radius: 8px;
+  }
 
-        /* Holiday type colors */
-        .holiday-public {
-          background: #fef2f2;
-          color: #991b1b;
-        }
+  .react-calendar__navigation button:hover {
+    background: #f1f5f9;
+  }
 
-        .holiday-optional {
-          background: #fffbeb;
-          color: #92400e;
-        }
+  .react-calendar__month-view__weekdays {
+    font-size: 0.65rem;
+    color: var(--muted);
+    font-weight: 700;
+  }
 
-        .holiday-custom {
-          background: #faf5ff;
-          color: #6b21a8;
-        }
+  .react-calendar__tile {
+    border: 1px solid #dae1e7;
+    border-radius: 4px !important;
+    font-weight: 600;
+    color: var(--text);
+    transition: all 0.15s ease;
+    margin-right: -1px;
+    margin-bottom: -1px;
+  }
 
-        .holiday-academic {
-          background: #eff6ff;
-          color: #1e40af;
-        }
+  .react-calendar__tile:hover {
+    background: #f1f5f9;
+  }
 
-        .holiday-festival {
-          background: #fdf2f8;
-          color: #9f1239;
-        }
+  .react-calendar__tile--active {
+    background: var(--primary) !important;
+    color: white !important;
+  }
 
-        .sunday {
-          background: #fef3c7;
-        }
+  .react-calendar__tile--now {
+    background: #f59e0b !important;
+    color: white !important;
+    border-radius: 8px !important;
+    font-weight: 800;
+    box-shadow: 0 4px 6px -1px rgba(245, 158, 11, 0.4);
+  }
 
-        .sidebar-section {
-          background: white;
-          border-radius: 1rem;
-          padding: 1.5rem;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
+  /* ================= TILE MARKERS ================= */
 
-        .sidebar-title {
-          font-size: 1.125rem;
-          font-weight: 700;
-          color: #1e293b;
-          margin-bottom: 1rem;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
+  .tile-content {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+  }
 
-        .holiday-list {
-          display: flex;
-          flex-direction: column;
-          gap: 0.75rem;
-        }
+  .holiday-indicator,
+  .sunday-indicator {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+  }
 
-        .holiday-item {
-          padding: 0.75rem;
-          background: #f8fafc;
-          border-radius: 0.5rem;
-          border-left: 4px solid #8b5cf6;
-          transition: all 0.2s;
-        }
+  .holiday-public .holiday-indicator {
+    background: var(--public);
+  }
 
-        .holiday-item:hover {
-          background: #f1f5f9;
-          transform: translateX(2px);
-        }
+  .holiday-optional .holiday-indicator {
+    background: var(--optional);
+  }
 
-        .holiday-date {
-          font-size: 0.75rem;
-          color: #64748b;
-          font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-        }
+  .sunday .sunday-indicator {
+    background: var(--sunday);
+  }
 
-        .holiday-name {
-          font-size: 0.875rem;
-          color: #1e293b;
-          font-weight: 600;
-          margin-top: 0.25rem;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
+  /* ================= TILE STATES ================= */
 
-        .type-badge {
-          display: inline-block;
-          padding: 0.125rem 0.5rem;
-          font-size: 0.75rem;
-          border-radius: 9999px;
-          font-weight: 500;
-          text-transform: capitalize;
-        }
+  .holiday-public {
+    color: var(--public) !important;
+  }
 
-        .legend-section {
-          background: white;
-          border-radius: 1rem;
-          padding: 1.5rem;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-          margin-top: 1rem;
-        }
+  .holiday-optional {
+    color: var(--optional) !important;
+  }
 
-        .legend-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 0.75rem;
-          margin-top: 1rem;
-        }
+  .sunday {
+    color: var(--sunday) !important;
+  }
 
-        .legend-item {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          font-size: 0.875rem;
-        }
+  /* ================= SIDEBAR ================= */
 
-        .legend-color {
-          width: 1rem;
-          height: 1rem;
-          border-radius: 0.25rem;
-          flex-shrink: 0;
-        }
-      `}</style>
+  .sidebar-title {
+    font-size: 0.95rem;
+    font-weight: 800;
+    margin-bottom: 1rem;
+    color: var(--text);
+  }
+
+  .holiday-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-height: 380px;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+  }
+  
+  /* Custom Scrollbar for holiday list */
+  .holiday-list::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .holiday-list::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .holiday-list::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 20px;
+  }
+
+  .holiday-item {
+    padding: 0.75rem;
+    border-radius: 10px;
+    background: #f8fafc;
+    border-left: 4px solid var(--primary);
+  }
+
+  .holiday-date {
+    font-size: 0.7rem;
+    color: var(--muted);
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .holiday-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .type-badge {
+    margin-top: 6px;
+    font-size: 0.65rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-weight: 700;
+    text-transform: uppercase;
+    border: 1px solid currentColor;
+  }
+
+  /* ================= LEGEND ================= */
+
+  .legend-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  .legend-color {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+  }
+`}</style>
 
       {/* Main Grid */}
       <div className="calendar-grid">
         {/* Calendar */}
         <div className="calendar-section">
-          {/* Year Selector */}
-          <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <label style={{ fontSize: '0.875rem', fontWeight: '600', color: '#64748b', marginRight: '0.5rem' }}>
-                Select Year:
-              </label>
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number(e.target.value))}
-                style={{
-                  padding: '0.5rem 1rem',
-                  borderRadius: '0.5rem',
-                  border: '1px solid #e2e8f0',
-                  fontSize: '1rem',
-                  fontWeight: '600',
-                  color: '#1e293b',
-                  cursor: 'pointer'
-                }}
-              >
-                {availableYears.map(year => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
+          {/* Year Selector & Legend */}
+          <div className="flex flex-col gap-6 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
+            {/* Top Row: Dropdown, Year Stats */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-bold text-slate-600">
+                  Select Academic Year:
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(Number(e.target.value))}
+                    className="appearance-none pl-4 pr-10 py-2 bg-white border border-slate-200 rounded-lg text-slate-700 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer hover:border-indigo-300"
+                  >
+                    {availableYears.map(year => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-slate-500">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                  </div>
+                </div>
+              </div>
+
+              {/* Year Stats */}
+              {yearStats && (
+                <div className="flex flex-wrap gap-2">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg shadow-sm">
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Public</span>
+                    <span className="text-sm font-bold text-slate-800">{yearStats.totalPublicHolidays}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg shadow-sm">
+                    <span className="text-xs font-semibold text-amber-600 uppercase tracking-wider">Optional</span>
+                    <span className="text-sm font-bold text-slate-800">{yearStats.totalOptionalHolidays}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg shadow-sm">
+                    <span className="text-xs font-semibold text-indigo-500 uppercase tracking-wider">Sundays</span>
+                    <span className="text-sm font-bold text-slate-800">{yearStats.totalSundays}</span>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Year Stats */}
-            {yearStats && (
-              <div style={{ display: 'flex', gap: '1rem', fontSize: '0.75rem', color: '#64748b' }}>
-                <span>📅 Public: {yearStats.totalPublicHolidays}</span>
-                <span>🟠 Optional: {yearStats.totalOptionalHolidays}</span>
-                <span>☀️ Sundays: {yearStats.totalSundays}</span>
-              </div>
-            )}
           </div>
 
           <Calendar
@@ -361,6 +407,9 @@ const ManageCalendar = () => {
             defaultView="month"
             minDate={new Date(Math.min(...availableYears), 0, 1)}
             maxDate={new Date(Math.max(...availableYears), 11, 31)}
+            prev2Label={null}
+            next2Label={null}
+            className="rounded-xl border-none font-sans"
           />
         </div>
 
@@ -409,24 +458,6 @@ const ManageCalendar = () => {
             </div>
           </div>
 
-          {/* Legend */}
-          <div className="legend-section">
-            <h3 className="sidebar-title">
-              📋 Legend
-            </h3>
-            <div className="legend-grid">
-              {Object.entries(HOLIDAY_TYPE_COLORS).map(([type, color]) => (
-                <div key={type} className="legend-item">
-                  <div className="legend-color" style={{ backgroundColor: color }}></div>
-                  <span style={{ textTransform: 'capitalize' }}>{type}</span>
-                </div>
-              ))}
-              <div className="legend-item">
-                <div className="legend-color" style={{ backgroundColor: '#fbbf24' }}></div>
-                <span>Sunday</span>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>

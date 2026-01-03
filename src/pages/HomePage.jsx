@@ -7,7 +7,6 @@ import { useAttendance } from '../contexts/AttendanceContext';
 import PageLayout from './PageLayout';
 import ReportOverview from '../components/report/ReportOverview';
 import StatsCards from '../components/report/StatsCards';
-import DepartmentChart from '../components/report/DepartmentChart';
 
 
 import {
@@ -210,56 +209,14 @@ const HomePage = () => {
         </div>
       )}
 
-      {/* QUICK STATS */}
-      {hasData && (
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <StatCard
-            label="Total Present Days"
-            value={totalPresent}
-            colorClass={{
-              bg: 'bg-emerald-100',
-              text: 'text-emerald-600',
-              border: 'border-emerald-200',
-            }}
-            icon={<span className="text-2xl">✔</span>}
-          />
-          <StatCard
-            label="Total Absent Days"
-            value={totalAbsent}
-            colorClass={{
-              bg: 'bg-rose-100',
-              text: 'text-rose-600',
-              border: 'border-rose-200',
-            }}
-            icon={<span className="text-2xl">✖</span>}
-          />
-        </section>
-      )}
 
-      {/* DASHBOARD CARDS */}
-      {hasData && (
-        <StatsCards
-          facultyData={attendanceData}
-          overallStats={overallStats}
-          filteredCount={attendanceData.length}
-          workingDays={effectiveWorkingDays}
-          selectedMonth={selectedMonth}
-          selectedYear={selectedYear}
-        />
-      )}
-
-      {/* CHARTS */}
-      {hasData && (
-        <DepartmentChart
-          attendanceData={attendanceData}
-          workingDays={effectiveWorkingDays}
-        />
-      )}
 
       {hasData && (
         <ReportOverview
           periodStats={periodStats}
           overallStats={overallStats}
+          facultyData={attendanceData}
+          workingDays={effectiveWorkingDays || []}
           isSMTPConfigured={isSMTPConfigured}
           employeesAlreadySent={employeesAlreadySent}
           employeesWithEmail={employeesWithEmail}

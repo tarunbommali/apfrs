@@ -11,7 +11,7 @@ const getEmailApiUrl = () => {
   // Check if local backend is available
   const localBackend = 'http://localhost:8001/api';
   const externalApi = import.meta.env.VITE_EMAIL_API_URL || 'https://api.apfrs.jntugv.in/api';
-  
+
   // We'll try local first in the send function
   return { local: localBackend, external: externalApi };
 };
@@ -27,7 +27,7 @@ const MONTH_NAMES = [
 const sendRequestWithRetry = async (url, options = {}, retries = DEFAULT_RETRY) => {
   let attempt = 0;
   let lastError = null;
-  
+
   while (attempt <= retries) {
     try {
       console.log(`📤 Attempt ${attempt + 1}/${retries + 1} to send attendance report`);
@@ -106,7 +106,7 @@ export const sendEmail = async (payload, configOverride = null) => {
 
   const apis = getEmailApiUrl();
   let lastError = null;
-  
+
   // Try local backend first
   try {
     console.log('📤 Trying local backend...');
@@ -120,7 +120,7 @@ export const sendEmail = async (payload, configOverride = null) => {
     console.log('⚠️ Local backend failed, trying external API...', localError.message);
     lastError = localError;
   }
-  
+
   // Fallback to external API
   try {
     const res = await sendRequestWithRetry(`${apis.external}/send-email`, {
@@ -137,7 +137,7 @@ export const sendEmail = async (payload, configOverride = null) => {
 
 export const sendIndividualReport = async (employee, configOverride = null, monthNumber = 11, year = new Date().getFullYear()) => {
   console.log(`📤 Sending attendance report to: ${employee.name} <${employee.email}>`);
-  
+
   const periodKey = `${year}-${String(monthNumber).padStart(2, '0')}`;
 
   if (!employee.email || !employee.email.includes('@')) {
@@ -156,7 +156,7 @@ export const sendIndividualReport = async (employee, configOverride = null, mont
 
   // Generate email HTML
   const emailHtml = generateEmailHTML(employee, summary, config, periodLabel);
-  
+
   // Generate PDF attachment
   let pdfAttachment = null;
   try {
@@ -167,7 +167,7 @@ export const sendIndividualReport = async (employee, configOverride = null, mont
       year,
       periodLabel
     });
-    
+
     pdfAttachment = {
       filename: `attendance_report_${employee.cfmsId || employee.name.replace(/\s+/g, '_')}_${year}_${monthNumber}.pdf`,
       content: pdfBase64,
@@ -206,10 +206,10 @@ export const sendIndividualReport = async (employee, configOverride = null, mont
     };
   } catch (error) {
     console.error(`❌ Failed to send report to ${employee.name}:`, error);
-    
+
     // Update status to failed
     setEmailFailed(employee.email, periodKey, error.message);
-    
+
     throw error;
   }
 };
@@ -217,18 +217,43 @@ export const sendIndividualReport = async (employee, configOverride = null, mont
 // Test SMTP connection
 export const testSMTPConnection = async (config) => {
   const apis = getEmailApiUrl();
-  
+  let lastError = null;
+
+  // Try local backend first
   try {
     const response = await fetch(`${apis.local}/test-smtp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ config }),
+      signal: AbortSignal.timeout(5000)
+    });
+
+    if (response.ok) {
+      return await response.json();
+    }
+    throw new Error(`Local test failed with status: ${response.status}`);
+  } catch (localError) {
+    console.log('⚠️ Local SMTP test failed, trying external API...', localError.message);
+    lastError = localError;
+  }
+
+  // Fallback to external API
+  try {
+    const response = await fetch(`${apis.external}/test-smtp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config }),
       signal: AbortSignal.timeout(15000)
     });
-    
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `External test failed with status: ${response.status}`);
+    }
+
     return await response.json();
-  } catch (error) {
-    console.error('SMTP test failed:', error);
-    throw error;
+  } catch (externalError) {
+    console.error('❌ Both local and external SMTP tests failed');
+    throw externalError; // Throw the external error as it's the last attempt
   }
 };

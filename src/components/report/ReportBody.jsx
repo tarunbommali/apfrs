@@ -8,6 +8,8 @@ const ReportBody = ({
   sendingEmail,
   bulkEmailProgress,
   onBulkSend,
+  onAction,
+  actionLabel,
   onSendEmail,
   emailStatus,
   searchValue,
@@ -31,11 +33,11 @@ const ReportBody = ({
             />
 
             <button
-              onClick={onBulkSend}
+              onClick={onAction}
               disabled={sendingEmail || bulkEmailProgress.processing}
               className="px-6 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 disabled:opacity-50 transition shadow"
             >
-              {bulkEmailProgress.processing ? "Sending..." : "Send Bulk Email"}
+              {bulkEmailProgress.processing ? "Sending..." : (actionLabel || "Send Bulk Email")}
             </button>
           </div>
         </div>

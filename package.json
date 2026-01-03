@@ -4,18 +4,21 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "npx vite --host 0.0.0.0 --port 5000",
+    "dev": "concurrently \"node backend/server.js\" \"npx vite --host 0.0.0.0 --port 5000\"",
     "build": "npx vite build",
     "lint": "npx eslint .",
     "preview": "npx vite preview"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.17",
+    "cors": "^2.8.5",
     "dayjs": "^1.11.19",
     "dotenv": "^17.2.3",
+    "express": "^5.2.1",
     "jspdf": "^3.0.4",
     "jspdf-autotable": "^5.0.2",
     "lucide-react": "^0.554.0",
+    "nodemailer": "^7.0.12",
     "react": "^19.2.0",
     "react-calendar": "^6.0.0",
     "react-dom": "^19.2.0",
@@ -24,6 +27,7 @@
     "react-toastify": "^11.0.5",
     "recharts": "^3.5.1",
     "tailwindcss": "^4.1.17",
+    "uuid": "^13.0.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

@@ -138,15 +138,125 @@ const ConfigureSMTP = () => {
   };
 
   const buildTestMessage = () => `
-    <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto;">
-      <h2 style="color:#0f172a;">SMTP Configuration Test</h2>
-      <p>This is a verification email from the APFRS Attendance Report System.</p>
-      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:16px;">
-        <p style="margin:0 0 8px 0; color:#475569;">Provider: <strong>Gmail SMTP</strong></p>
-        <p style="margin:0 0 8px 0; color:#475569;">Host: <strong>${form.host}:${form.port}</strong></p>
-        <p style="margin:0; color:#475569;">Sender: <strong>${form.user}</strong></p>
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f1f5f9; padding: 20px;">
+      <div style="background-color: #ffffff; border-radius: 16px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); overflow: hidden;">
+        <div style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); padding: 32px; text-align: center;">
+          <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 700;">SMTP Configuration Test</h1>
+          <p style="margin: 8px 0 0; color: rgba(255, 255, 255, 0.9);">APFRS Attendance Report System</p>
+        </div>
+        
+        <div style="padding: 32px;">
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+            <p style="margin: 0 0 8px; color: #475569; font-size: 14px;"><strong>Provider:</strong> Gmail SMTP</p>
+            <p style="margin: 0 0 8px; color: #475569; font-size: 14px;"><strong>Host:</strong> ${form.host}:${form.port}</p>
+            <p style="margin: 0; color: #475569; font-size: 14px;"><strong>Sender:</strong> ${form.user}</p>
+          </div>
+
+          <h3 style="color: #1e293b; font-size: 18px; margin-bottom: 16px;">Preview of Stats Layout</h3>
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; border-radius: 12px; margin-bottom: 24px;">
+            <tr>
+              <td style="padding: 16px; border-bottom: 1px solid #e2e8f0;">
+                <span style="color: #64748b; font-size: 13px;">Present Days</span>
+                <span style="float: right; color: #1e293b; font-weight: 700;">20</span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 16px; border-bottom: 1px solid #e2e8f0;">
+                <span style="color: #64748b; font-size: 13px;">Absent Days</span>
+                <span style="float: right; color: #1e293b; font-weight: 700;">2</span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 16px; border-bottom: 1px solid #e2e8f0;">
+                <span style="color: #64748b; font-size: 13px;">Working Days</span>
+                <span style="float: right; color: #1e293b; font-weight: 700;">22</span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 16px; border-bottom: 1px solid #e2e8f0;">
+                <span style="color: #64748b; font-size: 13px;">Total Hours</span>
+                <span style="float: right; color: #1e293b; font-weight: 700;">160 hrs</span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 16px;">
+                <span style="color: #64748b; font-size: 13px;">Holidays</span>
+                <span style="float: right; color: #1e293b; font-weight: 700;">8</span>
+              </td>
+            </tr>
+          </table>
+
+          <h3 style="color: #1e293b; font-size: 18px; margin-bottom: 16px;">Daily Attendance</h3>
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; width: 100%; margin-bottom: 24px;">
+            <thead>
+              <tr style="background-color: #f1f5f9;">
+                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e2e8f0; color: #475569; font-size: 12px; font-weight: 700; text-transform: uppercase;">Day</th>
+                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e2e8f0; color: #475569; font-size: 12px; font-weight: 700; text-transform: uppercase;">In</th>
+                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e2e8f0; color: #475569; font-size: 12px; font-weight: 700; text-transform: uppercase;">Out</th>
+                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e2e8f0; color: #475569; font-size: 12px; font-weight: 700; text-transform: uppercase;">Status</th>
+                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e2e8f0; color: #475569; font-size: 12px; font-weight: 700; text-transform: uppercase;">Duration</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="background-color: #ffffff;">
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px;">1</td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px;">10:21:49</td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px;">18:07:34</td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0;">
+                  <span style="background-color: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600;">P</span>
+                </td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px;">07:45:45</td>
+              </tr>
+              <tr style="background-color: #f8fafc;">
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px;">2</td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px;">-</td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px;">-</td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0;">
+                  <span style="background-color: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600;">A</span>
+                </td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px;">0 hrs</td>
+              </tr>
+              <tr style="background-color: #ffffff;">
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px;">3</td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px;">-</td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px;">-</td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0;">
+                  <span style="background-color: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600;">A</span>
+                </td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px;">0 hrs</td>
+              </tr>
+              <tr style="background-color: #f8fafc;">
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px;">4</td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px;">10:58:37</td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px;">18:00:20</td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0;">
+                  <span style="background-color: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600;">P</span>
+                </td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px;">07:01:43</td>
+              </tr>
+              <tr style="background-color: #ffffff;">
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px;">5</td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px;">-</td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px;">-</td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0;">
+                  <span style="background-color: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600;">A</span>
+                </td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px;">0 hrs</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <p style="color: #166534; background: #dcfce7; padding: 12px; border-radius: 8px; text-align: center; font-size: 14px; margin: 0;">
+            ✅ If you received this email, the SMTP configuration is valid.
+          </p>
+        </div>
+        
+        <div style="background-color: #f8fafc; padding: 24px 32px; border-top: 1px solid #e2e8f0; text-align: center;">
+          <p style="margin: 0; color: #94a3b8; font-size: 11px;">
+            © ${new Date().getFullYear()} APFRS. All rights reserved.
+          </p>
+        </div>
       </div>
-      <p style="color:#475569; font-size:13px; margin-top:16px;">If you received this email, the SMTP configuration is valid.</p>
     </div>
   `;
 

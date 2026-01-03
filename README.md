@@ -1,124 +1,166 @@
-# APFRS - Attendance Report System
+# APFRS - Attendance Report System (JNTU GV)
 
-A comprehensive Attendance Performance and Faculty Reporting System (APFRS) for JNTU GV. This system allows administrators to upload attendance data, manage academic calendars, and generate various detailed reports including daily, weekly, monthly, and department-wise analyses.
+A comprehensive **Attendance Performance and Faculty Reporting System (APFRS)** designed for JNTU GV. This system automates the processing of biometric/excel attendance data, manages academic calendars dynamically, and generates detailed analytical reports (Daily, Weekly, Monthly, Department-wise). It also features a robust email notification system for sending individual or bulk performance reports to faculty.
+
+![APFRS Dashboard](https://via.placeholder.com/800x400?text=APFRS+Dashboard+Preview)
 
 ## 🚀 Key Features
 
-### 1. **Robust Data Import**
-- **Modern Drag & Drop Interface**: Completely redesigned file upload with visual feedback and animations.
-- **Auto-Detection**: Automatically detects year and month from the uploaded Excel filename.
-- **Validation**: Ensures proper file formats (.xlsx, .xls) and prevents future date imports.
-- **File Preview**: Shows file details, size, and detected metadata before upload.
+### 1. **Robust Data Import & Validation**
+- **Drag & Drop Interface**: Modern, intuitive file upload area with animations.
+- **Form-Data Support**: Supports Excel (`.xlsx`, `.xls`) file processing via `SheetJS`.
+- **Auto-Detection**: Automatically extracts Year and Month from filenames or validates selected periods.
+- **Smart Validation**: Prevents uploading future data or malformed excel sheets.
 
 ### 2. **Advanced Academic Calendar Management**
-- **Year-Based Configuration**: Centralized holiday management for multiple academic years using a structured `CALENDAR_CONFIG` object.
-- **Dynamic Date Calculations**:
-    - **Working Days**: Auto-calculated by excluding configured holidays and all Sundays.
-    - **Holiday Statistics**: Real-time calculation of public holidays, optional holidays, and Sundays per month and year.
-- **Smart Interface**:
-    - **Month-Specific Sidebar**: Dynamically filters and displays only the holidays and events relevant to the currently visible month.
-    - **Visual Legend**: 
-        - 🔴 **Public**: Official government holidays.
-        - 🟠 **Optional**: Restricted/optional holidays.
-        - 🟣 **Custom**: User-defined local events.
-        - 🔵 **Academic**: Exams, convocations, and academic milestones.
-        - 🌸 **Festival**: Cultural and religious festivals.
-        - ⚫ **Other**: Miscellaneous institutional events.
-        - 🟡 **Sunday**: Automatic highlighting of all Sundays.
-    - **Navigation Restrictions**:
-        - Restricted navigation to only those years with active configurations.
-        - Navigation arrows auto-disable at the boundaries of the configured date range.
-- **Simplified Workflow**: Transitioned to a "Configuration-First" model where all calendar data is managed in `calendar.js` for better performance and consistency.
+- **Dynamic Configuration**: Centralized holiday management via `src/utils/calendar.js`.
+- **Automatic Calculations**:
+    - **Sundays = Public Holidays**: Automatically treats all Sundays as holidays.
+    - **Working Days**: Calculated as `Total Days - (Public Holidays + Sundays)`.
+    - **Holiday Types**: Supports Public, Optional, Custom, Academic, Festival, and "Sunday".
+- **Visual Interface**:
+    - Color-coded calendar view.
+    - Month-specific holiday lists side-by-side.
+    - Year-based navigation.
 
 ### 3. **Comprehensive Reporting Suite**
 
-#### **Daily Report**
-- View attendance details for any specific day in the selected month.
-- **Quick Day Selector**: Color-coded calendar days (Holiday: Red, Working: Green, Sunday: Gray).
-- **Navigation**: Simple ◀ ▶ controls to move between days.
-- **Faculty Details**: Lists every faculty member with status (Present/Absent/Leave) and hours worked.
+#### **📊 Daily Report**
+- Day-wise attendance breakdown.
+- Visual status indicators (Present/Absent/Leave).
+- Toggle between days with simple navigation ◀ ▶.
 
-#### **Weekly Report**
-- **Automatic Grouping**: Intelligent grouping of working days into 7-day academic weeks.
-- **Trend Analysis**: Visual indicators (↑ ↓ →) showing attendance trends compared to the previous week.
-- **Progress Tracking**: Visual progress bars per week with performance-based color coding.
+#### **📅 Weekly Report**
+- Groups data into academic weeks.
+- Trend analysis (↑ ↓) comparing current week vs previous week.
+- Visual progress bars for weekly attendance rates.
 
-#### **Monthly Report**
-- High-level overview of the entire month's attendance performance.
-- Statistics on average attendance, working days, and faculty performance.
+#### **🏢 Department Report**
+- Comparative analysis of all departments (CSE, ECE, MECH, etc.).
+- Performance ranking sorted by attendance percentage.
+- Drill-down capability to view faculty within a department.
 
-#### **Department Report**
-- **Comparison Table**: Side-by-side performance analysis of all departments.
-- **Drill-Down**: Click on any department to see detailed faculty-wise attendance.
-- **Performance Ranking**: Departments sorted by attendance percentage.
+#### **👤 Monthly Report (Faculty Summary)**
+- The core report for audits.
+- Detailed summary: Present, Absent, Working Days, Holidays, Total Hours.
+- **Email Integration**: Send individual or bulk reports directly from this view.
 
-#### **Detailed View**
-- Full raw data accessibility for comprehensive auditing.
-- Advanced filtering by department, designation, and search terms.
+### 4. **Automated Communication System**
+- **Bulk Emailing**: Send personalized reports to hundreds of faculty members with one click.
+- **Concurrency Control**: Processes emails in batches (default: 2) to prevent server/SMTP timeouts.
+- **Progress Tracking**: Full-screen animated overlay showing real-time success/failure counts.
+- **Rich HTML Emails**:
+  - **Performance Color Coding**: Green (Good) to Red (Poor).
+  - **Dynamic Remarks**: Automatic performance feedback text.
+  - **Daily Breakdown**: Detailed table of every day's In/Out time and status.
+  - **Attachment**: Automatically attaches a PDF version of the report.
 
-#### **Automated Communication & Email Preview**
-- **Enhanced Progress Experience**: A beautiful, full-screen animated overlay appears during bulk email sending, showing real-time success/fail counts and a graphical progress bar.
-- **Smart Throttling**: Visual indicators and progress tracking ensure the system remains stable during large-scale mailing operations.
-- **Live Preview**: See exactly how the attendance report email looks before sending using the dedicated Email Template section.
-- **Dynamic Visualization**: Renders the complete HTML email with sample faculty data, including personalized remarks based on attendance performance.
-
-### 4. **Project Architecture**
-- **Email Configuration**: Secure SMTP settings for automated report delivery.
-- **Individual/Bulk Mailing**: Send attendance reports to faculty members with a single click.
-- **Success Tracking**: Real-time progress updates for bulk mailing operations.
-
-## 🛠️ Technology Stack
-- **Frontend**: React.js with Vite
-- **Styling**: Tailwind CSS for a premium, responsive UI.
-- **Icons**: Lucide React for consistent and intuitive visual cues.
-- **Excel Processing**: SheetJS (xlsx) for reliable data parsing.
-- **Routing**: React Router 6 for seamless navigation.
-
-## 📁 Project Structure
-- `/src/pages`: Main application pages (DailyReport, WeeklyReport, DepartmentReport, etc.)
-- `/src/components`: Reusable UI components (FileUpload, Sidebar, ManageCalendar, etc.)
-- `/src/utils`: Helper functions for attendance calculations, calendar logic (`calendar.js`), and email ops.
-- `/src/contexts`: Application state management (AttendanceContext).
-
-## 📋 User Guide
-
-### Getting Started
-1. Click **Import Data** in the system menu.
-2. Select the Year and Month.
-3. Drag your Excel file into the upload zone or click to browse.
-4. Once uploaded, all report sections will be activated in the sidebar.
-
-### Managing Calendar
-1. Navigate to **Academic Calendar**.
-2. Select the academic year from the dropdown.
-3. View holidays and statistics for that year. The reports will automatically use these settings for calculations.
-4. To update holidays, edit `src/utils/calendar.js` following the `CALENDAR_CONFIG` structure.
-
-### Generating Reports
-- Use the **Daily Report** for immediate daily status.
-- Use **Weekly Report** to track short-term trends.
-- Use **Department Report** for administrative performance reviews.
-- Use **Monthly Report** (Faculty Summary) for final monthly audits and email distribution.
+### 5. **System Configuration**
+- **SMTP Settings**: Configure Gmail or custom SMTP servers directly from the UI.
+- **Test Configuration**: built-in tool to send test emails and verify credentials.
+- **Environment Support**: Supports `.env` variables for secure credential management.
 
 ---
 
-**Dashboard Preview**
-```
-┌────────────────────────────────────────┐
-│  APFRS Admin Portal                    │
-├────────────────────────────────────────┤
-│  Main Menu                             │
-│  - Home                                │
-│  - Daily Report        [New]           │
-│  - Weekly Report       [New]           │
-│  - Department Report   [New]           │
-│  - Monthly Report                      │
-│                                        │
-│  System                                │
-│  - Import Data         [Enhanced]      │
-│  - Academic Calendar   [Refactored]    │
-│  - Email Config                        │
-└────────────────────────────────────────┘
+## 🛠️ Technology Stack
+- **Frontend Framework**: [React.js](https://reactjs.org/) with [Vite](https://vitejs.dev/)
+- **Language**: JavaScript (ES6+)
+- **Styling**: [Tailwind CSS](https://tailwindcss.com/) (Responsive, Modern UI)
+- **State Management**: React Context API
+- **Data Processing**: `xlsx` (SheetJS)
+- **Date Handling**: `dayjs`
+- **Icons**: `lucide-react`
+- **Routing**: `react-router-dom`
+
+---
+
+## 📁 Project Structure
+
+```bash
+/src
+├── components/       # Reusable UI components (Buttons, Cards, Inputs)
+│   ├── report/       # Report-specific components (FacultyTable, StatsCards)
+├── contexts/         # Global State (AttendanceContext)
+├── pages/            # Main Views (HomePage, DailyReport, FacultySummary)
+├── utils/            # Core Logic & Helpers
+│   ├── attendanceCalculations.js  # Summary & Stats logic
+│   ├── calendar.js                # Holiday configuration
+│   ├── dateTimeUtils.js           # Date/Sunday/Working Day logic
+│   ├── emailService.js            # SMTP & Sending logic
+│   ├── emailTemplateGenerator.js  # HTML Email templates
+└── App.jsx           # Main Router Setup
 ```
 
-© 2025 APFRS - Developed for JNTU GV.
+---
+
+## 📋 Setup & Installation
+
+### Prerequisites
+- Node.js (v16 or higher)
+- npm or yarn
+
+### Installation
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/your-repo/apfrs.git
+   cd apfrs
+   ```
+
+2. **Install dependencies**:
+   ```bash
+   npm install
+   ```
+
+3. **Configure Environment Variables** (Optional):
+   Create a `.env` file in the root directory:
+   ```env
+   VITE_COMPANY_NAME="JNTU GV"
+   VITE_SMTP_USER="your-email@gmail.com"
+   VITE_SMTP_PASS="your-app-password"
+   ```
+
+4. **Run Development Server**:
+   ```bash
+   npm run dev
+   ```
+   Access the app at `http://localhost:5173`.
+
+---
+
+## 📖 User Guide
+
+### 1. Importing Data
+- Go to the **Home** page.
+- Select the **Year** and **Month**.
+- Drag and drop your attendance Excel file.
+- *Note: Ensure the file matches the standard format.*
+
+### 2. Configuring Calendar
+- Navigate to **Academic Calendar**.
+- Check the holidays for the current year.
+- *To add holidays*: Edit `src/utils/calendar.js` and add entries to `CALENDAR_CONFIG`.
+
+### 3. Configuring Email
+- Go to **Settings > Configure SMTP**.
+- Enter your Gmail address and **App Password** (not login password).
+- Click **Test Configuration** to verify.
+
+### 4. Sending Reports
+- Go to **Monthly Report**.
+- Use filters (Dept, Status) to select faculty.
+- Click **Send Bulk Email** to email everyone in the list.
+- Watch the progress overlay for status updates.
+
+---
+
+## 💡 Email Report Logic
+The system uses the following logic for generating reports:
+- **Working Days**: Calculated dynamically excluding Sundays and configured holidays.
+- **Present Days**: Counted from 'P' status.
+- **Absent Days**: Counted from 'A' status or empty status on *Working Days*.
+- **Leave Days**: Tracked but **excluded** from the main summary view (as per latest requirements).
+- **Remarks**: Auto-generated based on attendance percentage (<50%: Poor, >90%: Excellent).
+
+---
+
+© 2026 APFRS - Developed for JNTU GV.

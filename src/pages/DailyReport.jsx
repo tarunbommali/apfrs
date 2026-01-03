@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAttendance } from '../contexts/AttendanceContext';
-import { calculateWorkingDays } from '../utils/attendanceUtils';
-import { getHolidayDays, getHolidayLabel } from '../utils/calendar';
+import { calculateWorkingDays, getHolidays, getDaysInMonth } from '../utils/attendanceUtils';
+import { getHolidayLabel } from '../utils/calendar';
 import PageLayout from './PageLayout';
 import { Calendar, Users, CheckCircle, XCircle, Clock, Building2, ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -17,20 +17,25 @@ const DailyReport = () => {
     const [selectedDay, setSelectedDay] = useState(today);
     const [selectedDepartment, setSelectedDepartment] = useState('');
 
+    // Get total days
+    const totalDays = useMemo(() => {
+        return attendanceData.length ? getDaysInMonth(attendanceData) : new Date(selectedYear, selectedMonth, 0).getDate();
+    }, [attendanceData, selectedMonth, selectedYear]);
+
     // Get working days
     const workingDays = useMemo(() => {
         if (!attendanceData.length) return [];
         return calculateWorkingDays(attendanceData, selectedMonth, null, selectedYear);
     }, [attendanceData, selectedMonth, selectedYear]);
 
-    // Get holidays
+    // Get holidays (Configured + Sundays)
     const holidays = useMemo(() => {
-        return getHolidayDays(selectedMonth, selectedYear);
-    }, [selectedMonth, selectedYear]);
+        return getHolidays(selectedMonth, totalDays, selectedYear);
+    }, [selectedMonth, selectedYear, totalDays]);
 
     // Check if selected day is a holiday
     const isHoliday = holidays.includes(selectedDay);
-    const holidayName = isHoliday ? getHolidayLabel(selectedMonth, selectedDay, selectedYear) : null;
+    const holidayName = getHolidayLabel(selectedMonth, selectedDay, selectedYear);
 
     // Check if selected day is a working day
     const isWorkingDay = workingDays.includes(selectedDay);
@@ -124,8 +129,7 @@ const DailyReport = () => {
     };
 
     const handleNextDay = () => {
-        const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
-        if (selectedDay < daysInMonth) {
+        if (selectedDay < totalDays) {
             setSelectedDay(selectedDay + 1);
         }
     };
@@ -162,18 +166,18 @@ const DailyReport = () => {
                                 </h2>
                                 <div className="flex items-center justify-center gap-2 mt-1">
                                     {isHoliday && (
-                                        <span className="text-sm text-red-600 font-semibold">
+                                        <span className="text-sm text-red-600 font-semibold bg-red-50 px-3 py-0.5 rounded-full">
                                             🎉 {holidayName || 'Holiday'}
                                         </span>
                                     )}
                                     {!isHoliday && isWorkingDay && (
-                                        <span className="text-sm text-green-600 font-semibold">
+                                        <span className="text-sm text-green-600 font-semibold bg-green-50 px-3 py-0.5 rounded-full">
                                             ✓ Working Day
                                         </span>
                                     )}
                                     {!isHoliday && !isWorkingDay && (
-                                        <span className="text-sm text-slate-500 font-semibold">
-                                            ☀️ Sunday
+                                        <span className="text-sm text-slate-500 font-semibold bg-slate-50 px-3 py-0.5 rounded-full">
+                                            Non-Working Day
                                         </span>
                                     )}
                                 </div>
@@ -183,7 +187,7 @@ const DailyReport = () => {
 
                     <button
                         onClick={handleNextDay}
-                        disabled={selectedDay >= new Date(selectedYear, selectedMonth, 0).getDate()}
+                        disabled={selectedDay >= totalDays}
                         className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                     >
                         <ChevronRight className="w-6 h-6 text-slate-600" />

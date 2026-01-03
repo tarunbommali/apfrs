@@ -1,12 +1,12 @@
 /* eslint-disable no-unused-vars */
 import React from 'react';
 
-const EmailActions = ({ 
-  employeesWithEmail, 
-  isSMTPConfigured, 
-  onBulkEmail, 
-  bulkEmailProgress, 
-  sendingEmail 
+const EmailActions = ({
+  employeesWithEmail,
+  isSMTPConfigured,
+  onBulkEmail,
+  bulkEmailProgress,
+  sendingEmail
 }) => {
   if (employeesWithEmail === 0) return null;
 
@@ -40,11 +40,10 @@ const EmailActions = ({
                 <div className="text-2xl font-bold text-slate-900">{bulkEmailProgress.total}</div>
                 <div className="text-xs text-slate-500 font-medium">TOTAL</div>
               </div>
-              
+
               <div className="text-center">
-                <div className={`text-2xl font-bold ${
-                  bulkEmailProgress.sent === bulkEmailProgress.total ? 'text-emerald-600' : 'text-sky-600'
-                }`}>
+                <div className={`text-2xl font-bold ${bulkEmailProgress.sent === bulkEmailProgress.total ? 'text-emerald-600' : 'text-sky-600'
+                  }`}>
                   {bulkEmailProgress.sent}
                 </div>
                 <div className="text-xs text-slate-500 font-medium">SENT</div>
@@ -96,9 +95,9 @@ const EmailActions = ({
               <span className="text-sm font-medium text-amber-700">SMTP Not Configured</span>
             </div>
           )}
-          
+
           <button
-            onClick={onBulkEmail}
+            onClick={() => onBulkEmail()}
             disabled={sendingEmail || bulkEmailProgress.processing || !isSMTPConfigured}
             className="px-6 py-3 bg-sky-600 text-white rounded-lg hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 flex items-center shadow-sm font-medium"
           >

@@ -393,292 +393,28 @@ const FacultySummary = () => {
     }
   };
 
-  const handleBulkEmail = async () => {
-    // Prevent multiple bulk operations
-    if (isBulkInProgress.current) {
-      console.warn("Bulk email already in progress");
+  const handleSendSample = async () => {
+    const sampleEmp = filteredData.find((emp) => emp.canSendEmail);
+
+    if (!sampleEmp) {
+      alert("No eligible employees found to send a sample to.");
       return;
     }
 
-    isBulkInProgress.current = true;
-
-    try {
-      const smtpCheck = getValidatedSMTPConfig();
-      if (!smtpCheck.ok) {
-        const errorMsg = smtpCheck.message || SMTP_MISSING_ERROR;
-        setBulkEmailProgress((prev) => ({
-          ...prev,
-          error: errorMsg,
-          status: "error",
-        }));
-        alert(errorMsg);
-        return;
-      }
-      const bulkSMTPConfig = smtpCheck.config;
-
-      const employeesToEmail = filteredData.filter((emp) => emp.canSendEmail);
-
-      if (employeesToEmail.length === 0) {
-        const errorMsg =
-          "No employees available for email. Either emails were already sent today or no valid email addresses found.";
-        setBulkEmailProgress((prev) => ({
-          ...prev,
-          error: errorMsg,
-          status: "error",
-        }));
-        return;
-      }
-
-      console.log(`Starting bulk email for ${employeesToEmail.length} employees`);
-
-      // Reset progress
-      setBulkEmailProgress({
-        current: 0,
-        success: 0,
-        fail: 0,
-        total: employeesToEmail.length,
-        processing: true,
-        error: "",
-        status: "in-progress",
-        currentEmployee: "",
-      });
-      setSendingEmail(true);
-
-      let successCount = 0;
-      let errorCount = 0;
-      let alreadySentCount = 0;
-      const errors = [];
-
-      // Process emails sequentially with a small delay to avoid rate limiting
-      for (let i = 0; i < employeesToEmail.length; i++) {
-        const employee = employeesToEmail[i];
-
-        // Update current employee
-        setBulkEmailProgress((prev) => ({
-          ...prev,
-          currentEmployee: employee.name,
-        }));
-
-        try {
-          console.log(`Processing ${i + 1}/${employeesToEmail.length}: ${employee.name}`);
-
-          const result = await handleSendEmail(employee, bulkSMTPConfig);
-
-          if (result && result.success) {
-            successCount++;
-            console.log(`✅ Sent to ${employee.name}`);
-          } else if (result && result.alreadySent) {
-            alreadySentCount++;
-            console.log(`⚠️ Already sent to ${employee.name}`);
-          } else {
-            errorCount++;
-            const errorMsg = result?.message || "Unknown error";
-            errors.push({ employee: employee.name, error: errorMsg });
-            console.log(`❌ Failed to send to ${employee.name}:`, errorMsg);
-          }
-
-          // Update progress
-          setBulkEmailProgress((prev) => ({
-            ...prev,
-            current: i + 1,
-            success: successCount,
-            fail: errorCount
-          }));
-
-          // Add delay between emails (1 second) to avoid rate limiting
-          if (i < employeesToEmail.length - 1) {
-            await new Promise((resolve) => setTimeout(resolve, 1000));
-          }
-        } catch (error) {
-          errorCount++;
-          const errorMsg = error.message || "Unknown error";
-          errors.push({ employee: employee.name, error: errorMsg });
-          console.error(`❌ Error processing ${employee.name}:`, error);
-
-          setBulkEmailProgress((prev) => ({
-            ...prev,
-            current: i + 1,
-            fail: errorCount
-          }));
-        }
-      }
-
-      // Prepare summary message
-      let summaryMessage = "";
-      let statusType = "info";
-
-      if (successCount > 0 && errorCount === 0) {
-        summaryMessage = `✅ Successfully sent ${successCount} email${successCount > 1 ? 's' : ''}`;
-        if (alreadySentCount > 0) {
-          summaryMessage += ` (${alreadySentCount} already sent today)`;
-        }
-        statusType = "success";
-      } else if (successCount > 0 && errorCount > 0) {
-        summaryMessage = `⚠️ Sent ${successCount} successfully, ${errorCount} failed`;
-        if (alreadySentCount > 0) {
-          summaryMessage += `, ${alreadySentCount} already sent`;
-        }
-        statusType = "warning";
-      } else if (errorCount > 0) {
-        summaryMessage = `❌ Failed to send ${errorCount} email${errorCount > 1 ? 's' : ''}`;
-        if (alreadySentCount > 0) {
-          summaryMessage += ` (${alreadySentCount} already sent)`;
-        }
-
-        // Show first 3 errors
-        if (errors.length > 0) {
-          const errorList = errors.slice(0, 3).map(e => `${e.employee}: ${e.error}`).join("; ");
-          summaryMessage += `. Errors: ${errorList}${errors.length > 3 ? "..." : ""}`;
-        }
-        statusType = "error";
-      } else {
-        summaryMessage = "No emails were sent";
-        statusType = "info";
-      }
-
-      console.log("Bulk email completed:", summaryMessage);
-
-      setBulkEmailProgress((prev) => ({
-        ...prev,
-        processing: false,
-        error: summaryMessage,
-        status: statusType,
-        currentEmployee: "",
-      }));
-
-      setSendingEmail(false);
-
-      // Auto-clear after 10 seconds
-      setTimeout(() => {
-        setBulkEmailProgress({
-          current: 0,
-          success: 0,
-          fail: 0,
-          total: 0,
-          processing: false,
-          error: "",
-          status: "idle",
-          currentEmployee: "",
-        });
-      }, 10000);
-
-    } catch (error) {
-      console.error("Bulk email error:", error);
-      setBulkEmailProgress({
-        sent: 0,
-        total: 0,
-        processing: false,
-        error: `Bulk email failed: ${error.message}`,
-        status: "error",
-        currentEmployee: "",
-      });
-      setSendingEmail(false);
-    } finally {
-      isBulkInProgress.current = false;
+    if (!confirm(`Send a sample email to ${sampleEmp.name} (${sampleEmp.email})?`)) {
+      return;
     }
-  };
 
-  // Alternative bulk email using the utility function
-  const handleBulkEmailAlternative = async () => {
+    setSendingEmail(true);
     try {
-      const smtpCheck = getValidatedSMTPConfig();
-      if (!smtpCheck.ok) {
-        alert(smtpCheck.message || SMTP_MISSING_ERROR);
-        return;
-      }
-
-      const employeesToEmail = filteredData.filter((emp) => emp.canSendEmail);
-
-      if (employeesToEmail.length === 0) {
-        alert("No employees available for email.");
-        return;
-      }
-
-      setSendingEmail(true);
-      setBulkEmailProgress({
-        current: 0,
-        success: 0,
-        fail: 0,
-        total: employeesToEmail.length,
-        processing: true,
-        error: "",
-        status: "in-progress",
-        currentEmployee: "",
-      });
-
-      // Use the sendBulkReports utility function
-      const results = await sendBulkReports(
-        employeesToEmail,
-        (progress) => {
-          setBulkEmailProgress({
-            current: progress.current,
-            success: progress.success || 0,
-            fail: progress.failed || 0,
-            total: progress.total,
-            processing: progress.status === 'sending' || progress.status === 'processing',
-            error: progress.error || "",
-            status: progress.status === 'error' ? 'error' :
-              progress.status === 'sent' ? 'success' : 'in-progress',
-            currentEmployee: progress.employee || "",
-          });
-        },
-        2, // Concurrency: 2 emails at a time
-        selectedMonth,
-        selectedYear
-      );
-
-      // Save successful reports
-      results.results.forEach((result) => {
-        if (result.success && result.employeeId) {
-          saveEmailReport(
-            result.employeeId,
-            result.email,
-            "success",
-            "Email sent via bulk operation"
-          );
-        } else if (!result.success) {
-          saveEmailReport(
-            result.employeeId,
-            result.email,
-            "error",
-            result.error || "Bulk email failed"
-          );
-        }
-      });
-
-      const successCount = results.results.filter(r => r.success).length;
-      const errorCount = results.results.filter(r => !r.success).length;
-
-      let summaryMessage = "";
-      if (successCount > 0 && errorCount === 0) {
-        summaryMessage = `✅ Successfully sent ${successCount} emails`;
-      } else if (successCount > 0 && errorCount > 0) {
-        summaryMessage = `⚠️ Sent ${successCount} successfully, ${errorCount} failed`;
+      const result = await handleSendEmail(sampleEmp);
+      if (result && result.success) {
+        alert(`Sample email sent successfully to ${sampleEmp.name}`);
       } else {
-        summaryMessage = `❌ Failed to send ${errorCount} emails`;
+        alert(`Failed to send sample: ${result?.message || "Unknown error"}`);
       }
-
-      setBulkEmailProgress({
-        current: employeesToEmail.length,
-        success: successCount,
-        fail: errorCount,
-        total: employeesToEmail.length,
-        processing: false,
-        error: summaryMessage,
-        status: errorCount === 0 ? "success" : errorCount === employeesToEmail.length ? "error" : "warning",
-        currentEmployee: "",
-      });
-
     } catch (error) {
-      console.error("Bulk email error:", error);
-      setBulkEmailProgress({
-        sent: 0,
-        total: 0,
-        processing: false,
-        error: `Bulk email failed: ${error.message}`,
-        status: "error",
-        currentEmployee: "",
-      });
+      alert(`Error: ${error.message}`);
     } finally {
       setSendingEmail(false);
     }
@@ -705,8 +441,9 @@ const FacultySummary = () => {
             effectiveWorkingDays={effectiveWorkingDays}
             periodStats={periodStats}
             sendingEmail={sendingEmail}
-            bulkEmailProgress={bulkEmailProgress}
-            onBulkSend={handleBulkEmail}
+            bulkEmailProgress={{ processing: false }} // Dummy prop
+            onAction={handleSendSample}
+            actionLabel="Send Sample Email"
             onSendEmail={handleSendEmail}
             emailStatus={emailStatus}
             searchValue={filters.search}
@@ -721,9 +458,10 @@ const FacultySummary = () => {
             isSMTPConfigured={isSMTPConfigured}
             employeesAlreadySent={employeesAlreadySent}
             employeesWithEmail={employeesWithEmail}
-            bulkEmailProgress={bulkEmailProgress}
+            bulkEmailProgress={{ processing: false }} // Dummy prop
             sendingEmail={sendingEmail}
-            onBulkSend={handleBulkEmail}
+            onAction={handleSendSample}
+            actionLabel="Send Sample Email"
             selectedMonth={selectedMonth}
             selectedYear={selectedYear}
           />

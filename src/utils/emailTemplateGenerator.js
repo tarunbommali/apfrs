@@ -24,7 +24,7 @@ const getPerformanceColor = (percentage) => {
 const getPerformanceRemark = (percentage, name) => {
   const pct = parseFloat(percentage) || 0;
   const firstName = name?.split(' ')[0] || 'The employee';
-  
+
   if (pct >= 90) {
     return `Excellent performance! ${firstName} has maintained outstanding attendance this month.`;
   }
@@ -142,13 +142,6 @@ export const generateEmailHTML = (employee, summary, config, periodLabel) => {
                       <div style="font-size: 11px; color: #b91c1c; text-transform: uppercase; font-weight: 600; margin-top: 4px;">Absent Days</div>
                     </div>
                   </td>
-                  <!-- Leave Days -->
-                  <td width="33%" style="padding: 8px;">
-                    <div style="background: #fffbeb; border: 1px solid #f59e0b; border-radius: 12px; padding: 16px; text-align: center;">
-                      <div style="font-size: 28px; font-weight: 800; color: #d97706;">${summary.leaveDays || 0}</div>
-                      <div style="font-size: 11px; color: #b45309; text-transform: uppercase; font-weight: 600; margin-top: 4px;">Leave Days</div>
-                    </div>
-                  </td>
                 </tr>
               </table>
             </td>
@@ -194,17 +187,52 @@ export const generateEmailHTML = (employee, summary, config, periodLabel) => {
             </td>
           </tr>
           
-          <!-- Remarks -->
+          <!-- Daily Attendance Breakdown -->
           <tr>
             <td style="padding: 0 32px 32px;">
-              <div style="background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); border-radius: 12px; padding: 20px;">
-                <h3 style="margin: 0 0 8px; color: #475569; font-size: 14px; font-weight: 700;">
-                  💬 Performance Remarks
-                </h3>
-                <p style="margin: 0; color: #334155; font-size: 14px; line-height: 1.6;">
-                  ${remark}
-                </p>
-              </div>
+              <h2 style="margin: 0 0 16px; color: #1e293b; font-size: 18px; font-weight: 700;">
+                📅 Daily Attendance
+              </h2>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; width: 100%;">
+                <thead>
+                  <tr style="background-color: #f1f5f9;">
+                    <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e2e8f0; color: #475569; font-size: 12px; font-weight: 700; text-transform: uppercase;">Day</th>
+                    <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e2e8f0; color: #475569; font-size: 12px; font-weight: 700; text-transform: uppercase;">In</th>
+                    <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e2e8f0; color: #475569; font-size: 12px; font-weight: 700; text-transform: uppercase;">Out</th>
+                    <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e2e8f0; color: #475569; font-size: 12px; font-weight: 700; text-transform: uppercase;">Status</th>
+                    <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e2e8f0; color: #475569; font-size: 12px; font-weight: 700; text-transform: uppercase;">Duration</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${employee.attendance && employee.attendance.length > 0 ? employee.attendance.map((record, index) => {
+    const rowBg = index % 2 === 0 ? '#ffffff' : '#f8fafc';
+    const statusColor = record.status === 'P' ? '#166534' :
+      record.status === 'A' ? '#991b1b' :
+        '#854d0e';
+    const statusBg = record.status === 'P' ? '#dcfce7' :
+      record.status === 'A' ? '#fee2e2' :
+        '#fef9c3';
+
+    return `
+                      <tr style="background-color: ${rowBg};">
+                        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px;">${record.day}</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px;">${record.inTime || '-'}</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px;">${record.outTime || '-'}</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0;">
+                          <span style="background-color: ${statusBg}; color: ${statusColor}; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600;">
+                            ${record.status || '-'}
+                          </span>
+                        </td>
+                        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px;">${record.duration || record.hours + ' hrs' || '-'}</td>
+                      </tr>
+                    `;
+  }).join('') : `
+                    <tr>
+                      <td colspan="5" style="padding: 16px; text-align: center; color: #64748b; font-size: 13px;">No attendance records found</td>
+                    </tr>
+                  `}
+                </tbody>
+              </table>
             </td>
           </tr>
           
@@ -268,16 +296,14 @@ ATTENDANCE SUMMARY
 ------------------
 Present Days: ${summary.presentDays || 0}
 Absent Days: ${summary.absentDays || 0}
-Leave Days: ${summary.leaveDays || 0}
+
 Working Days: ${summary.workingDays || 0}
 Total Hours: ${summary.totalHours || 0} hrs
 Holidays: ${summary.holidays || 0}
 
 ATTENDANCE RATE: ${summary.attendancePercentage || 0}%
 
-PERFORMANCE REMARKS
--------------------
-${remark}
+
 
 ${'='.repeat(50)}
 Report ID: ${reportId}

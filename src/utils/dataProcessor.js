@@ -3,12 +3,15 @@ import { parseDurationToHours, estimateHoursFromTimes } from './timeUtils';
 import { calculateSummary, calculateOverallStats, calculateMonthlyStats } from './attendanceCalculations';
 import { detectMonthFromFileName } from './fileUtils';
 import { getWorkingDays, getDaysInMonth } from './dateTimeUtils';
+import { getHolidayLabel, getHolidayType } from './calendar';
 
 const BASE_FIELD_KEYS = new Set([
   'name',
   'designation',
+
   'cfmsid',
   'cfms_id',
+
   'emptype',
   'emp_type',
   'department',
@@ -120,13 +123,16 @@ const formatTime = (timeValue) => {
   return timeStr;
 };
 
-export const processAttendanceData = (rawData) => {
+export const processAttendanceData = (rawData, monthNumber = null, year = new Date().getFullYear()) => {
   if (!rawData || rawData.length < 3) return [];
 
   const processed = [];
   const headerRow = rawData[0];
   const daysInMonth = detectDaysInMonth(headerRow);
   const dayColumnSet = buildDayColumnSet(headerRow, daysInMonth);
+
+  // Use detected month if not provided
+  const actualMonth = monthNumber || new Date().getMonth() + 1;
 
   for (let i = 1; i < rawData.length; i++) {
     const row = rawData[i];
@@ -152,16 +158,45 @@ export const processAttendanceData = (rawData) => {
       const dayPrefix = day.toString().padStart(2, '0');
       const baseCol = findDayColumns(headerRow, dayPrefix);
 
+      // Check if this day is a holiday or weekend
+      const holidayLabel = getHolidayLabel(actualMonth, day, year);
+      const holidayType = getHolidayType(actualMonth, day, year);
+
       if (baseCol !== -1 && baseCol + 3 < row.length) {
         const inTime = formatTime(row[baseCol]);
         const outTime = formatTime(row[baseCol + 1]);
-        const status = (row[baseCol + 2] || '').toString().trim();
+        let rawStatus = (row[baseCol + 2] || '').toString().trim();
         const duration = (row[baseCol + 3] || '').toString().trim();
 
+        // Determine final status based on calendar configuration
+        let finalStatus;
+        if (holidayLabel) {
+          // If it's a holiday/weekend/second Saturday, check if they actually attended
+          if (rawStatus === 'P') {
+            // They came to work on a holiday - mark as Present
+            finalStatus = 'P';
+          } else if (rawStatus === 'A') {
+            // They were marked absent on a holiday (unusual but possible)
+            finalStatus = 'A';
+          } else {
+            // No attendance data - show the holiday label
+            if (holidayType === 'sunday') {
+              finalStatus = 'Weekend';
+            } else if (holidayType === 'second_saturday') {
+              finalStatus = 'Second Saturday';
+            } else {
+              finalStatus = holidayLabel; // e.g., "Republic Day", "Diwali"
+            }
+          }
+        } else {
+          // On working days, only allow P or A
+          finalStatus = (rawStatus === 'P' || rawStatus === 'A') ? rawStatus : '';
+        }
+
         let hours = 0;
-        if (duration && status === 'P') {
+        if (duration && finalStatus === 'P') {
           hours = parseDurationToHours(duration);
-        } else if (status === 'P' && (inTime || outTime)) {
+        } else if (finalStatus === 'P' && (inTime || outTime)) {
           hours = estimateHoursFromTimes(inTime, outTime);
         }
 
@@ -170,17 +205,29 @@ export const processAttendanceData = (rawData) => {
           date: dayPrefix,
           inTime,
           outTime,
-          status,
+          status: finalStatus,
           duration,
           hours
         });
       } else {
+        // For missing columns, still check if it's a holiday/weekend
+        let finalStatus = '';
+        if (holidayLabel) {
+          if (holidayType === 'sunday') {
+            finalStatus = 'Weekend';
+          } else if (holidayType === 'second_saturday') {
+            finalStatus = 'Second Saturday';
+          } else {
+            finalStatus = holidayLabel;
+          }
+        }
+
         employee.attendance.push({
           day,
           date: dayPrefix,
           inTime: '',
           outTime: '',
-          status: '',
+          status: finalStatus,
           duration: '',
           hours: 0
         });
@@ -194,10 +241,12 @@ export const processAttendanceData = (rawData) => {
 };
 
 export const handleExcelUpload = (rawData, fileName = '') => {
-  const attendanceData = processAttendanceData(rawData);
+  const monthNumber = detectMonthFromFileName(fileName);
+  const year = new Date().getFullYear(); // Could also detect from filename if needed
+
+  const attendanceData = processAttendanceData(rawData, monthNumber, year);
   if (!attendanceData || !Array.isArray(attendanceData)) return [];
 
-  const monthNumber = detectMonthFromFileName(fileName);
 
   return attendanceData.map((employee) => {
     const summary = calculateSummary(employee, monthNumber);
@@ -219,8 +268,8 @@ export const handleExcelUpload = (rawData, fileName = '') => {
           summary.attendancePercentage >= 75
             ? 'Good'
             : summary.attendancePercentage >= 50
-            ? 'Average'
-            : 'Poor'
+              ? 'Average'
+              : 'Poor'
       }
     };
   });

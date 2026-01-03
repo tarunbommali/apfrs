@@ -69,18 +69,26 @@ const Sidebar = ({ isOpen, onClose, hasData }) => {
 
 
                         <SidebarItem to="/" icon={Home} label="Home" />
-                        <SidebarItem to="/daily" icon={Calendar} label="Daily Report" disabled={!hasData} />
-                        <SidebarItem to="/summary" icon={FileText} label="Monthly Report" disabled={!hasData} />
-                        <SidebarItem to="/weekly" icon={Calendar} label="Weekly Report" disabled={!hasData} />
-                        <SidebarItem to="/department" icon={Users} label="Department Report" disabled={!hasData} />
-                        <SidebarItem to="/detailed" icon={Users} label="Detailed View" disabled={!hasData} />
-                        <SidebarItem to="/email-preview" icon={Mail} label="Email Template" disabled={!hasData} />
-                        <SidebarItem to="/status-dashboard" icon={BarChart3} label="Status Dashboard" disabled={!hasData} />
+                        <SidebarItem to="/import" icon={Upload} label="Import Data" />
 
                         <div className="pt-4 px-4 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                            System
+                            Reports
                         </div>
-                        <SidebarItem to="/import" icon={Upload} label="Import Data" />
+                        <SidebarItem to="/daily" icon={Calendar} label="Daily Report" disabled={!hasData} />
+                        <SidebarItem to="/weekly" icon={Calendar} label="Weekly Report" disabled={!hasData} />
+                        <SidebarItem to="/summary" icon={FileText} label="Monthly Report" disabled={!hasData} />
+                        <SidebarItem to="/department" icon={Users} label="Department Report" disabled={!hasData} />
+                        <SidebarItem to="/detailed" icon={Users} label="Detailed View" disabled={!hasData} />
+
+                        <div className="pt-4 px-4 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                            Communication
+                        </div>
+                        <SidebarItem to="/status-dashboard" icon={BarChart3} label="Status Dashboard" disabled={!hasData} />
+                        <SidebarItem to="/email-preview" icon={Mail} label="Email Template" disabled={!hasData} />
+
+                        <div className="pt-4 px-4 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                            Configuration
+                        </div>
                         <SidebarItem to="/calendar" icon={Calendar} label="Academic Calendar" />
                         <SidebarItem to="/admin" icon={Settings} label="Email Configuration" />
                     </nav>

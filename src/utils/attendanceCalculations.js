@@ -44,19 +44,17 @@ export const calculateSummary = (employee, monthNumber = 11, year = new Date().g
   const totalDays = employee.attendance.length;
   const workingDays = getHardcodedWorkingDays(monthNumber, totalDays, year);
   const workingDaysCount = workingDays.length;
-  const workingDaySet = new Set(workingDays);
 
   let presentDays = 0;
   let absentDays = 0;
-  let leaveDays = 0;
+  let holidayDays = 0;
   let totalHours = 0;
 
-  employee.attendance.forEach((record, index) => {
-    const dayNumber = index + 1;
-    if (!workingDaySet.has(dayNumber)) return;
+  employee.attendance.forEach((record) => {
+    const status = record.status?.trim() || '';
 
-    const status = record.status?.toUpperCase() || '';
     if (status === 'P') {
+      // Present day
       presentDays++;
       if (record.hours && record.hours > 0) {
         totalHours += record.hours;
@@ -68,13 +66,19 @@ export const calculateSummary = (employee, monthNumber = 11, year = new Date().g
         totalHours += 8.0;
       }
     } else if (status === 'A') {
+      // Absent day
       absentDays++;
-    } else if (['L', 'EL', 'OD'].includes(status)) {
-      leaveDays++;
-    } else if (status && status.trim() !== '') {
-      absentDays++;
+    } else {
+      // Everything else is a holiday (Weekend, Republic Day, Diwali, etc. or empty on holiday)
+      holidayDays++;
     }
   });
+
+  // Verify accounting: Present + Absent + Holidays MUST equal Total Days
+  const calculatedTotal = presentDays + absentDays + holidayDays;
+  if (calculatedTotal !== totalDays) {
+    console.warn(`Accounting mismatch: P(${presentDays}) + A(${absentDays}) + H(${holidayDays}) = ${calculatedTotal} !== ${totalDays}`);
+  }
 
   const attendancePercentage = workingDaysCount > 0 ? (presentDays / workingDaysCount) * 100 : 0;
   const totalHoursFormatted = parseFloat(totalHours.toFixed(2));
@@ -82,11 +86,10 @@ export const calculateSummary = (employee, monthNumber = 11, year = new Date().g
   return {
     presentDays,
     absentDays,
-    leaveDays,
     totalDays,
     workingDays: workingDaysCount,
-    holidays: totalDays - workingDaysCount,
-    effectiveDays: presentDays + absentDays + leaveDays,
+    holidays: holidayDays,
+    effectiveDays: presentDays + absentDays,
     totalHours: totalHoursFormatted,
     formattedDuration: formatDuration(totalHours),
     attendancePercentage: parseFloat(attendancePercentage.toFixed(1))
