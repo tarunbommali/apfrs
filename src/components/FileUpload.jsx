@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { read, utils } from 'xlsx';
 import { Upload, FileSpreadsheet, X, AlertCircle } from 'lucide-react';
+import { getAvailableYears } from '../config/calendar';
 
 /* ---------- MONTH UTILS ---------- */
 const MONTHS = [
@@ -29,14 +30,7 @@ const detectYearFromFilename = (filename = '') => {
   return yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
 };
 
-const getAvailableYears = () => {
-  const currentYear = new Date().getFullYear();
-  const years = [];
-  for (let i = 0; i < 6; i++) {
-    years.push(currentYear - i);
-  }
-  return years;
-};
+// getAvailableYears removed as it is now imported from config/calendar
 
 const isFutureMonth = (month, year) => {
   const now = new Date();

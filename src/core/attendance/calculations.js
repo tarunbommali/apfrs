@@ -1,4 +1,4 @@
-import { calculateWorkingDaysFromCalendar, getWorkingDays, getDaysInMonth } from '../calendar/workingDays';
+import { calculateWorkingDaysFromCalendar, getWorkingDays, getDaysInMonth, getHolidays } from '../calendar/workingDays';
 import { parseDurationToHours, estimateHoursFromTimes } from '../calendar/dateUtils';
 
 const getEmptySummary = () => ({
@@ -42,19 +42,29 @@ export const calculateSummary = (employee, monthNumber = 11, year = new Date().g
   if (!employee || !employee.attendance) return getEmptySummary();
 
   const totalDays = employee.attendance.length;
-  const workingDays = calculateWorkingDaysFromCalendar(monthNumber, totalDays, year);
-  const workingDaysCount = workingDays.length;
+  // Get holidays for this specific month/year from config
+  const holidays = getHolidays(monthNumber, totalDays, year);
+  const holidaySet = new Set(holidays);
+  const holidayCount = holidaySet.size;
+
+  // Working days as per requirement: total_days - holiday count from config
+  const workingDaysCount = totalDays - holidayCount;
 
   let presentDays = 0;
   let absentDays = 0;
-  let holidayDays = 0;
   let totalHours = 0;
 
-  employee.attendance.forEach((record) => {
+  employee.attendance.forEach((record, index) => {
+    const day = index + 1;
     const status = record.status?.trim() || '';
 
+    // If it's a holiday in the config, we don't count it as P or A for this formula
+    if (holidaySet.has(day)) {
+      return;
+    }
+
+    // It's a working day
     if (status === 'P') {
-      // Present day
       presentDays++;
       if (record.hours && record.hours > 0) {
         totalHours += record.hours;
@@ -65,21 +75,14 @@ export const calculateSummary = (employee, monthNumber = 11, year = new Date().g
       } else {
         totalHours += 8.0;
       }
-    } else if (status === 'A') {
-      // Absent day
-      absentDays++;
     } else {
-      // Everything else is a holiday (Weekend, Republic Day, Diwali, etc. or empty on holiday)
-      holidayDays++;
+      // Anything other than 'P' on a working day (including 'A', 'L', or empty) is counted as Absent
+      // to satisfy the requirement: Present + Absent + Holidays = Total
+      absentDays++;
     }
   });
 
-  // Verify accounting: Present + Absent + Holidays MUST equal Total Days
-  const calculatedTotal = presentDays + absentDays + holidayDays;
-  if (calculatedTotal !== totalDays) {
-    console.warn(`Accounting mismatch: P(${presentDays}) + A(${absentDays}) + H(${holidayDays}) = ${calculatedTotal} !== ${totalDays}`);
-  }
-
+  // Attendance Percentage = (Present Days / Working Days) * 100
   const attendancePercentage = workingDaysCount > 0 ? (presentDays / workingDaysCount) * 100 : 0;
   const totalHoursFormatted = parseFloat(totalHours.toFixed(2));
 
@@ -88,7 +91,7 @@ export const calculateSummary = (employee, monthNumber = 11, year = new Date().g
     absentDays,
     totalDays,
     workingDays: workingDaysCount,
-    holidays: holidayDays,
+    holidays: holidayCount,
     effectiveDays: presentDays + absentDays,
     totalHours: totalHoursFormatted,
     formattedDuration: formatDuration(totalHours),

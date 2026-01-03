@@ -3,8 +3,8 @@
  * This file re-exports functions from their new locations to maintain backward compatibility
  */
 
-import { getSMTPConfig, validateSMTPConfig, saveSMTPConfigEntry } from '../store/smtpConfig';
-import { sendEmail, sendIndividualReport, testSMTPConnection } from '../api/emailService';
+import { getSMTPConfig, validateSMTPConfig, saveSMTPConfigEntry } from '../../store/smtpConfig';
+import { sendEmail, sendIndividualReport, testSMTPConnection } from '../../api/emailService';
 
 // Re-export for backward compatibility
 export {

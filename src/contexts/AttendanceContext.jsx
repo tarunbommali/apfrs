@@ -72,43 +72,21 @@ export const AttendanceProvider = ({ children }) => {
 
     try {
       console.log('📤 Processing uploaded file:', file.name, 'Month:', month);
-      console.log('Raw data structure:', {
-        rows: rawData.length,
-        columns: rawData[0]?.length || 0,
-        sample: rawData.slice(0, 3)
-      });
+      // Resolve month and year: Use selection if provided, otherwise fallback to detection from filename
+      let monthNum = month || 11;
+      let yearNum = year || new Date().getFullYear();
 
-      // Process the Excel data - pass filename for automatic month detection if possible
-      const processedData = handleExcelUpload(rawData, file.name);
+      // Process the Excel data
+      const processedData = handleExcelUpload(rawData, file.name, monthNum, yearNum);
 
       if (!processedData || !Array.isArray(processedData) || processedData.length === 0) {
         throw new Error('No valid attendance data found in the file');
       }
 
-      console.log('✅ Successfully processed attendance data:', {
-        employees: processedData.length,
-        sample: processedData[0]
-      });
-
       // Update state
       setAttendanceData(processedData);
       setFileName(file.name);
-
-      // Resolve month: Use selection if provided, otherwise fallback to detection from filename
-      let monthNum = 11; // Default
-
-      if (typeof month === 'number') {
-        monthNum = month;
-      } else if (typeof month === 'string') {
-        const monthMap = {
-          'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
-          'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
-        };
-        monthNum = monthMap[month.toLowerCase()] || monthMap[month.toLowerCase().substring(0, 3)] || 11;
-      }
-
       setSelectedMonth(monthNum);
-      const yearNum = year || new Date().getFullYear();
       setSelectedYear(yearNum);
 
       // Store in localStorage for persistence
@@ -180,4 +158,5 @@ export const AttendanceProvider = ({ children }) => {
   );
 };
 
-export default AttendanceContext;
+// export default AttendanceContext;
+// Removed default export to fix Vite HMR incompatibility with non-component default exports.

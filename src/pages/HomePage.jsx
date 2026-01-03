@@ -15,7 +15,7 @@ import { getWorkingDays, getDaysInMonth } from '../core/calendar/workingDays';
 import {
   getSMTPConfig,
   validateSMTPConfig,
-} from '../utils/emailUtils';
+} from '../utils/email/index';
 
 const EMAIL_REPORTS_KEY = "faculty_email_reports";
 
@@ -71,9 +71,9 @@ const HomePage = () => {
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
   /* ---------------- FILE UPLOAD ---------------- */
-  const handleUpload = async (file, data, month) => {
+  const handleUpload = async (file, data, month, year) => {
     setUploadSuccess(false);
-    const success = await handleFileUpload(file, data, month);
+    const success = await handleFileUpload(file, data, month, year);
     setUploadSuccess(success);
     return success;
   };

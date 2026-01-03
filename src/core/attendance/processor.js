@@ -1,7 +1,7 @@
-import { persons } from '../../utils/data';
+import { persons } from '../../utils/data/faculty';
 import { parseDurationToHours, estimateHoursFromTimes } from '../calendar/dateUtils';
 import { calculateSummary, calculateOverallStats, calculateMonthlyStats } from './calculations';
-import { detectMonthFromFileName } from '../../utils/file';
+import { detectMonthFromFileName } from '../../utils/export/file';
 import { getWorkingDays, getDaysInMonth } from '../calendar/workingDays';
 import { getHolidayLabel, getHolidayType } from '../../config/calendar';
 
@@ -240,16 +240,15 @@ export const processAttendanceData = (rawData, monthNumber = null, year = new Da
   return processed;
 };
 
-export const handleExcelUpload = (rawData, fileName = '') => {
-  const monthNumber = detectMonthFromFileName(fileName);
-  const year = new Date().getFullYear(); // Could also detect from filename if needed
+export const handleExcelUpload = (rawData, fileName = '', monthNumber = null, year = new Date().getFullYear()) => {
+  const actualMonth = monthNumber || detectMonthFromFileName(fileName) || 11;
+  const actualYear = year || new Date().getFullYear();
 
-  const attendanceData = processAttendanceData(rawData, monthNumber, year);
+  const attendanceData = processAttendanceData(rawData, actualMonth, actualYear);
   if (!attendanceData || !Array.isArray(attendanceData)) return [];
 
-
   return attendanceData.map((employee) => {
-    const summary = calculateSummary(employee, monthNumber);
+    const summary = calculateSummary(employee, actualMonth, actualYear);
     return {
       canSendEmail: true,
       cfmsId: employee.cfmsId,
@@ -275,19 +274,19 @@ export const handleExcelUpload = (rawData, fileName = '') => {
   });
 };
 
-export const analyzeAttendanceData = (attendanceData, monthNumber = 11) => {
+export const analyzeAttendanceData = (attendanceData, monthNumber = 11, year = new Date().getFullYear()) => {
   if (!attendanceData || !attendanceData.length) {
     return {
-      summary: calculateOverallStats([], monthNumber),
+      summary: calculateOverallStats([], monthNumber, year),
       dailyStats: [],
       departmentStats: [],
       issues: []
     };
   }
 
-  const overallStats = calculateOverallStats(attendanceData, monthNumber);
-  const dailyStats = calculateMonthlyStats(attendanceData, monthNumber);
-  const workingDays = getWorkingDays(attendanceData, monthNumber);
+  const overallStats = calculateOverallStats(attendanceData, monthNumber, year);
+  const dailyStats = calculateMonthlyStats(attendanceData, monthNumber, year);
+  const workingDays = getWorkingDays(attendanceData, monthNumber, null, year);
   const totalDays = getDaysInMonth(attendanceData);
 
   const departmentMap = new Map();
@@ -306,7 +305,7 @@ export const analyzeAttendanceData = (attendanceData, monthNumber = 11) => {
 
     const deptData = departmentMap.get(dept);
     deptData.employees.push(employee.name);
-    const summary = calculateSummary(employee, monthNumber);
+    const summary = calculateSummary(employee, monthNumber, year);
     deptData.totalPresent += summary.presentDays;
     deptData.totalAbsent += summary.absentDays;
     deptData.totalLeave += summary.leaveDays;
@@ -318,12 +317,12 @@ export const analyzeAttendanceData = (attendanceData, monthNumber = 11) => {
     employeeCount: dept.employees.length,
     avgAttendance:
       dept.employees.length > 0
-        ? ((dept.totalPresent / (dept.employees.length * workingDays.length)) * 100).toFixed(1)
+        ? ((dept.totalPresent / (dept.employees.length * (workingDays.length || 1))) * 100).toFixed(1)
         : '0.0'
   }));
 
   const issues = attendanceData
-    .map((employee) => ({ employee, summary: calculateSummary(employee, monthNumber) }))
+    .map((employee) => ({ employee, summary: calculateSummary(employee, monthNumber, year) }))
     .filter(({ summary }) => summary.attendancePercentage < 50)
     .map(({ employee, summary }) => ({
       name: employee.name,
@@ -342,7 +341,8 @@ export const analyzeAttendanceData = (attendanceData, monthNumber = 11) => {
     issues,
     workingDays: workingDays.length,
     totalHolidays: totalDays - workingDays.length,
-    month: monthNumber
+    month: monthNumber,
+    year
   };
 };
 

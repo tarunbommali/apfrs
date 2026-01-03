@@ -5,7 +5,7 @@ import PageLayout from './PageLayout';
 import { Mail, Eye, Download, AlertCircle, FileSpreadsheet, FileText, Loader2, BarChart3 } from 'lucide-react';
 import { calculateSummary } from '../core/attendance/calculations';
 import { getActiveSMTPConfig } from '../store/smtpConfig';
-import { downloadReport } from '../utils/report';
+import { downloadReport } from '../utils/report/index';
 
 const EmailPreview = () => {
     const { attendanceData, selectedMonth, selectedYear, hasData } = useAttendance();
@@ -124,8 +124,8 @@ const EmailPreview = () => {
                                 <div>
                                     <p className="text-xs text-slate-500 uppercase font-semibold">SMTP Status</p>
                                     <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-bold mt-1 ${activeConfig
-                                            ? 'bg-green-100 text-green-700'
-                                            : 'bg-amber-100 text-amber-700'
+                                        ? 'bg-green-100 text-green-700'
+                                        : 'bg-amber-100 text-amber-700'
                                         }`}>
                                         {activeConfig ? 'CONFIGURED' : 'NOT CONFIGURED'}
                                     </span>

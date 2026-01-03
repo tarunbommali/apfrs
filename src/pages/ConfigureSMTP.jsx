@@ -4,7 +4,7 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
 import PageLayout from './PageLayout';
-import { validateSMTPConfig, sendEmail } from '../utils/emailUtils';
+import { validateSMTPConfig, sendEmail } from '../utils/email/index';
 import {
   getActiveSMTPConfig,
   saveSMTPConfigEntry,

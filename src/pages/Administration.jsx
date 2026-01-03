@@ -1,7 +1,7 @@
 /* eslint-disable no-unused-vars */
 import React, { useEffect, useState, useMemo } from 'react';
 import PageLayout from './PageLayout';
-import { validateSMTPConfig, sendEmail } from '../utils/emailUtils';
+import { validateSMTPConfig, sendEmail } from '../utils/email/index';
 import { getActiveSMTPConfig, saveSMTPConfigEntry } from '../store/smtpConfig';
 import Button from '../components/ui/Button';
 import Card, { CardHeader, CardTitle, CardDescription } from '../components/ui/Card';

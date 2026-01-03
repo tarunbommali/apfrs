@@ -3,7 +3,7 @@ import { getSMTPConfig, validateSMTPConfig, createSMTPEmailPayload } from '../st
 import { calculateSummary } from '../core/attendance/calculations';
 import { generateEmailHTML } from '../core/email/templates';
 import { setEmailSent, setEmailFailed, setEmailPending } from '../store/emailStatus';
-import { generatePDFBase64 } from '../utils/report';
+import { generatePDFBase64 } from '../utils/report/index';
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 

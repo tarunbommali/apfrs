@@ -22,9 +22,9 @@ import {
   setEmailSent,
   setEmailFailed
 } from '../store/emailStatus';
-import { generateIndividualPDF, downloadReport } from '../utils/report';
+import { generateIndividualPDF, downloadReport } from '../utils/report/index';
 import { calculateSummary } from '../core/attendance/calculations';
-import { sendBulkReports, validateSMTPConfig } from '../utils/emailUtils';
+import { sendBulkReports, validateSMTPConfig } from '../utils/email/index';
 import { sendIndividualReport } from '../api/emailService';
 import { getActiveSMTPConfig } from '../store/smtpConfig';
 

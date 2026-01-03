@@ -8,7 +8,7 @@ import {
   validateSMTPConfig,
   sendIndividualReport,
   sendBulkReports,
-} from "../utils/emailUtils";
+} from "../utils/email/index";
 import PageLayout from "./PageLayout";
 import ReportOverview from "../components/report/ReportOverview";
 import ReportBody from "../components/report/ReportBody";

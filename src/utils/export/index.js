@@ -3,9 +3,9 @@ import {
   calculateSummary,
   calculateOverallStats,
   calculateMonthlyStats
-} from './attendanceCalculations';
-import { generateReportFilename } from './fileUtils';
-import { getWorkingDays, getHolidays } from './dateTimeUtils';
+} from '../../core/attendance/calculations';
+import { generateReportFilename } from './file';
+import { getWorkingDays, getHolidays } from '../../core/calendar/workingDays';
 
 const sanitizeCSVValue = (value) => {
   if (value === null || value === undefined) return '';
