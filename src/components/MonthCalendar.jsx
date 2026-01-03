@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useAttendance } from '../contexts/AttendanceContext';
-import { calculateSummary, getHolidays, getWorkingDays } from '../utils/attendanceUtils';
+import { calculateSummary } from '../core/attendance/calculations';
+import { getHolidays, getWorkingDays } from '../core/calendar/workingDays';
 
 const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 

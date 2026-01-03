@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAttendance } from '../contexts/AttendanceContext';
-import { calculateSummary, calculateWorkingDays } from '../utils/attendanceUtils';
+import { calculateSummary } from '../core/attendance/calculations';
+import { getWorkingDays as calculateWorkingDays } from '../core/calendar/workingDays';
 import PageLayout from './PageLayout';
 import { Building2, Users, TrendingUp, Award, AlertCircle } from 'lucide-react';
 

@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 import React, { useRef, useCallback, useState } from 'react';
-import { calculateSummary } from '../../utils/attendanceUtils';
+import { calculateSummary } from '../../core/attendance/calculations';
 
 const FacultyTable = ({
   facultyData,

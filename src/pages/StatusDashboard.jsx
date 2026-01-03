@@ -21,12 +21,12 @@ import {
   clearEmailStatusStore,
   setEmailSent,
   setEmailFailed
-} from '../utils/emailStatusStore';
-import { generateIndividualPDF, downloadReport } from '../utils/reportGenerator';
-import { calculateSummary } from '../utils/attendanceUtils';
+} from '../store/emailStatus';
+import { generateIndividualPDF, downloadReport } from '../utils/report';
+import { calculateSummary } from '../core/attendance/calculations';
 import { sendBulkReports, validateSMTPConfig } from '../utils/emailUtils';
-import { sendIndividualReport } from '../utils/emailService';
-import { getActiveSMTPConfig } from '../utils/smtpConfigStore';
+import { sendIndividualReport } from '../api/emailService';
+import { getActiveSMTPConfig } from '../store/smtpConfig';
 
 const StatusBadge = ({ status }) => {
   const styles = {

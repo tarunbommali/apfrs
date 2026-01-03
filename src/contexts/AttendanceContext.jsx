@@ -1,7 +1,7 @@
 /* eslint-disable no-unused-vars */
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { processAttendanceData, handleExcelUpload } from '../utils/attendanceUtils';
+import { handleExcelUpload } from '../core/attendance/processor';
 
 const AttendanceContext = createContext();
 

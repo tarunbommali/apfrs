@@ -8,7 +8,7 @@ import { validateSMTPConfig, sendEmail } from '../utils/emailUtils';
 import {
   getActiveSMTPConfig,
   saveSMTPConfigEntry,
-} from '../utils/smtpConfigStore';
+} from '../store/smtpConfig';
 import Button from '../components/ui/Button';
 import Card, { CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
 import Input from '../components/ui/Input';

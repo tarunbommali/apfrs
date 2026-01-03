@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { useAttendance } from '../contexts/AttendanceContext';
-import { generateEmailHTML } from '../utils/emailTemplateGenerator';
+import { generateEmailHTML } from '../core/email/templates';
 import PageLayout from './PageLayout';
 import { Mail, Eye, Download, AlertCircle, FileSpreadsheet, FileText, Loader2, BarChart3 } from 'lucide-react';
-import { calculateSummary } from '../utils/attendanceUtils';
-import { getActiveSMTPConfig } from '../utils/smtpConfigStore';
-import { downloadReport } from '../utils/reportGenerator';
+import { calculateSummary } from '../core/attendance/calculations';
+import { getActiveSMTPConfig } from '../store/smtpConfig';
+import { downloadReport } from '../utils/report';
 
 const EmailPreview = () => {
     const { attendanceData, selectedMonth, selectedYear, hasData } = useAttendance();

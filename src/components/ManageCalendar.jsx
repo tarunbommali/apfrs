@@ -9,7 +9,7 @@ import {
   getColorForType,
   getAvailableYears,
   getYearStats
-} from '../utils/calendar';
+} from '../config/calendar';
 
 const ManageCalendar = () => {
   const currentYear = new Date().getFullYear();

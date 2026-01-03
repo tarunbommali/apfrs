@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { useAttendance } from '../contexts/AttendanceContext';
 import EmployeeCard from '../components/EmployeeCard';
-import { calculateSummary, calculateWorkingDays, getDaysInMonth } from '../utils/attendanceUtils';
+import { calculateSummary } from '../core/attendance/calculations';
+import { getWorkingDays, getDaysInMonth } from '../core/calendar/workingDays';
 import PageLayout from './PageLayout';
 import StatsCards from '../components/report/StatsCards';
 
@@ -33,7 +34,7 @@ const DetailedView = () => {
 
   const [expandedId, setExpandedId] = useState(null); // ID or index of currently expanded employee for calendar
 
-  const workingDays = useMemo(() => calculateWorkingDays(attendanceData, selectedMonth, null, selectedYear), [attendanceData, selectedMonth, selectedYear]);
+  const workingDays = useMemo(() => getWorkingDays(attendanceData, selectedMonth, null, selectedYear), [attendanceData, selectedMonth, selectedYear]);
   const totalDaysInPeriod = useMemo(() => getDaysInMonth(attendanceData), [attendanceData]);
   const effectiveWorkingDays = workingDays.length ? workingDays : null;
   const denominatorDays = workingDays.length || totalDaysInPeriod || 1;

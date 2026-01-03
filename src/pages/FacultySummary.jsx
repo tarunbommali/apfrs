@@ -1,11 +1,8 @@
 /* eslint-disable no-unused-vars */
 import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useAttendance } from "../contexts/AttendanceContext";
-import {
-  calculateSummary,
-  calculateWorkingDays,
-  getDaysInMonth,
-} from "../utils/attendanceUtils";
+import { calculateSummary } from '../core/attendance/calculations';
+import { getWorkingDays, getDaysInMonth } from '../core/calendar/workingDays';
 import {
   getSMTPConfig,
   validateSMTPConfig,
@@ -168,7 +165,7 @@ const FacultySummary = () => {
 
   const workingDays = useMemo(() => {
     if (!attendanceData.length) return [];
-    return calculateWorkingDays(attendanceData, selectedMonth, null, selectedYear);
+    return getWorkingDays(attendanceData, selectedMonth, null, selectedYear);
   }, [attendanceData, selectedMonth, selectedYear]);
 
   const totalDaysInPeriod = useMemo(() => {
@@ -373,7 +370,7 @@ const FacultySummary = () => {
 
       return { success: true, data: result };
     } catch (error) {
-      console.error(`Error sending email to ${employee.name}:`, error);
+      console.error(`Error sending email to ${employee.name}: `, error);
 
       saveEmailReport(
         employee.cfmsId,
@@ -409,12 +406,12 @@ const FacultySummary = () => {
     try {
       const result = await handleSendEmail(sampleEmp);
       if (result && result.success) {
-        alert(`Sample email sent successfully to ${sampleEmp.name}`);
+        alert(`Sample email sent successfully to ${sampleEmp.name} `);
       } else {
-        alert(`Failed to send sample: ${result?.message || "Unknown error"}`);
+        alert(`Failed to send sample: ${result?.message || "Unknown error"} `);
       }
     } catch (error) {
-      alert(`Error: ${error.message}`);
+      alert(`Error: ${error.message} `);
     } finally {
       setSendingEmail(false);
     }

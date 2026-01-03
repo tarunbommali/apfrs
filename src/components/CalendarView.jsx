@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { getHolidayDays } from '../utils/calendar';
+import { getHolidayDays } from '../config/calendar';
 import { useAttendance } from '../contexts/AttendanceContext';
 
 const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];

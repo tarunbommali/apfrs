@@ -9,11 +9,8 @@ import ReportOverview from '../components/report/ReportOverview';
 import StatsCards from '../components/report/StatsCards';
 
 
-import {
-  calculateWorkingDays,
-  getDaysInMonth,
-  calculateSummary,
-} from '../utils/attendanceUtils';
+import { calculateSummary } from '../core/attendance/calculations';
+import { getWorkingDays, getDaysInMonth } from '../core/calendar/workingDays';
 
 import {
   getSMTPConfig,
@@ -83,7 +80,7 @@ const HomePage = () => {
 
   /* ---------------- BASIC CALCULATIONS ---------------- */
   const workingDays = useMemo(
-    () => (attendanceData.length ? calculateWorkingDays(attendanceData, selectedMonth, null, selectedYear) : []),
+    () => (attendanceData.length ? getWorkingDays(attendanceData, selectedMonth, null, selectedYear) : []),
     [attendanceData, selectedMonth, selectedYear]
   );
 

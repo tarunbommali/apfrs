@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import PageLayout from './PageLayout';
 import { validateSMTPConfig, sendEmail } from '../utils/emailUtils';
-import { getActiveSMTPConfig, saveSMTPConfigEntry } from '../utils/smtpConfigStore';
+import { getActiveSMTPConfig, saveSMTPConfigEntry } from '../store/smtpConfig';
 import Button from '../components/ui/Button';
 import Card, { CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
 import Input from '../components/ui/Input';

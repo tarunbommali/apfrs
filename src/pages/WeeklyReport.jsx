@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useAttendance } from '../contexts/AttendanceContext';
-import { calculateWorkingDays, getDaysInMonth, getHolidays } from '../utils/attendanceUtils';
+import { getWorkingDays, getDaysInMonth, getHolidays } from '../core/calendar/workingDays';
 import PageLayout from './PageLayout';
 import { Calendar, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
@@ -16,7 +16,7 @@ const WeeklyReport = () => {
     // Get working days and holidays
     const workingDays = useMemo(() => {
         if (!attendanceData.length) return [];
-        return calculateWorkingDays(attendanceData, selectedMonth, null, selectedYear);
+        return getWorkingDays(attendanceData, selectedMonth, null, selectedYear);
     }, [attendanceData, selectedMonth, selectedYear]);
 
     const totalDaysInMonth = useMemo(() => {

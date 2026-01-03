@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAttendance } from '../contexts/AttendanceContext';
-import { calculateWorkingDays, getHolidays, getDaysInMonth } from '../utils/attendanceUtils';
-import { getHolidayLabel } from '../utils/calendar';
+import { getWorkingDays as calculateWorkingDays, getHolidays, getDaysInMonth } from '../core/calendar/workingDays';
+import { getHolidayLabel } from '../config/calendar';
 import PageLayout from './PageLayout';
 import { Calendar, Users, CheckCircle, XCircle, Clock, Building2, ChevronLeft, ChevronRight } from 'lucide-react';
 

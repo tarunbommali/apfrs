@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 import React from 'react';
-import { calculateSummary } from '../../utils/attendanceUtils';
+import { calculateSummary } from '../../core/attendance/calculations';
 
 const StatsCards = ({ facultyData, overallStats, filteredCount, workingDays, selectedMonth = 11, selectedYear = 2025 }) => {
   const effectiveWorkingDays = workingDays && workingDays.length ? workingDays : null;
