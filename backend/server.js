@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 import express from 'express';
 import cors from 'cors';
 import nodemailer from 'nodemailer';
@@ -170,7 +171,7 @@ app.post('/api/send-bulk-emails', async (req, res) => {
       const mailOptions = {
         from: emailData.from || `"APFRS Reports" <${config?.user || process.env.SMTP_EMAIL}>`,
         to: Array.isArray(emailData.to) ? emailData.to.join(', ') : emailData.to,
-        subject: emailData.subject || 'APFRS Attendance Report',
+        subject: emailData.subject || 'JNTUGV Attendance Report',
         html: emailData.html,
         text: emailData.text,
         attachments: emailData.attachments || []

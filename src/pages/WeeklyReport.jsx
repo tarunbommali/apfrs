@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useAttendance } from '../contexts/AttendanceContext';
 import { getWorkingDays, getDaysInMonth, getHolidays } from '../core/calendar/workingDays';
 import PageLayout from './PageLayout';
-import { Calendar, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Calendar, TrendingUp, TrendingDown, Minus, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const MONTHS = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -10,8 +11,27 @@ const MONTHS = [
 ];
 
 const WeeklyReport = () => {
-    const { attendanceData, selectedMonth, selectedYear } = useAttendance();
+    const { year, month, week: weekParam } = useParams();
+    const navigate = useNavigate();
+    const { attendanceData, selectedMonth: contextMonth, selectedYear: contextYear } = useAttendance();
+
+    const selectedYear = parseInt(year) || contextYear;
+    const selectedMonth = parseInt(month) || contextMonth;
+    const [selectedWeek, setSelectedWeek] = useState(parseInt(weekParam) || 1);
     const [selectedDepartment, setSelectedDepartment] = useState('');
+
+    // Sync state with params
+    useEffect(() => {
+        if (weekParam) {
+            setSelectedWeek(parseInt(weekParam));
+        }
+    }, [weekParam]);
+
+    // Update URL when week changes
+    const handleWeekChange = (newWeek) => {
+        setSelectedWeek(newWeek);
+        navigate(`/weekly/${selectedYear}/${selectedMonth}/${newWeek}`);
+    };
 
     // Get working days and holidays
     const workingDays = useMemo(() => {
@@ -49,16 +69,33 @@ const WeeklyReport = () => {
         return weekGroups;
     }, [workingDays]);
 
-    // Get unique departments
-    const departments = useMemo(() => {
-        const depts = [...new Set(attendanceData.map(emp => emp.department))];
-        return depts.filter(Boolean).sort();
+    // Build case-insensitive department options
+    const departmentOptions = useMemo(() => {
+        const registry = new Map();
+
+        attendanceData.forEach((emp) => {
+            const raw = (emp.department || '').trim();
+            if (!raw) return;
+            const key = raw.toLowerCase();
+            if (!registry.has(key)) {
+                registry.set(key, {
+                    label: raw.toUpperCase(),
+                    value: key
+                });
+            }
+        });
+
+        return Array.from(registry.values()).sort((a, b) =>
+            a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })
+        );
     }, [attendanceData]);
 
     // Filter data by department
     const filteredData = useMemo(() => {
         if (!selectedDepartment) return attendanceData;
-        return attendanceData.filter(emp => emp.department === selectedDepartment);
+        return attendanceData.filter(
+            (emp) => (emp.department || '').trim().toLowerCase() === selectedDepartment
+        );
     }, [attendanceData, selectedDepartment]);
 
     // Calculate weekly statistics
@@ -136,8 +173,8 @@ const WeeklyReport = () => {
                         className="flex-1 max-w-md rounded-lg border border-slate-300 px-4 py-2 text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
                     >
                         <option value="">All Departments</option>
-                        {departments.map(dept => (
-                            <option key={dept} value={dept}>{dept}</option>
+                        {departmentOptions.map((dept) => (
+                            <option key={dept.value} value={dept.value}>{dept.label}</option>
                         ))}
                     </select>
                 </div>
@@ -182,70 +219,127 @@ const WeeklyReport = () => {
                 </div>
             </div>
 
+            {/* Week Selector */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                <div className="flex items-center justify-between gap-4">
+                    <button
+                        onClick={() => handleWeekChange(selectedWeek - 1)}
+                        disabled={selectedWeek <= 1}
+                        className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                        <ChevronLeft className="w-6 h-6 text-slate-600" />
+                    </button>
+
+                    <div className="flex-1 text-center">
+                        <div className="flex items-center justify-center gap-4">
+                            <Calendar className="w-6 h-6 text-indigo-600" />
+                            <div>
+                                <h2 className="text-2xl font-bold text-slate-900">
+                                    Week {selectedWeek} Analysis
+                                </h2>
+                                <p className="text-sm text-slate-500 font-medium mt-1">
+                                    {MONTHS[selectedMonth - 1]} {selectedYear}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button
+                        onClick={() => handleWeekChange(selectedWeek + 1)}
+                        disabled={selectedWeek >= weeklyStats.length}
+                        className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                        <ChevronRight className="w-6 h-6 text-slate-600" />
+                    </button>
+                </div>
+
+                {/* Quick Week Selector */}
+                <div className="mt-6 flex justify-center gap-4">
+                    {weeklyStats.map((week) => (
+                        <button
+                            key={week.weekNumber}
+                            onClick={() => handleWeekChange(week.weekNumber)}
+                            className={`
+                                px-6 py-2 rounded-xl font-semibold transition-all
+                                ${selectedWeek === week.weekNumber
+                                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
+                                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                                }
+                            `}
+                        >
+                            Week {week.weekNumber}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
             {/* Weekly Stats */}
             {weeklyStats.length > 0 ? (
-                <div className="space-y-4">
-                    <h2 className="text-xl font-bold text-slate-900">Week-by-Week Analysis</h2>
-
-                    {weeklyStats.map((week, index) => {
-                        const trend = getTrend(week, weeklyStats[index - 1]);
+                <div className="space-y-6">
+                    {weeklyStats.filter(w => w.weekNumber === selectedWeek).map((week, index) => {
+                        const trend = getTrend(week, weeklyStats[selectedWeek - 2]);
                         const TrendIcon = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : Minus;
                         const trendColor = trend === 'up' ? 'text-green-600' : trend === 'down' ? 'text-red-600' : 'text-slate-400';
 
                         return (
-                            <div key={week.weekNumber} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                                <div className="flex items-center justify-between mb-4">
+                            <div key={week.weekNumber} className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
+                                <div className="flex items-center justify-between mb-8">
                                     <div>
-                                        <h3 className="text-lg font-bold text-slate-900">
-                                            Week {week.weekNumber}
+                                        <h3 className="text-xl font-bold text-slate-900">
+                                            Weekly Performance Summary
                                         </h3>
-                                        <p className="text-sm text-slate-500">
+                                        <p className="text-slate-500 mt-1">
                                             Days {week.weekStart} - {week.weekEnd} ({week.workingDays} working days)
                                         </p>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <TrendIcon className={`w-5 h-5 ${trendColor}`} />
-                                        <span className="text-2xl font-bold text-slate-900">
-                                            {week.attendancePercentage}%
-                                        </span>
+                                    <div className="text-right">
+                                        <div className="flex items-center justify-end gap-2 mb-1">
+                                            <TrendIcon className={`w-5 h-5 ${trendColor}`} />
+                                            <span className="text-3xl font-bold text-slate-900">
+                                                {week.attendancePercentage}%
+                                            </span>
+                                        </div>
+                                        <p className="text-sm font-medium text-slate-500 text-uppercase tracking-wider">Attendance Rate</p>
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    <div className="p-4 bg-slate-50 rounded-xl">
-                                        <p className="text-sm text-slate-500">Total Faculty</p>
-                                        <p className="text-xl font-bold text-slate-900">{week.totalEmployees}</p>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                    <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                                        <p className="text-sm font-medium text-slate-500 mb-1">Total Faculty</p>
+                                        <p className="text-2xl font-bold text-slate-900">{week.totalEmployees}</p>
                                     </div>
 
-                                    <div className="p-4 bg-green-50 rounded-xl">
-                                        <p className="text-sm text-green-700">Present</p>
-                                        <p className="text-xl font-bold text-green-900">{week.totalPresent}</p>
+                                    <div className="p-6 bg-green-50 rounded-2xl border border-green-100">
+                                        <p className="text-sm font-medium text-green-600 mb-1">Present</p>
+                                        <p className="text-2xl font-bold text-green-700">{week.totalPresent}</p>
                                     </div>
 
-                                    <div className="p-4 bg-red-50 rounded-xl">
-                                        <p className="text-sm text-red-700">Absent</p>
-                                        <p className="text-xl font-bold text-red-900">{week.totalAbsent}</p>
+                                    <div className="p-6 bg-red-50 rounded-2xl border border-red-100">
+                                        <p className="text-sm font-medium text-red-600 mb-1">Absent</p>
+                                        <p className="text-2xl font-bold text-red-700">{week.totalAbsent}</p>
                                     </div>
 
-                                    <div className="p-4 bg-indigo-50 rounded-xl">
-                                        <p className="text-sm text-indigo-700">Working Days</p>
-                                        <p className="text-xl font-bold text-indigo-900">{week.workingDays}</p>
+                                    <div className="p-6 bg-indigo-50 rounded-2xl border border-indigo-100">
+                                        <p className="text-sm font-medium text-indigo-600 mb-1">Working Days</p>
+                                        <p className="text-2xl font-bold text-indigo-700">{week.workingDays}</p>
                                     </div>
                                 </div>
 
                                 {/* Progress Bar */}
-                                <div className="mt-4">
-                                    <div className="flex justify-between text-sm text-slate-600 mb-2">
-                                        <span>Attendance Rate</span>
-                                        <span>{week.attendancePercentage}%</span>
+                                <div className="mt-8">
+                                    <div className="flex justify-between items-center mb-3">
+                                        <span className="text-sm font-bold text-slate-700">Monthly Target Progress</span>
+                                        <span className={`text-sm font-bold ${week.attendancePercentage >= 75 ? 'text-green-600' : 'text-amber-600'}`}>
+                                            {week.attendancePercentage}% / 100%
+                                        </span>
                                     </div>
-                                    <div className="w-full bg-slate-200 rounded-full h-3">
+                                    <div className="w-full bg-slate-100 rounded-full h-4 overflow-hidden border border-slate-200">
                                         <div
-                                            className={`h-3 rounded-full transition-all ${week.attendancePercentage >= 75
-                                                ? 'bg-green-500'
+                                            className={`h-full rounded-full transition-all duration-1000 ease-out ${week.attendancePercentage >= 75
+                                                ? 'bg-linear-to-r from-green-500 to-emerald-400'
                                                 : week.attendancePercentage >= 50
-                                                    ? 'bg-yellow-500'
-                                                    : 'bg-red-500'
+                                                    ? 'bg-linear-to-r from-amber-500 to-orange-400'
+                                                    : 'bg-linear-to-r from-red-500 to-rose-400'
                                                 }`}
                                             style={{ width: `${week.attendancePercentage}%` }}
                                         />

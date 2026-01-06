@@ -17,52 +17,85 @@ export {
 };
 
 // Bulk send functionality
-export const sendBulkReports = async (employees, config, monthNumber, year, onProgress) => {
-    const results = [];
-    let sent = 0;
-    let failed = 0;
+export const sendBulkReports = async (employees, options = {}) => {
+    const {
+        config = null,
+        monthNumber = new Date().getMonth() + 1,
+        year = new Date().getFullYear(),
+        onProgress = null,
+        concurrency: _concurrency = 1, // Reserved for future parallelism support
+        delayMs = 500
+    } = options;
 
-    for (let i = 0; i < employees.length; i++) {
-        const employee = employees[i];
+    void _concurrency;
+
+    const summary = {
+        success: 0,
+        failed: 0,
+        total: employees.length
+    };
+
+    const results = [];
+
+    for (let index = 0; index < employees.length; index++) {
+        const employee = employees[index];
+
+        if (onProgress) {
+            onProgress({
+                current: index + 1,
+                total: employees.length,
+                employee: employee.name,
+                status: 'sending',
+                success: summary.success,
+                failed: summary.failed
+            });
+        }
 
         try {
-            if (onProgress) {
-                onProgress({
-                    current: i + 1,
-                    total: employees.length,
-                    employee: employee.name,
-                    status: 'sending'
-                });
-            }
-
             await sendIndividualReport(employee, config, monthNumber, year);
-            sent++;
+            summary.success += 1;
+            results.push({
+                success: true,
+                email: employee.email,
+                name: employee.name
+            });
 
             if (onProgress) {
                 onProgress({
-                    current: i + 1,
+                    current: index + 1,
                     total: employees.length,
                     employee: employee.name,
-                    status: 'success'
+                    status: 'success',
+                    success: summary.success,
+                    failed: summary.failed
                 });
             }
         } catch (error) {
-            failed++;
+            summary.failed += 1;
+            results.push({
+                success: false,
+                email: employee.email,
+                name: employee.name,
+                error: error.message || 'Unable to send email'
+            });
 
             if (onProgress) {
                 onProgress({
-                    current: i + 1,
+                    current: index + 1,
                     total: employees.length,
                     employee: employee.name,
                     status: 'failed',
-                    error: error.message
+                    success: summary.success,
+                    failed: summary.failed,
+                    error: error.message || 'Unable to send email'
                 });
             }
         }
 
-        // Small delay between sends
-        await new Promise(resolve => setTimeout(resolve, 500));
+        if (delayMs > 0) {
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
     }
 
-    return { sent, failed, total: employees.length };
+    return { summary, results };
 };

@@ -265,22 +265,22 @@ const StatusDashboard = () => {
     });
 
     try {
-      const results = await sendBulkReports(
-        employeesToEmail,
-        (progress) => {
-          setBulkProgress(prev => ({
+      const results = await sendBulkReports(employeesToEmail, {
+        config: activeConfig,
+        monthNumber: selectedMonth,
+        year: selectedYear,
+        concurrency: 2,
+        onProgress: (progress) => {
+          setBulkProgress((prev) => ({
             ...prev,
             current: progress.current,
             success: progress.success,
             failed: progress.failed,
             currentEmployee: progress.employee,
-            status: progress.status === 'processing' || progress.status === 'sending' ? 'sending' : prev.status
+            status: progress.status === 'sending' ? 'sending' : prev.status
           }));
-        },
-        2, // Concurrency
-        selectedMonth,
-        selectedYear
-      );
+        }
+      });
 
       // Update stores
       results.results.forEach(res => {

@@ -18,6 +18,7 @@ import DepartmentReport from './pages/DepartmentReport';
 import DailyReport from './pages/DailyReport';
 import EmailPreview from './pages/EmailPreview';
 import StatusDashboard from './pages/StatusDashboard';
+import ConsolidatedReport from './pages/ConsolidatedReport';
 
 const ProtectedRoute = ({ children }) => {
   const { ready, hasData } = useAttendance();
@@ -51,10 +52,18 @@ const AppContent = () => {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route
-          path="/summary"
+          path="/summary/:year/:month"
           element={
             <ProtectedRoute>
               <FacultySummary />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/summary"
+          element={
+            <ProtectedRoute>
+              <Navigate to={`/summary/${new Date().getFullYear()}/${new Date().getMonth() + 1}`} replace />
             </ProtectedRoute>
           }
         />
@@ -67,10 +76,18 @@ const AppContent = () => {
           }
         />
         <Route
-          path="/weekly"
+          path="/weekly/:year/:month/:week"
           element={
             <ProtectedRoute>
               <WeeklyReport />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/weekly"
+          element={
+            <ProtectedRoute>
+              <Navigate to={`/weekly/${new Date().getFullYear()}/${new Date().getMonth() + 1}/1`} replace />
             </ProtectedRoute>
           }
         />
@@ -83,10 +100,18 @@ const AppContent = () => {
           }
         />
         <Route
-          path="/daily"
+          path="/daily/:year/:month/:day"
           element={
             <ProtectedRoute>
               <DailyReport />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/daily"
+          element={
+            <ProtectedRoute>
+              <Navigate to={`/daily/${new Date().getFullYear()}/${new Date().getMonth() + 1}/${new Date().getDate()}`} replace />
             </ProtectedRoute>
           }
         />
@@ -103,6 +128,14 @@ const AppContent = () => {
           element={
             <ProtectedRoute>
               <StatusDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/consolidated"
+          element={
+            <ProtectedRoute>
+              <ConsolidatedReport />
             </ProtectedRoute>
           }
         />

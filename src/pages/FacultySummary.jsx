@@ -1,5 +1,6 @@
 /* eslint-disable no-unused-vars */
 import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useParams } from 'react-router-dom';
 import { useAttendance } from "../contexts/AttendanceContext";
 import { calculateSummary } from '../core/attendance/calculations';
 import { getWorkingDays, getDaysInMonth } from '../core/calendar/workingDays';
@@ -99,7 +100,11 @@ const MONTH_NAMES = [
 ];
 
 const FacultySummary = () => {
-  const { attendanceData, fileName, resetData, selectedMonth, selectedYear, workingDays: contextWorkingDays } = useAttendance();
+  const { year, month } = useParams();
+  const { attendanceData, fileName, resetData, selectedMonth: contextMonth, selectedYear: contextYear, workingDays: contextWorkingDays } = useAttendance();
+
+  const selectedYear = parseInt(year) || contextYear;
+  const selectedMonth = parseInt(month) || contextMonth;
 
   const [smtpStatus, setSmtpStatus] = useState(() => createSMTPSnapshot());
   const refreshSMTPStatus = useCallback(() => {
@@ -348,7 +353,12 @@ const FacultySummary = () => {
 
     try {
       console.log(`Sending email to ${employee.name} (${employee.email})`);
-      const result = await sendIndividualReport(employee, activeConfig, effectiveWorkingDays);
+      const result = await sendIndividualReport(
+        employee,
+        activeConfig,
+        selectedMonth,
+        selectedYear
+      );
 
       saveEmailReport(
         employee.cfmsId,

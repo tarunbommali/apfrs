@@ -5,6 +5,8 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const clientPort = Number(env.VITE_DEV_SERVER_PORT || 5000)
+  const backendHost = env.BACKEND_HOST || 'localhost'
+  const backendPort = Number(env.BACKEND_PORT || env.VITE_BACKEND_PORT || 8001)
 
   return {
     plugins: [react(), tailwindcss()],
@@ -14,7 +16,7 @@ export default defineConfig(({ mode }) => {
       allowedHosts: true,
       proxy: {
         '/api': {
-          target: 'http://localhost:8001',
+          target: `http://${backendHost}:${backendPort}`,
           changeOrigin: true,
           secure: false,
         }

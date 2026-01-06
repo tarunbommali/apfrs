@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
+import { useAttendance } from '../../contexts/AttendanceContext';
 import {
     LayoutDashboard,
     FileText,
@@ -10,7 +11,8 @@ import {
     Home,
     Mail,
     X,
-    BarChart3
+    BarChart3,
+    Layers
 } from 'lucide-react';
 
 const SidebarItem = ({ to, icon: Icon, label, disabled }) => (
@@ -30,6 +32,9 @@ const SidebarItem = ({ to, icon: Icon, label, disabled }) => (
 );
 
 const Sidebar = ({ isOpen, onClose, hasData }) => {
+    const { selectedMonth, selectedYear } = useAttendance();
+    const today = new Date().getDate();
+
     return (
         <>
             {/* Mobile Overlay */}
@@ -74,9 +79,9 @@ const Sidebar = ({ isOpen, onClose, hasData }) => {
                         <div className="pt-4 px-4 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
                             Reports
                         </div>
-                        <SidebarItem to="/daily" icon={Calendar} label="Daily Report" disabled={!hasData} />
-                        <SidebarItem to="/weekly" icon={Calendar} label="Weekly Report" disabled={!hasData} />
-                        <SidebarItem to="/summary" icon={FileText} label="Monthly Report" disabled={!hasData} />
+                        <SidebarItem to={`/daily/${selectedYear}/${selectedMonth}/${today}`} icon={Calendar} label="Daily Report" disabled={!hasData} />
+                        <SidebarItem to={`/weekly/${selectedYear}/${selectedMonth}/1`} icon={Calendar} label="Weekly Report" disabled={!hasData} />
+                        <SidebarItem to={`/summary/${selectedYear}/${selectedMonth}`} icon={FileText} label="Monthly Report" disabled={!hasData} />
                         <SidebarItem to="/department" icon={Users} label="Department Report" disabled={!hasData} />
                         <SidebarItem to="/detailed" icon={Users} label="Detailed View" disabled={!hasData} />
 
@@ -84,6 +89,7 @@ const Sidebar = ({ isOpen, onClose, hasData }) => {
                             Communication
                         </div>
                         <SidebarItem to="/status-dashboard" icon={BarChart3} label="Status Dashboard" disabled={!hasData} />
+                        <SidebarItem to="/consolidated" icon={Layers} label="Consolidated Report" disabled={!hasData} />
                         <SidebarItem to="/email-preview" icon={Mail} label="Email Template" disabled={!hasData} />
 
                         <div className="pt-4 px-4 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">

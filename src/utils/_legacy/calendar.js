@@ -12,7 +12,6 @@ const CALENDAR_CONFIG = {
 
     holidays: {
       1: [
-        { day: 1, label: "New Year's Day", type: "optional" },
         { day: 14, label: "Bhogi", type: "general" },
         { day: 15, label: "Makara Sankranti", type: "general" },
         { day: 16, label: "Kanuma", type: "general" },
@@ -148,12 +147,11 @@ const CALENDAR_CONFIG = {
         { day: 24, label: "Christmas Eve", type: "optional" },
         { day: 25, label: "Christmas", type: "general" },
         { day: 26, label: "Boxing Day", type: "optional" },
-
-        { day: 5, label: "Second Saturday", type: "second_saturday" },
-        { day: 6, label: "Weekend", type: "sunday" },
-        { day: 13, label: "Weekend", type: "sunday" },
-        { day: 20, label: "Weekend", type: "sunday" },
-        { day: 27, label: "Weekend", type: "sunday" }
+        { day: 27, label: "Leave Holiday", type: "optional" },
+        { day: 7, label: "Weekend", type: "sunday" },
+        { day: 14, label: "Weekend", type: "sunday" },
+        { day: 21, label: "Weekend", type: "sunday" },
+        { day: 28, label: "Weekend", type: "sunday" }
       ]
     }
   },
@@ -169,7 +167,6 @@ const CALENDAR_CONFIG = {
 
     holidays: {
       1: [
-        { day: 1, label: "New Year's Day", type: "optional" },
         { day: 14, label: "Bhogi", type: "general" },
         { day: 15, label: "Makara Sankranti", type: "general" },
         { day: 16, label: "Kanuma", type: "general" },

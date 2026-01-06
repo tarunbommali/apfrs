@@ -3,8 +3,10 @@
  */
 
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { calculateSummary } from '../../core/attendance/calculations';
+import { getHolidayLabel, getHolidayType } from '../../config/calendar';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -16,15 +18,14 @@ const MONTH_NAMES = [
  * @param {Object} data - Report data containing employee and summary
  * @returns {Blob} PDF blob
  */
-export const generateIndividualPDF = (data) => {
+const createIndividualDocument = (data) => {
   const { employee, summary, month, year, periodLabel } = data;
   const doc = new jsPDF();
-  
+
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 20;
   let yPos = 20;
 
-  // Helper function to add centered text
   const addCenteredText = (text, y, fontSize = 12, style = 'normal') => {
     doc.setFontSize(fontSize);
     doc.setFont('helvetica', style);
@@ -33,53 +34,50 @@ export const generateIndividualPDF = (data) => {
     doc.text(text, x, y);
   };
 
-  // Header
-  doc.setFillColor(79, 70, 229); // Indigo
+  doc.setFillColor(79, 70, 229);
   doc.rect(0, 0, pageWidth, 40, 'F');
-  
+
   doc.setTextColor(255, 255, 255);
   addCenteredText('ATTENDANCE PERFORMANCE REPORT', 18, 16, 'bold');
   addCenteredText(`${periodLabel || MONTH_NAMES[month - 1] + ' ' + year}`, 30, 12, 'normal');
 
-  // Reset colors
   doc.setTextColor(0, 0, 0);
   yPos = 55;
 
-  // Employee Information Section
   doc.setFillColor(248, 250, 252);
   doc.rect(margin, yPos - 5, pageWidth - 2 * margin, 45, 'F');
-  
+
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.text('Employee Information', margin + 5, yPos + 5);
-  
+
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  
+
   const infoStartY = yPos + 15;
   const col1X = margin + 5;
   const col2X = pageWidth / 2 + 10;
-  
+
   doc.setFont('helvetica', 'bold');
   doc.text('Name:', col1X, infoStartY);
   doc.setFont('helvetica', 'normal');
   doc.text(employee.name || 'N/A', col1X + 30, infoStartY);
-  
+
   doc.setFont('helvetica', 'bold');
   doc.text('Employee ID:', col2X, infoStartY);
   doc.setFont('helvetica', 'normal');
   doc.text(employee.cfmsId || 'N/A', col2X + 35, infoStartY);
-  
+
   doc.setFont('helvetica', 'bold');
   doc.text('Designation:', col1X, infoStartY + 10);
   doc.setFont('helvetica', 'normal');
   doc.text(employee.designation || 'N/A', col1X + 35, infoStartY + 10);
-  
+
   doc.setFont('helvetica', 'bold');
   doc.text('Department:', col2X, infoStartY + 10);
   doc.setFont('helvetica', 'normal');
   doc.text(employee.department || 'N/A', col2X + 35, infoStartY + 10);
-  
+
   doc.setFont('helvetica', 'bold');
   doc.text('Email:', col1X, infoStartY + 20);
   doc.setFont('helvetica', 'normal');
@@ -87,14 +85,12 @@ export const generateIndividualPDF = (data) => {
 
   yPos += 55;
 
-  // Attendance Summary Section
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.text('Attendance Summary', margin + 5, yPos);
-  
+
   yPos += 10;
 
-  // Summary Cards
   const cardWidth = (pageWidth - 2 * margin - 20) / 4;
   const cardHeight = 35;
   const cards = [
@@ -106,15 +102,15 @@ export const generateIndividualPDF = (data) => {
 
   cards.forEach((card, index) => {
     const x = margin + index * (cardWidth + 5);
-    
+
     doc.setFillColor(...card.color);
     doc.roundedRect(x, yPos, cardWidth, cardHeight, 3, 3, 'F');
-    
+
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
     doc.text(card.label, x + 5, yPos + 12);
-    
+
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
     doc.text(card.value, x + 5, yPos + 26);
@@ -123,23 +119,21 @@ export const generateIndividualPDF = (data) => {
   doc.setTextColor(0, 0, 0);
   yPos += cardHeight + 15;
 
-  // Additional Statistics
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.text('Additional Statistics', margin + 5, yPos);
-  
+
   yPos += 10;
 
   const statsData = [
     ['Working Days', summary.workingDays?.toString() || 'N/A'],
     ['Total Hours Worked', `${summary.totalHours || 0} hours`],
-    ['Average Hours/Day', summary.workingDays > 0 ? 
+    ['Average Hours/Day', summary.workingDays > 0 ?
       `${(summary.totalHours / summary.workingDays).toFixed(1)} hours` : 'N/A'],
-    ['Holidays', summary.holidays?.toString() || 'N/A'],
-    ['Performance Status', getPerformanceStatus(summary.attendancePercentage)]
+    ['Holidays', summary.holidays?.toString() || 'N/A']
   ];
 
-  doc.autoTable({
+  autoTable(doc, {
     startY: yPos,
     head: [['Metric', 'Value']],
     body: statsData,
@@ -151,9 +145,7 @@ export const generateIndividualPDF = (data) => {
 
   yPos = doc.lastAutoTable.finalY + 15;
 
-  // Day-wise Breakdown (if attendance data available)
   if (employee.attendance && employee.attendance.length > 0) {
-    // Check if we need a new page
     if (yPos > 200) {
       doc.addPage();
       yPos = 20;
@@ -162,21 +154,25 @@ export const generateIndividualPDF = (data) => {
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
     doc.text('Day-wise Attendance Breakdown', margin + 5, yPos);
-    
+
     yPos += 10;
 
-    const attendanceData = employee.attendance
-      .filter(day => day.status && day.status !== '')
-      .map(day => [
-        `Day ${day.day}`,
-        day.inTime || '-',
-        day.outTime || '-',
-        day.status || '-',
-        day.duration || `${day.hours || 0} hrs`
-      ]);
+    const attendanceData = employee.attendance.map((day) => {
+        const statusLabel = formatAttendanceStatus(day, month, year);
+        const hasDuration = day.duration && day.duration.trim().length > 0;
+        const hoursLabel = day.hours ? `${formatNumber(day.hours, 1)} hrs` : '-';
+
+        return [
+          `Day ${day.day}`,
+          day.inTime || '-',
+          day.outTime || '-',
+          statusLabel,
+          hasDuration ? day.duration : hoursLabel
+        ];
+      });
 
     if (attendanceData.length > 0) {
-      doc.autoTable({
+      autoTable(doc, {
         startY: yPos,
         head: [['Day', 'In Time', 'Out Time', 'Status', 'Duration']],
         body: attendanceData,
@@ -195,19 +191,23 @@ export const generateIndividualPDF = (data) => {
     }
   }
 
-  // Footer
   const pageCount = doc.internal.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(128, 128, 128);
-    
+
     const footerText = `Generated on ${new Date().toLocaleString()} | APFRS Attendance System | Page ${i} of ${pageCount}`;
     const footerWidth = doc.getStringUnitWidth(footerText) * 8 / doc.internal.scaleFactor;
     doc.text(footerText, (pageWidth - footerWidth) / 2, doc.internal.pageSize.getHeight() - 10);
   }
 
+  return doc;
+};
+
+export const generateIndividualPDF = (data) => {
+  const doc = createIndividualDocument(data);
   return doc.output('blob');
 };
 
@@ -239,7 +239,6 @@ export const generateIndividualExcel = (data) => {
     ['Working Days', summary.workingDays || 0],
     ['Total Hours', summary.totalHours || 0],
     ['Attendance Percentage', `${summary.attendancePercentage || 0}%`],
-    ['Performance Status', getPerformanceStatus(summary.attendancePercentage)],
     [''],
     ['Report Generated', new Date().toLocaleString()]
   ];
@@ -301,7 +300,6 @@ export const generateIndividualCSV = (data) => {
     `Working Days,${summary.workingDays || 0}`,
     `Total Hours,${summary.totalHours || 0}`,
     `Attendance Percentage,${summary.attendancePercentage || 0}%`,
-    `Performance Status,${getPerformanceStatus(summary.attendancePercentage)}`,
     '',
     'DAILY ATTENDANCE',
     'Day,Date,In Time,Out Time,Status,Duration,Hours'
@@ -333,13 +331,6 @@ export const generateIndividualCSV = (data) => {
 /**
  * Get performance status based on attendance percentage
  */
-const getPerformanceStatus = (percentage) => {
-  const pct = parseFloat(percentage) || 0;
-  if (pct >= 90) return 'Excellent';
-  if (pct >= 75) return 'Good';
-  if (pct >= 50) return 'Average';
-  return 'Needs Improvement';
-};
 
 /**
  * Download report in specified format
@@ -398,66 +389,259 @@ export const downloadReport = async (data, format = 'pdf') => {
  * @returns {string} Base64 encoded PDF
  */
 export const generatePDFBase64 = (data) => {
-  const { employee, summary, month, year, periodLabel } = data;
-  const doc = new jsPDF();
-  
-  // Use same generation logic as generateIndividualPDF
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 20;
-  let yPos = 20;
+  const doc = createIndividualDocument(data);
+  return doc.output('datauristring').split(',')[1];
+};
 
-  // Header
-  doc.setFillColor(79, 70, 229);
-  doc.rect(0, 0, pageWidth, 40, 'F');
-  
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text('ATTENDANCE PERFORMANCE REPORT', pageWidth / 2, 18, { align: 'center' });
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`${periodLabel || MONTH_NAMES[month - 1] + ' ' + year}`, pageWidth / 2, 30, { align: 'center' });
+const formatNumber = (value, digits = 1) => {
+  if (value == null || Number.isNaN(value)) return '0';
+  return Number(value).toFixed(digits);
+};
 
-  doc.setTextColor(0, 0, 0);
-  yPos = 55;
+const formatAttendanceStatus = (record, month, year) => {
+  const rawStatus = (record.status || '').toString().trim();
+  const upper = rawStatus.toUpperCase();
+  const holidayLabel = getHolidayLabel(month, record.day, year);
+  const holidayType = getHolidayType(month, record.day, year);
+  const dayNumber = Number(record.day);
+  const isValidDay = Number.isFinite(dayNumber) && dayNumber > 0;
+  const date = isValidDay ? new Date(year, month - 1, dayNumber) : null;
+  const isSunday = holidayType === 'sunday' || (date ? date.getDay() === 0 : false);
+  const isCalendarHoliday = Boolean(holidayType) || Boolean(holidayLabel);
 
-  // Employee Info
-  doc.setFillColor(248, 250, 252);
-  doc.rect(margin, yPos - 5, pageWidth - 2 * margin, 35, 'F');
-  
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text(`Name: ${employee.name || 'N/A'}`, margin + 5, yPos + 5);
-  doc.text(`ID: ${employee.cfmsId || 'N/A'}`, margin + 5, yPos + 15);
-  doc.text(`Department: ${employee.department || 'N/A'}`, margin + 5, yPos + 25);
+  if (isCalendarHoliday) {
+    return isSunday ? 'Weekend' : 'Holiday';
+  }
 
-  yPos += 45;
+  if (upper === 'P') return 'Present';
+  if (upper === 'A') return 'Absent';
+  if (upper === 'L') return 'Leave';
 
-  // Summary
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Attendance Summary', margin + 5, yPos);
-  yPos += 10;
+  if (upper.includes('HOLIDAY') || upper.includes('SECOND SATURDAY')) {
+    return 'Holiday';
+  }
 
-  const summaryData = [
-    ['Present Days', summary.presentDays?.toString() || '0'],
-    ['Absent Days', summary.absentDays?.toString() || '0'],
-    ['Leave Days', summary.leaveDays?.toString() || '0'],
-    ['Total Hours', `${summary.totalHours || 0} hrs`],
-    ['Attendance %', `${summary.attendancePercentage || 0}%`]
-  ];
+  if (upper.includes('WEEKEND')) {
+    return 'Weekend';
+  }
 
-  doc.autoTable({
-    startY: yPos,
-    head: [['Metric', 'Value']],
-    body: summaryData,
-    theme: 'striped',
-    headStyles: { fillColor: [79, 70, 229] },
-    margin: { left: margin, right: margin }
+  if (rawStatus) return rawStatus;
+
+  return 'Not Recorded';
+};
+
+export const buildConsolidatedReport = (attendanceData, monthNumber, year) => {
+  const month = monthNumber || new Date().getMonth() + 1;
+  const targetYear = year || new Date().getFullYear();
+
+  if (!Array.isArray(attendanceData) || attendanceData.length === 0) {
+    return {
+      month,
+      year: targetYear,
+      periodLabel: `${MONTH_NAMES[month - 1]} ${targetYear}`,
+      departments: []
+    };
+  }
+
+  const departmentMap = new Map();
+
+  const resolveDepartment = (value) => {
+    const raw = (value || '').toString().trim();
+    if (!raw) {
+      return { key: 'unknown', label: 'UNKNOWN' };
+    }
+    const key = raw.toLowerCase();
+    const label = raw.toUpperCase();
+    return { key, label };
+  };
+
+  attendanceData.forEach((employee) => {
+    const { key: departmentKey, label: departmentLabel } = resolveDepartment(employee.department);
+    const summary = calculateSummary(employee, month, targetYear);
+    const totalDays = summary.workingDays || summary.presentDays + summary.absentDays;
+
+    if (!departmentMap.has(departmentKey)) {
+      departmentMap.set(departmentKey, {
+        department: departmentLabel,
+        employees: [],
+        presentSum: 0,
+        totalSum: 0,
+        hoursSum: 0
+      });
+    }
+
+    const entry = departmentMap.get(departmentKey);
+    entry.employees.push({
+      name: employee.name || 'N/A',
+      designation: employee.designation || 'N/A',
+      cfmsId: employee.cfmsId || employee.cfms_id || 'N/A',
+      email: employee.email || '',
+      presentDays: summary.presentDays,
+      totalDays,
+      totalHours: summary.totalHours || 0,
+      percentage: summary.attendancePercentage || 0
+    });
+
+    entry.presentSum += summary.presentDays;
+    entry.totalSum += totalDays;
+    entry.hoursSum += summary.totalHours || 0;
   });
 
-  // Return as base64
+  const departments = Array.from(departmentMap.values()).map((dept) => {
+    const average = dept.totalSum > 0 ? (dept.presentSum / dept.totalSum) * 100 : 0;
+    const employees = dept.employees
+      .slice()
+      .sort((a, b) => (b.percentage || 0) - (a.percentage || 0))
+      .map((emp, index) => ({
+        ...emp,
+        serial: index + 1,
+        statsLabel: `${emp.presentDays}/${emp.totalDays || 0}`,
+        hoursLabel: formatNumber(emp.totalHours, 1)
+      }));
+
+    return {
+      department: dept.department,
+      employees,
+      averagePercentage: parseFloat(average.toFixed(1)),
+      totalEmployees: dept.employees.length,
+      presentSum: dept.presentSum,
+      totalSum: dept.totalSum,
+      hoursSum: parseFloat(dept.hoursSum.toFixed(1))
+    };
+  });
+
+  departments.sort((a, b) => b.averagePercentage - a.averagePercentage);
+
+  return {
+    month,
+    year: targetYear,
+    periodLabel: `${MONTH_NAMES[month - 1]} ${targetYear}`,
+    departments
+  };
+};
+
+const createConsolidatedDocument = (report) => {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+  const { periodLabel, departments } = report;
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  doc.setFillColor(79, 70, 229);
+  doc.rect(0, 0, pageWidth, 80, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(22);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Consolidated Attendance Report', pageWidth / 2, 38, { align: 'center' });
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'normal');
+  doc.text(periodLabel, pageWidth / 2, 60, { align: 'center' });
+
+  doc.setTextColor(17, 24, 39);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'normal');
+
+  let currentY = 100;
+
+  if (!departments.length) {
+    doc.text('No attendance data available for the selected period.', 40, currentY);
+    return doc;
+  }
+
+  departments.forEach((dept, deptIndex) => {
+    if (deptIndex > 0 && currentY > 120) {
+      doc.addPage();
+      currentY = 60;
+    }
+
+    if (deptIndex > 0 && currentY < 100) {
+      currentY = 100;
+    }
+
+    const header = `${dept.department} • ${dept.totalEmployees} Faculty • Avg ${formatNumber(dept.averagePercentage)}%`;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text(header, 40, currentY);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+
+    currentY += 12;
+
+    const tableBody = dept.employees.map((emp) => ([
+      emp.serial,
+      emp.name,
+      `${emp.designation}${emp.cfmsId && emp.cfmsId !== 'N/A' ? ` | ${emp.cfmsId}` : ''}`,
+      emp.statsLabel,
+      emp.hoursLabel,
+      `${formatNumber(emp.percentage)}%`
+    ]));
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [['S.No', 'Faculty Member', 'Details', 'Stats [P/T]', 'Total Hours', 'Percentage']],
+      body: tableBody,
+      theme: 'striped',
+      headStyles: { fillColor: [79, 70, 229], halign: 'center' },
+      styles: { fontSize: 9, cellPadding: 6 },
+      columnStyles: {
+        0: { cellWidth: 50, halign: 'center' },
+        1: { cellWidth: 160 },
+        2: { cellWidth: 220 },
+        3: { cellWidth: 90, halign: 'center' },
+        4: { cellWidth: 90, halign: 'right' },
+        5: { cellWidth: 90, halign: 'right' }
+      },
+      margin: { left: 40, right: 40 },
+      willDrawCell: (data) => {
+        if (data.section === 'body' && data.column.index === 2 && data.cell.text) {
+          doc.setFont('helvetica', 'normal');
+        }
+      }
+    });
+
+    currentY = doc.lastAutoTable.finalY + 24;
+
+    const aggregateLine = `Department Total: ${dept.presentSum} Present / ${dept.totalSum} Working Days • ${formatNumber(dept.hoursSum)} Hours Logged`;
+    doc.setFont('helvetica', 'italic');
+    doc.text(aggregateLine, 44, currentY);
+    doc.setFont('helvetica', 'normal');
+    currentY += 32;
+  });
+
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(107, 114, 128);
+    const footer = `Generated ${new Date().toLocaleDateString()} • APFRS Attendance System • Page ${i} of ${totalPages}`;
+    doc.text(footer, pageWidth / 2, doc.internal.pageSize.getHeight() - 30, { align: 'center' });
+  }
+
+  return doc;
+};
+
+export const generateConsolidatedPDF = (report) => {
+  const doc = createConsolidatedDocument(report);
+  return doc.output('blob');
+};
+
+export const generateConsolidatedPDFBase64 = (report) => {
+  const doc = createConsolidatedDocument(report);
   return doc.output('datauristring').split(',')[1];
+};
+
+export const downloadConsolidatedPDF = (report) => {
+  const doc = createConsolidatedDocument(report);
+  const filename = `consolidated_attendance_${report.year}_${report.month}.pdf`;
+  const blob = doc.output('blob');
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  return filename;
 };
 
 export default {
@@ -465,5 +649,9 @@ export default {
   generateIndividualExcel,
   generateIndividualCSV,
   downloadReport,
-  generatePDFBase64
+  generatePDFBase64,
+  buildConsolidatedReport,
+  generateConsolidatedPDF,
+  generateConsolidatedPDFBase64,
+  downloadConsolidatedPDF
 };

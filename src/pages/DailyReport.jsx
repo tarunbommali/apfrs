@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useAttendance } from '../contexts/AttendanceContext';
 import { getWorkingDays as calculateWorkingDays, getHolidays, getDaysInMonth } from '../core/calendar/workingDays';
 import { getHolidayLabel } from '../config/calendar';
@@ -11,11 +12,30 @@ const MONTHS = [
 ];
 
 const DailyReport = () => {
-    const { attendanceData, selectedMonth, selectedYear } = useAttendance();
-    const today = new Date().getDate();
+    const { year, month, day } = useParams();
+    const navigate = useNavigate();
+    const { attendanceData, selectedMonth: contextMonth, selectedYear: contextYear } = useAttendance();
 
-    const [selectedDay, setSelectedDay] = useState(today);
+    // Use params if available, otherwise fallback to context or current date
+    const selectedYear = parseInt(year) || contextYear;
+    const selectedMonth = parseInt(month) || contextMonth;
+    const initialDay = parseInt(day) || new Date().getDate();
+
+    const [selectedDay, setSelectedDay] = useState(initialDay);
     const [selectedDepartment, setSelectedDepartment] = useState('');
+
+    // Sync state with params
+    useEffect(() => {
+        if (day) {
+            setSelectedDay(parseInt(day));
+        }
+    }, [day]);
+
+    // Update URL when day changes
+    const handleDayChange = (newDay) => {
+        setSelectedDay(newDay);
+        navigate(`/daily/${selectedYear}/${selectedMonth}/${newDay}`);
+    };
 
     // Get total days
     const totalDays = useMemo(() => {
@@ -40,10 +60,25 @@ const DailyReport = () => {
     // Check if selected day is a working day
     const isWorkingDay = workingDays.includes(selectedDay);
 
-    // Get unique departments
-    const departments = useMemo(() => {
-        const depts = [...new Set(attendanceData.map(emp => emp.department))];
-        return depts.filter(Boolean).sort();
+    // Build case-insensitive department options
+    const departmentOptions = useMemo(() => {
+        const registry = new Map();
+
+        attendanceData.forEach((emp) => {
+            const raw = (emp.department || '').trim();
+            if (!raw) return;
+            const key = raw.toLowerCase();
+            if (!registry.has(key)) {
+                registry.set(key, {
+                    label: raw.toUpperCase(),
+                    value: key
+                });
+            }
+        });
+
+        return Array.from(registry.values()).sort((a, b) =>
+            a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })
+        );
     }, [attendanceData]);
 
     // Get attendance for selected day
@@ -51,7 +86,9 @@ const DailyReport = () => {
         const dayKey = `day${selectedDay}`;
 
         return attendanceData
-            .filter(emp => !selectedDepartment || emp.department === selectedDepartment)
+            .filter(emp =>
+                !selectedDepartment || (emp.department || '').trim().toLowerCase() === selectedDepartment
+            )
             .map(emp => {
                 const status = emp[dayKey];
                 const hoursKey = `hours${selectedDay}`;
@@ -124,13 +161,13 @@ const DailyReport = () => {
     // Navigate days
     const handlePreviousDay = () => {
         if (selectedDay > 1) {
-            setSelectedDay(selectedDay - 1);
+            handleDayChange(selectedDay - 1);
         }
     };
 
     const handleNextDay = () => {
         if (selectedDay < totalDays) {
-            setSelectedDay(selectedDay + 1);
+            handleDayChange(selectedDay + 1);
         }
     };
 
@@ -205,7 +242,7 @@ const DailyReport = () => {
                         return (
                             <button
                                 key={day}
-                                onClick={() => setSelectedDay(day)}
+                                onClick={() => handleDayChange(day)}
                                 className={`
                   flex-shrink-0 w-12 h-12 rounded-lg font-semibold transition-all
                   ${isSelected
@@ -237,8 +274,8 @@ const DailyReport = () => {
                         className="flex-1 max-w-md rounded-lg border border-slate-300 px-4 py-2 text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
                     >
                         <option value="">All Departments</option>
-                        {departments.map(dept => (
-                            <option key={dept} value={dept}>{dept}</option>
+                        {departmentOptions.map((dept) => (
+                            <option key={dept.value} value={dept.value}>{dept.label}</option>
                         ))}
                     </select>
                 </div>

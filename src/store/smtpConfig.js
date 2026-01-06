@@ -32,6 +32,24 @@ const sanitizeString = (value, fallback = '') => {
   return trimmed || fallback;
 };
 
+let viteEnv = {};
+try {
+  viteEnv = import.meta && import.meta.env ? import.meta.env : {};
+} catch (error) {
+  viteEnv = {};
+}
+
+const nodeEnv = typeof process !== 'undefined' && process?.env ? process.env : {};
+
+const readEnvValue = (key) => {
+  if (!key) return undefined;
+  const raw = Object.prototype.hasOwnProperty.call(viteEnv, key) ? viteEnv[key] : undefined;
+  if (raw != null && raw !== '') return raw;
+  const fallback = Object.prototype.hasOwnProperty.call(nodeEnv, key) ? nodeEnv[key] : undefined;
+  if (fallback != null && fallback !== '') return fallback;
+  return undefined;
+};
+
 const hydrateConfig = (config = {}) => {
   const now = new Date().toISOString();
   const port = sanitizeString(config.port, '587');
@@ -57,6 +75,48 @@ const hydrateConfig = (config = {}) => {
     isDisabled: !!config.isDisabled,
   };
 };
+
+const buildEnvConfig = () => {
+  const host = sanitizeString(readEnvValue('VITE_SMTP_HOST') || readEnvValue('SMTP_HOST'));
+  const user = sanitizeString(
+    readEnvValue('VITE_SMTP_USER') ||
+    readEnvValue('VITE_SMTP_EMAIL') ||
+    readEnvValue('SMTP_EMAIL')
+  );
+  const pass = readEnvValue('VITE_SMTP_PASS') || readEnvValue('VITE_SMTP_PASSWORD') || readEnvValue('SMTP_PASSWORD');
+
+  if (!host || !user || !pass) {
+    return null;
+  }
+
+  const port = sanitizeString(readEnvValue('VITE_SMTP_PORT') || readEnvValue('SMTP_PORT'), '587');
+  const secureRaw = readEnvValue('VITE_SMTP_SECURE') ?? readEnvValue('SMTP_SECURE') ?? readEnvValue('SMTP_SECURITY');
+  const createdAt = new Date().toISOString();
+
+  return hydrateConfig({
+    id: 'env_smtp_config',
+    name: sanitizeString(readEnvValue('VITE_SMTP_CONFIG_NAME'), 'Environment SMTP'),
+    provider: 'env',
+    host,
+    port,
+    secure: secureRaw !== undefined ? secureRaw : undefined,
+    security: sanitizeString(readEnvValue('VITE_SMTP_SECURITY') || readEnvValue('SMTP_SECURITY')),
+    user,
+    pass,
+    subject: sanitizeString(readEnvValue('VITE_SMTP_SUBJECT'), DEFAULT_SUBJECT),
+    testRecipient: sanitizeString(readEnvValue('VITE_SMTP_TEST_RECIPIENT'), user),
+    fromName: sanitizeString(readEnvValue('VITE_SMTP_FROM_NAME'), DEFAULT_FROM_NAME),
+    notes: 'Loaded from environment variables',
+    createdAt,
+    updatedAt: createdAt,
+    isActive: true,
+    isDisabled: false,
+  });
+};
+
+const ENV_FALLBACK_CONFIG = buildEnvConfig();
+
+const getEnvFallbackConfig = () => (ENV_FALLBACK_CONFIG ? { ...ENV_FALLBACK_CONFIG } : null);
 
 const migrateLegacyConfig = () => {
   const storage = getStorage();
@@ -113,7 +173,16 @@ const persistState = (configs, activeId) => {
 
 const resolveState = () => {
   const storage = getStorage();
+  const envConfig = getEnvFallbackConfig();
+
   if (!storage) {
+    if (envConfig) {
+      return {
+        configs: [envConfig],
+        activeConfig: envConfig,
+        activeId: envConfig.id,
+      };
+    }
     return { configs: [], activeConfig: null, activeId: null };
   }
 
@@ -122,12 +191,25 @@ const resolveState = () => {
     configs = migrateLegacyConfig();
   }
 
+  if (!configs.length && envConfig) {
+    configs = [envConfig];
+  }
+
   let activeId = storage.getItem(SMTP_ACTIVE_CONFIG_KEY);
   let activeConfig = configs.find((cfg) => cfg.id === activeId && !cfg.isDisabled);
 
-  if (!activeConfig && configs.length) {
-    activeConfig = configs.find((cfg) => !cfg.isDisabled) || configs[0];
-    activeId = activeConfig ? activeConfig.id : null;
+  if (!activeConfig) {
+    if (envConfig) {
+      activeConfig = envConfig;
+      activeId = envConfig.id;
+      if (!configs.some((cfg) => cfg.id === envConfig.id)) {
+        configs = [envConfig, ...configs];
+      }
+    } else if (configs.length) {
+      activeConfig = configs.find((cfg) => !cfg.isDisabled) || configs[0];
+      activeId = activeConfig ? activeConfig.id : null;
+    }
+
     if (activeId) {
       storage.setItem(SMTP_ACTIVE_CONFIG_KEY, activeId);
     } else {
@@ -139,6 +221,8 @@ const resolveState = () => {
 
   return { configs, activeConfig: activeConfig || null, activeId: activeId || null };
 };
+
+export const getEnvironmentSMTPConfig = () => getEnvFallbackConfig();
 
 export const listSMTPConfigs = () => {
   const { configs } = resolveState();

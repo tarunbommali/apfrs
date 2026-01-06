@@ -139,7 +139,15 @@ export const sendEmail = async (payload, configOverride = null) => {
 export const sendIndividualReport = async (employee, configOverride = null, monthNumber = 11, year = new Date().getFullYear()) => {
   console.log(`📤 Sending attendance report to: ${employee.name} <${employee.email}>`);
 
-  const periodKey = `${year}-${String(monthNumber).padStart(2, '0')}`;
+  const normalizedMonth = Number.parseInt(monthNumber, 10);
+  const monthValue = Number.isFinite(normalizedMonth) && normalizedMonth >= 1 && normalizedMonth <= 12
+    ? normalizedMonth
+    : new Date().getMonth() + 1;
+
+  const normalizedYear = Number.parseInt(year, 10);
+  const yearValue = Number.isFinite(normalizedYear) ? normalizedYear : new Date().getFullYear();
+
+  const periodKey = `${yearValue}-${String(monthValue).padStart(2, '0')}`;
 
   if (!employee.email || !employee.email.includes('@')) {
     setEmailFailed(employee.email, periodKey, 'Invalid email address');
@@ -150,10 +158,10 @@ export const sendIndividualReport = async (employee, configOverride = null, mont
   setEmailPending(employee.email, periodKey);
 
   const config = configOverride || getSMTPConfig();
-  const periodLabel = `${MONTH_NAMES[monthNumber - 1]} ${year}`;
+  const periodLabel = `${MONTH_NAMES[monthValue - 1]} ${yearValue}`;
 
   // Calculate summary
-  const summary = calculateSummary(employee, monthNumber, year);
+  const summary = calculateSummary(employee, monthValue, yearValue);
 
   // Generate email HTML
   const emailHtml = generateEmailHTML(employee, summary, config, periodLabel);
@@ -164,13 +172,13 @@ export const sendIndividualReport = async (employee, configOverride = null, mont
     const pdfBase64 = generatePDFBase64({
       employee,
       summary,
-      month: monthNumber,
-      year,
+      month: monthValue,
+      year: yearValue,
       periodLabel
     });
 
     pdfAttachment = {
-      filename: `attendance_report_${employee.cfmsId || employee.name.replace(/\s+/g, '_')}_${year}_${monthNumber}.pdf`,
+      filename: `attendance_report_${employee.cfmsId || employee.name.replace(/\s+/g, '_')}_${yearValue}_${monthValue}.pdf`,
       content: pdfBase64,
       encoding: 'base64',
       contentType: 'application/pdf'
