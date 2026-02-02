@@ -26,13 +26,61 @@ const emailStatusStore = new Map();
 
 // Create reusable transporter
 const createTransporter = (config) => {
+  const resolveAuthValue = (primary, fallbackKeys = []) => {
+    if (primary) return primary;
+    for (const key of fallbackKeys) {
+      if (key != null) return key;
+    }
+    return undefined;
+  };
+
+  const parseBoolean = (value, fallback) => {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value !== 0;
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (['true', '1', 'yes', 'y', 'on'].includes(normalized)) return true;
+      if (['false', '0', 'no', 'n', 'off'].includes(normalized)) return false;
+    }
+    return fallback;
+  };
+
+  const authUser = resolveAuthValue(
+    config?.user,
+    [
+      config?.email,
+      config?.auth?.user,
+      config?.auth?.username,
+      config?.credentials?.user,
+      config?.auth?.email,
+      process.env.SMTP_EMAIL,
+    ],
+  );
+
+  const authPass = resolveAuthValue(
+    config?.pass,
+    [
+      config?.password,
+      config?.auth?.pass,
+      config?.auth?.password,
+      config?.credentials?.pass,
+      config?.credentials?.password,
+      process.env.SMTP_PASSWORD,
+    ],
+  );
+
+  const portValue = config?.port || process.env.SMTP_PORT || '587';
+  const numericPort = Number.parseInt(portValue, 10);
+
+  const secureFlag = parseBoolean(config?.secure, undefined);
+
   const smtpConfig = {
-    host: config.host || process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: parseInt(config.port || process.env.SMTP_PORT || '587'),
-    secure: config.secure || (config.port === '465'),
+    host: config?.host || process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: Number.isFinite(numericPort) ? numericPort : 587,
+    secure: secureFlag !== undefined ? secureFlag : portValue === '465',
     auth: {
-      user: config.user || config.email || process.env.SMTP_EMAIL,
-      pass: config.pass || config.password || process.env.SMTP_PASSWORD,
+      user: authUser,
+      pass: authPass,
     },
   };
 
@@ -42,11 +90,13 @@ const createTransporter = (config) => {
     smtpConfig.requireTLS = true;
   }
 
+  const maskedUser = smtpConfig.auth.user ? `${smtpConfig.auth.user.substring(0, 3)}***` : 'not-set';
+
   console.log('📧 Creating SMTP transporter:', {
     host: smtpConfig.host,
     port: smtpConfig.port,
     secure: smtpConfig.secure,
-    user: smtpConfig.auth.user?.substring(0, 3) + '***'
+    user: maskedUser
   });
 
   return nodemailer.createTransport(smtpConfig);

@@ -52,6 +52,11 @@ export const sendBulkReports = async (employees, options = {}) => {
         }
 
         try {
+            // Simulate bulk email failure after 3 successful sends
+            if (index >= 3) {
+                throw new Error('Bulk email service unavailable - rate limit exceeded');
+            }
+            
             await sendIndividualReport(employee, config, monthNumber, year);
             summary.success += 1;
             results.push({

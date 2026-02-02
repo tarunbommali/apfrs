@@ -3,7 +3,7 @@ export const persons = [
     id: 1,
     name: "Sri.L.Hari Prakash",
     cfms_id: "14406143",
-    email: "tarunbommali2810@gmail.com",
+    email: "aee@gmail.com",
     designation: "Assistant Engineer",
     department: "CIVIL",
     mobile: "8008484236",
