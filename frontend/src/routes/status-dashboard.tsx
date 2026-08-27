@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Suspense } from "react";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Clock, XCircle } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { StatCard } from "@/components/stat-card";
@@ -16,11 +15,7 @@ export const Route = createFileRoute("/status-dashboard")({
       },
     ],
   }),
-  component: () => (
-    <Suspense fallback={<StatusSkeleton />}>
-      <StatusDashboard />
-    </Suspense>
-  ),
+  component: StatusDashboard,
 });
 
 function StatusSkeleton() {
@@ -52,7 +47,12 @@ function BatchStatusBadge({ status }: { status: EmailBatch["status"] }) {
 }
 
 function StatusDashboard() {
-  const { data } = useSuspenseQuery(batchesQuery({ limit: 20 }));
+  const { data, isLoading } = useQuery(batchesQuery({ limit: 20 }));
+
+  if (isLoading) {
+    return <StatusSkeleton />;
+  }
+
   const batches = data?.batches ?? [];
 
   // Aggregate sent/failed/pending across all batches

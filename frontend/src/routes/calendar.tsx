@@ -12,8 +12,6 @@ import {
   Calendar,
   CheckCircle2,
   Loader2,
-  Search,
-  Users,
   AlertCircle,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
@@ -180,21 +178,6 @@ function AcademicCalendarPage() {
     }
   };
 
-  // ── Top Faculty Search (Debounced) ──
-  const [facultySearch, setFacultySearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(facultySearch.trim()), 300);
-    return () => clearTimeout(t);
-  }, [facultySearch]);
-
-  const { data: searchResultsData, isLoading: isSearching } = useQuery({
-    ...facultyListQuery({ search: debouncedSearch, limit: 5 }),
-    enabled: debouncedSearch.length > 1,
-  });
-  const searchResults = searchResultsData?.faculty || [];
-
   // ── Modal State: Add / Edit Holiday ──
   const [holidayModalOpen, setHolidayModalOpen] = useState(false);
   const [editingHoliday, setEditingHoliday] = useState<CalendarHoliday | null>(null);
@@ -282,60 +265,6 @@ function AcademicCalendarPage() {
       subtitle={`${monthName} ${selectedYear} · Working days and holidays synchronization`}
       actions={
         <div className="flex flex-wrap items-center gap-2">
-          {/* Top Search Bar */}
-          <div className="relative">
-            <div className="flex items-center rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs shadow-sm">
-              <Search className="size-3.5 text-muted-foreground mr-2 shrink-0" />
-              <input
-                type="text"
-                placeholder="Search faculty, email, CFMS..."
-                value={facultySearch}
-                onChange={(e) => setFacultySearch(e.target.value)}
-                className="w-44 bg-transparent outline-none placeholder:text-muted-foreground text-xs"
-              />
-              {facultySearch && (
-                <button
-                  type="button"
-                  onClick={() => setFacultySearch("")}
-                  className="text-muted-foreground hover:text-foreground text-xs"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-
-            {/* Quick Search Dropdown Preview */}
-            {debouncedSearch.length > 1 && (
-              <div className="absolute right-0 top-full mt-1.5 w-72 rounded-lg border border-border bg-popover p-2 shadow-xl z-50 text-xs">
-                {isSearching ? (
-                  <div className="flex items-center gap-2 py-2 px-3 text-muted-foreground">
-                    <Loader2 className="size-3.5 animate-spin" /> Searching faculty registry…
-                  </div>
-                ) : searchResults.length > 0 ? (
-                  <div className="space-y-1">
-                    <p className="px-2 py-1 font-semibold text-muted-foreground text-[10px] uppercase tracking-wider">
-                      Matching Faculty
-                    </p>
-                    {searchResults.map((f: any) => (
-                      <Link
-                        key={f.id}
-                        to="/faculty"
-                        className="flex flex-col rounded p-1.5 hover:bg-muted transition-colors"
-                      >
-                        <span className="font-semibold text-foreground">{f.name}</span>
-                        <span className="text-muted-foreground text-[10px]">
-                          {f.department} · {f.cfms_id || f.email}
-                        </span>
-                      </Link>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="py-2 px-3 text-muted-foreground text-center">No faculty records found.</p>
-                )}
-              </div>
-            )}
-          </div>
-
           {/* Add Holiday Button */}
           {isAdmin && (
             <Button size="sm" onClick={() => handleOpenAddHoliday()} className="gap-1.5">
@@ -416,11 +345,18 @@ function AcademicCalendarPage() {
                 </Button>
               </div>
 
-              {/* Sync / Verification Status Badge */}
-              <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                <CheckCircle2 className="size-3.5" />
-                <span>Verified ✓</span>
-              </div>
+              {/* Sync / Verification Status Badge: only verified when holidays are mapped */}
+              {holidays.length > 0 ? (
+                <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle2 className="size-3.5" />
+                  <span>Verified ({holidays.length} {holidays.length === 1 ? "holiday" : "holidays"}) ✓</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+                  <AlertCircle className="size-3.5" />
+                  <span>No holidays mapped</span>
+                </div>
+              )}
             </div>
 
             {/* Calendar Day Grid (MON - SUN) */}

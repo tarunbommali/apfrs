@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Suspense, useState } from "react";
-import { useSuspenseQuery, useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Trash2,
   Plus,
@@ -55,11 +55,7 @@ export const Route = createFileRoute("/faculty/$id/edit")({
       },
     ],
   }),
-  component: () => (
-    <Suspense fallback={<div className="p-8 text-muted-foreground">Loading…</div>}>
-      <EditFacultyPage />
-    </Suspense>
-  ),
+  component: EditFacultyPage,
 });
 
 function EditFacultyPage() {
@@ -67,7 +63,7 @@ function EditFacultyPage() {
   const navigate = useNavigate();
 
   // Queries
-  const { data, error } = useSuspenseQuery(facultyByIdQuery(id));
+  const { data, isLoading, error } = useQuery(facultyByIdQuery(id));
   const { data: inchargeData, isLoading: isInchargeLoading } = useQuery(facultyInchargeQuery(id));
 
   // Mutations
@@ -85,7 +81,15 @@ function EditFacultyPage() {
 
   const [endModalOpen, setEndModalOpen] = useState(false);
   const [assignmentToEnd, setAssignmentToEnd] = useState<InchargeAssignment | null>(null);
-  const [endEffectiveDate, setEndEffectiveDate] = useState(new Date().toISOString().split("T")[0]);
+  if (isLoading) {
+    return (
+      <AppShell title="Edit Faculty" subtitle="Loading record details…">
+        <div className="surface-panel p-10 text-center text-muted-foreground flex items-center justify-center gap-2 text-sm">
+          <Loader2 className="size-4 animate-spin text-primary" /> Loading faculty record…
+        </div>
+      </AppShell>
+    );
+  }
 
   if (error || !data?.faculty) {
     return (
