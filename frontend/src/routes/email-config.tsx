@@ -1,30 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  CheckCircle2,
-  Mailbox,
+  Mail,
   Send,
-  Server,
-  ShieldCheck,
-  Eye,
-  EyeOff,
-  AlertTriangle,
-  History,
-  Sparkles,
-  ArrowRight,
+  Save,
+  RotateCcw,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  Shield,
   Loader2,
-  RefreshCw,
-  SlidersHorizontal,
-  Check,
-  XCircle,
+  Server,
+  Zap,
+  Info,
 } from "lucide-react";
-import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -38,8 +32,9 @@ import {
   useUpdateEmailConfig,
   useSendTestEmail,
   type EmailConfigSettings,
+  type EmailConfigLog,
 } from "@/lib/queries";
-import { useAuth } from "@/lib/auth";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/email-config")({
   head: () => ({
@@ -47,206 +42,308 @@ export const Route = createFileRoute("/email-config")({
       { title: "Email Configuration — e-Office Jntugv" },
       {
         name: "description",
-        content: "Configure database-backed SMTP and Resend delivery settings with automated fallback, credential masking, and test dispatches.",
+        content: "Configure how APFRS sends attendance emails.",
       },
     ],
   }),
   component: EmailConfigPage,
 });
 
+interface FormState {
+  activeProvider: "smtp" | "resend";
+  fallbackEnabled: boolean;
+  smtpHost: string;
+  smtpPort: number;
+  smtpEncryption: "none" | "tls" | "ssl";
+  smtpUsername: string;
+  smtpPassword?: string;
+  smtpTimeout: number;
+  smtpPoolSize: number;
+  resendApiKey?: string;
+  resendDomain: string;
+  resendTag: string;
+  fromName: string;
+  fromEmail: string;
+  replyTo: string;
+  subjectTemplate: string;
+  signature: string;
+  retries: number;
+  batchDelay: number;
+  sandboxMode: boolean;
+}
+
 function EmailConfigPage() {
-  const { user } = useAuth();
-  const { data, isLoading, refetch } = useQuery(emailConfigQuery());
-  const updateMutation = useUpdateEmailConfig();
-  const testMutation = useSendTestEmail();
+  const { data, isLoading, refetch, isFetching } = useQuery(emailConfigQuery());
+  const updateConfig = useUpdateEmailConfig();
+  const sendTest = useSendTestEmail();
 
   const settings = data?.settings;
-  const logs = data?.logs || [];
+  const logs = (data?.logs || []) as EmailConfigLog[];
 
-  // Form State
-  const [activeProvider, setActiveProvider] = useState<"smtp" | "resend">("smtp");
-  const [fallbackEnabled, setFallbackEnabled] = useState(true);
-  const [fallbackOrder, setFallbackOrder] = useState<"smtp_first" | "resend_first">("smtp_first");
+  // ── Form State ──
+  const [form, setForm] = useState<FormState>({
+    activeProvider: "smtp",
+    fallbackEnabled: true,
+    smtpHost: "smtp.gmail.com",
+    smtpPort: 587,
+    smtpEncryption: "tls",
+    smtpUsername: "reports@jntugvcev.edu.in",
+    smtpPassword: "",
+    smtpTimeout: 30,
+    smtpPoolSize: 5,
+    resendApiKey: "",
+    resendDomain: "notify.jntugvcev.edu.in",
+    resendTag: "apfrs-monthly",
+    fromName: "APFRS Reporting Cell",
+    fromEmail: "reports@jntugvcev.edu.in",
+    replyTo: "admin@apfrs.in",
+    subjectTemplate: "Monthly Attendance Statement — {{month}} {{year}}",
+    signature: "",
+    retries: 3,
+    batchDelay: 200,
+    sandboxMode: false,
+  });
 
-  // SMTP State
-  const [smtpHost, setSmtpHost] = useState("");
-  const [smtpPort, setSmtpPort] = useState("587");
-  const [smtpEncryption, setSmtpEncryption] = useState<"none" | "tls" | "ssl">("tls");
-  const [smtpUsername, setSmtpUsername] = useState("");
-  const [smtpPassword, setSmtpPassword] = useState("");
-  const [showSmtpPassword, setShowSmtpPassword] = useState(false);
-  const [smtpPoolSize, setSmtpPoolSize] = useState("5");
-  const [smtpTimeout, setSmtpTimeout] = useState("30");
+  // Populate form state when server settings are loaded / reloaded
+  useEffect(() => {
+    if (settings) {
+      setForm({
+        activeProvider: settings.active_provider === "resend" ? "resend" : "smtp",
+        fallbackEnabled: settings.fallback_enabled !== false && settings.fallback_enabled !== 0,
+        smtpHost: settings.smtp_host || "",
+        smtpPort: settings.smtp_port || 587,
+        smtpEncryption: (settings.smtp_encryption as any) || "tls",
+        smtpUsername: settings.smtp_username || "",
+        smtpPassword: "",
+        smtpTimeout: settings.smtp_timeout || 30,
+        smtpPoolSize: settings.smtp_pool_size || 5,
+        resendApiKey: "",
+        resendDomain: settings.resend_domain || "",
+        resendTag: settings.resend_tag || "apfrs-monthly",
+        fromName: settings.from_name || "",
+        fromEmail: settings.from_email || "",
+        replyTo: settings.reply_to || "",
+        subjectTemplate: settings.subject_template || "Monthly Attendance Statement — {{month}} {{year}}",
+        signature: settings.signature || "",
+        retries: settings.retries ?? 3,
+        batchDelay: settings.batch_delay ?? 200,
+        sandboxMode: Boolean(settings.sandbox_mode),
+      });
+    }
+  }, [settings]);
 
-  // Resend State
-  const [resendApiKey, setResendApiKey] = useState("");
-  const [showResendApiKey, setShowResendApiKey] = useState(false);
-  const [resendDomain, setResendDomain] = useState("");
-  const [resendWebhookUrl, setResendWebhookUrl] = useState("");
-  const [resendTag, setResendTag] = useState("apfrs-monthly");
+  // ── Unsaved Changes Tracker ──
+  const isDirty = useMemo(() => {
+    if (!settings) return false;
+    if (form.smtpPassword && form.smtpPassword.trim() !== "") return true;
+    if (form.resendApiKey && form.resendApiKey.trim() !== "") return true;
 
-  // Sender State
-  const [fromName, setFromName] = useState("");
-  const [fromEmail, setFromEmail] = useState("");
-  const [replyTo, setReplyTo] = useState("");
-  const [subjectTemplate, setSubjectTemplate] = useState("");
-  const [signature, setSignature] = useState("");
-  const [retries, setRetries] = useState("3");
-  const [batchDelay, setBatchDelay] = useState("200");
-  const [sandboxMode, setSandboxMode] = useState(false);
+    const serverActive = settings.active_provider === "resend" ? "resend" : "smtp";
+    const serverFallback = settings.fallback_enabled !== false && settings.fallback_enabled !== 0;
 
-  // Test Email State
-  const [testEmailRecipient, setTestEmailRecipient] = useState(user?.email || "admin@apfrs.in");
+    return (
+      form.activeProvider !== serverActive ||
+      form.fallbackEnabled !== serverFallback ||
+      form.smtpHost !== (settings.smtp_host || "") ||
+      form.smtpPort !== (settings.smtp_port || 587) ||
+      form.smtpEncryption !== (settings.smtp_encryption || "tls") ||
+      form.smtpUsername !== (settings.smtp_username || "") ||
+      form.smtpTimeout !== (settings.smtp_timeout || 30) ||
+      form.smtpPoolSize !== (settings.smtp_pool_size || 5) ||
+      form.resendDomain !== (settings.resend_domain || "") ||
+      form.resendTag !== (settings.resend_tag || "apfrs-monthly") ||
+      form.fromName !== (settings.from_name || "") ||
+      form.fromEmail !== (settings.from_email || "") ||
+      form.replyTo !== (settings.reply_to || "") ||
+      form.subjectTemplate !== (settings.subject_template || "") ||
+      form.signature !== (settings.signature || "") ||
+      form.retries !== (settings.retries ?? 3) ||
+      form.batchDelay !== (settings.batch_delay ?? 200) ||
+      form.sandboxMode !== Boolean(settings.sandbox_mode)
+    );
+  }, [form, settings]);
+
+  const updateField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  // ── Provider Configured Status ──
+  const isSmtpConfigured = Boolean(
+    form.smtpHost &&
+      form.smtpUsername &&
+      (form.smtpPassword?.trim() || settings?.hasSmtpPassword)
+  );
+
+  const isResendConfigured = Boolean(
+    form.resendApiKey?.trim() || settings?.hasResendApiKey
+  );
+
+  // ── Test Email State ──
+  const [testEmail, setTestEmail] = useState("admin@apfrs.in");
+  const [testProvider, setTestProvider] = useState<string>("all");
   const [testResult, setTestResult] = useState<{
     success: boolean;
+    provider?: string;
     messageId?: string;
-    providerUsed?: string;
     durationMs?: number;
     error?: string;
     timestamp?: string;
   } | null>(null);
 
-  // Sync state from query when loaded
-  useEffect(() => {
-    if (settings) {
-      setActiveProvider(settings.active_provider || "smtp");
-      setFallbackEnabled(Boolean(settings.fallback_enabled));
-      setFallbackOrder(settings.fallback_order || "smtp_first");
-
-      setSmtpHost(settings.smtp_host || "");
-      setSmtpPort(String(settings.smtp_port || 587));
-      setSmtpEncryption((settings.smtp_encryption as any) || "tls");
-      setSmtpUsername(settings.smtp_username || "");
-      setSmtpPoolSize(String(settings.smtp_pool_size || 5));
-      setSmtpTimeout(String(settings.smtp_timeout || 30));
-
-      setResendDomain(settings.resend_domain || "");
-      setResendWebhookUrl(settings.resend_webhook_url || "");
-      setResendTag(settings.resend_tag || "apfrs-monthly");
-
-      setFromName(settings.from_name || "");
-      setFromEmail(settings.from_email || "");
-      setReplyTo(settings.reply_to || "");
-      setSubjectTemplate(settings.subject_template || "");
-      setSignature(settings.signature || "");
-      setRetries(String(settings.retries || 3));
-      setBatchDelay(String(settings.batch_delay || 200));
-      setSandboxMode(Boolean(settings.sandbox_mode));
-    }
-  }, [settings]);
-
-  // Validation checks
-  const isSmtpPortValid = !isNaN(Number(smtpPort)) && Number(smtpPort) > 0 && Number(smtpPort) <= 65535;
-  const isFromEmailValid = fromEmail === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fromEmail);
-  const isReplyToValid = replyTo === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyTo);
-  const isResendKeyValid = resendApiKey === "" || resendApiKey.startsWith("re_");
-
-  const handleSave = async () => {
-    if (!isSmtpPortValid) {
-      toast.error("Invalid SMTP Port number.");
-      return;
-    }
-    if (!isFromEmailValid) {
-      toast.error("Invalid Sender From Email address.");
-      return;
-    }
-
-    try {
-      await updateMutation.mutateAsync({
-        activeProvider,
-        fallbackEnabled,
-        fallbackOrder,
-        smtp: {
-          host: smtpHost,
-          port: smtpPort,
-          encryption: smtpEncryption,
-          username: smtpUsername,
-          password: smtpPassword, // Will only update in DB if non-empty
-          poolSize: smtpPoolSize,
-          timeout: smtpTimeout,
-        },
-        resend: {
-          apiKey: resendApiKey, // Will only update in DB if non-empty
-          domain: resendDomain,
-          webhookUrl: resendWebhookUrl,
-          tag: resendTag,
-        },
-        sender: {
-          fromName,
-          fromEmail,
-          replyTo,
-          subject: subjectTemplate,
-          signature,
-          retries,
-          batchDelay,
-          sandbox: sandboxMode,
-        },
-      });
-
-      setSmtpPassword(""); // Clear local password state after save
-      setResendApiKey(""); // Clear local key state after save
-      toast.success("Email delivery configuration saved and synchronized to database.");
-      void refetch();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to save configuration.");
-    }
-  };
-
-  const handleSendTestEmail = async () => {
-    if (!testEmailRecipient || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testEmailRecipient)) {
-      toast.error("Please provide a valid recipient email address.");
+  const handleSendTestEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!testEmail || !testEmail.includes("@")) {
+      toast.error("Please enter a valid recipient email address.");
       return;
     }
 
     setTestResult(null);
+
+    // Build temporary unsaved configuration so test immediately uses visible form inputs
+    const tempConfig: Record<string, any> = {
+      activeProvider: form.activeProvider,
+      fallbackEnabled: form.fallbackEnabled,
+      smtpHost: form.smtpHost,
+      smtpPort: form.smtpPort,
+      smtpEncryption: form.smtpEncryption,
+      smtpUsername: form.smtpUsername,
+      smtpTimeout: form.smtpTimeout,
+      smtpPoolSize: form.smtpPoolSize,
+      resendDomain: form.resendDomain,
+      resendTag: form.resendTag,
+      fromName: form.fromName,
+      fromEmail: form.fromEmail,
+      replyTo: form.replyTo,
+      signature: form.signature,
+    };
+
+    if (form.smtpPassword && form.smtpPassword.trim() !== "") {
+      tempConfig.smtpPassword = form.smtpPassword.trim();
+    }
+    if (form.resendApiKey && form.resendApiKey.trim() !== "") {
+      tempConfig.resendApiKey = form.resendApiKey.trim();
+    }
+
     try {
-      const res = await testMutation.mutateAsync({
-        recipientEmail: testEmailRecipient,
-        tempConfig: {
-          smtpHost,
-          smtpPort,
-          smtpEncryption,
-          smtpUsername,
-          smtpPassword: smtpPassword || undefined,
-          resendApiKey: resendApiKey || undefined,
-          fromName,
-          fromEmail,
-        },
+      const res = await sendTest.mutateAsync({
+        recipientEmail: testEmail.trim(),
+        providerOverride: testProvider === "all" ? undefined : testProvider,
+        tempConfig,
       });
 
-      if (res && res.result && res.result.success) {
+      if (res.result?.success) {
         setTestResult({
           success: true,
+          provider: res.result.providerUsed?.toUpperCase() || form.activeProvider.toUpperCase(),
           messageId: res.result.messageId,
-          providerUsed: res.result.providerUsed,
           durationMs: res.result.durationMs,
-          timestamp: new Date().toLocaleTimeString(),
+          timestamp: new Date().toLocaleTimeString("en-IN"),
         });
-        toast.success(`Test email delivered successfully! Message ID: ${res.result.messageId}`);
+        toast.success(`Test email sent successfully to ${testEmail}.`);
       } else {
         setTestResult({
           success: false,
-          error: res?.error || res?.message || "Test dispatch failed. Please verify credentials.",
-          timestamp: new Date().toLocaleTimeString(),
+          error: res.error || res.message || "Test email delivery failed.",
+          timestamp: new Date().toLocaleTimeString("en-IN"),
         });
-        toast.error(res?.error || res?.message || "Test dispatch failed.");
+        toast.error(res.error || res.message || "Test email delivery failed.");
       }
     } catch (err: any) {
       setTestResult({
         success: false,
-        error: err.message || "Test dispatch failed.",
-        timestamp: new Date().toLocaleTimeString(),
+        error: err?.message || "Test email delivery failed.",
+        timestamp: new Date().toLocaleTimeString("en-IN"),
       });
-      toast.error(`Test email failed: ${err.message}`);
+      toast.error(err?.message || "Test email delivery failed.");
     }
+  };
+
+  // ── Save Configuration ──
+  const handleSave = async () => {
+    // Basic validation
+    if (!form.fromEmail || !form.fromEmail.includes("@")) {
+      toast.error("Valid sender From Email is required.");
+      return;
+    }
+    if (!form.fromName.trim()) {
+      toast.error("Sender From Name is required.");
+      return;
+    }
+
+    if (form.activeProvider === "smtp" || form.fallbackEnabled) {
+      if (!form.smtpHost.trim()) {
+        toast.error("SMTP host is required.");
+        return;
+      }
+      if (!form.smtpUsername.trim()) {
+        toast.error("SMTP username is required.");
+        return;
+      }
+      if (!settings?.hasSmtpPassword && !form.smtpPassword?.trim()) {
+        toast.error("SMTP app password is required.");
+        return;
+      }
+    }
+
+    if (form.activeProvider === "resend" || form.fallbackEnabled) {
+      if (!settings?.hasResendApiKey && !form.resendApiKey?.trim()) {
+        toast.error("Resend API key is required.");
+        return;
+      }
+    }
+
+    const payload: Record<string, any> = {
+      activeProvider: form.activeProvider,
+      fallbackEnabled: form.fallbackEnabled,
+      smtpHost: form.smtpHost.trim(),
+      smtpPort: form.smtpPort,
+      smtpEncryption: form.smtpEncryption,
+      smtpUsername: form.smtpUsername.trim(),
+      smtpTimeout: form.smtpTimeout,
+      smtpPoolSize: form.smtpPoolSize,
+      resendDomain: form.resendDomain.trim(),
+      resendTag: form.resendTag.trim(),
+      fromName: form.fromName.trim(),
+      fromEmail: form.fromEmail.trim(),
+      replyTo: form.replyTo.trim(),
+      subjectTemplate: form.subjectTemplate.trim(),
+      signature: form.signature,
+      retries: form.retries,
+      batchDelay: form.batchDelay,
+      sandboxMode: form.sandboxMode,
+    };
+
+    if (form.smtpPassword && form.smtpPassword.trim() !== "") {
+      payload.smtpPassword = form.smtpPassword.trim();
+    }
+    if (form.resendApiKey && form.resendApiKey.trim() !== "") {
+      payload.resendApiKey = form.resendApiKey.trim();
+    }
+
+    try {
+      await updateConfig.mutateAsync(payload);
+      toast.success("Email configuration saved and applied.");
+      // Clear password and api key input fields after successful save
+      setForm((prev) => ({
+        ...prev,
+        smtpPassword: "",
+        resendApiKey: "",
+      }));
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save email configuration.");
+    }
+  };
+
+  const handleReload = async () => {
+    await refetch();
+    toast.info("Configuration restored from database.");
   };
 
   if (isLoading) {
     return (
-      <AppShell roles={["admin"]} title="Email Configuration" subtitle="Loading database configuration…">
-        <div className="space-y-6">
-          <div className="surface-panel h-64 animate-pulse" />
-          <div className="surface-panel h-96 animate-pulse" />
+      <AppShell title="Email Configuration" subtitle="Configure how APFRS sends attendance emails.">
+        <div className="surface-panel p-12 text-center text-muted-foreground flex items-center justify-center gap-2 text-sm">
+          <Loader2 className="size-4 animate-spin text-primary" /> Loading configuration…
         </div>
       </AppShell>
     );
@@ -254,448 +351,546 @@ function EmailConfigPage() {
 
   return (
     <AppShell
-      roles={["admin"]}
       title="Email Configuration"
-      subtitle="Database-backed multi-provider delivery settings, automated fallback, and dispatch testing"
+      subtitle="Configure how APFRS sends attendance emails."
       actions={
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => void refetch()}>
-            <RefreshCw className="mr-1.5 size-3.5" /> Reload
+          {isDirty && (
+            <span className="rounded-full bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 text-xs font-semibold text-amber-600 dark:text-amber-400 animate-pulse">
+              Unsaved changes
+            </span>
+          )}
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleReload}
+            disabled={isFetching}
+            className="gap-1.5"
+          >
+            <RotateCcw className={`size-3.5 ${isFetching ? "animate-spin" : ""}`} /> Reload
           </Button>
-          <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending}>
-            {updateMutation.isPending ? (
-              <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={updateConfig.isPending}
+            className="gap-1.5"
+          >
+            {updateConfig.isPending ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" /> Saving…
+              </>
             ) : (
-              <Check className="mr-1.5 size-3.5" />
+              <>
+                <Save className="size-3.5" /> Save Configuration
+              </>
             )}
-            Save Configuration
           </Button>
         </div>
       }
     >
-      <div className="space-y-8">
-        {/* ── Section 1: Send Test Email Verification ── */}
-        <section className="surface-panel p-5 border-l-4 border-primary bg-primary/5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="max-w-xl">
-              <div className="flex items-center gap-2">
-                <Send className="size-4 text-primary" />
-                <h3 className="text-sm font-semibold text-foreground">Send Test Email</h3>
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Trigger a live verification handshake to confirm SMTP credentials or Resend API pipeline before dispatching monthly attendance sheets.
-              </p>
-            </div>
+      <div className="max-w-4xl space-y-6">
+        {/* ── 1. Send Test Email ── */}
+        <section className="surface-panel p-6">
+          <div className="border-b border-border pb-4">
+            <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+              <Send className="size-4 text-primary" /> Send Test Email
+            </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Send a test email to check the current email settings.
+            </p>
+          </div>
 
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:w-auto">
-              <Input
-                value={testEmailRecipient}
-                onChange={(e) => setTestEmailRecipient(e.target.value)}
-                placeholder="Enter recipient email (e.g. you@domain.com)"
-                className="h-9 text-xs bg-card min-w-[260px]"
-              />
-              <Button
-                size="sm"
-                onClick={handleSendTestEmail}
-                disabled={testMutation.isPending}
-                className="shrink-0"
-              >
-                {testMutation.isPending ? (
-                  <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+          <form onSubmit={handleSendTestEmail} className="mt-4 space-y-4">
+            <div className="grid gap-4 sm:grid-cols-[1.5fr_1fr_auto] items-end">
+              <div className="space-y-1.5">
+                <Label htmlFor="test-email">Recipient email</Label>
+                <Input
+                  id="test-email"
+                  type="email"
+                  required
+                  placeholder="admin@apfrs.in"
+                  value={testEmail}
+                  onChange={(e) => setTestEmail(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="test-provider">Test using</Label>
+                <Select value={testProvider} onValueChange={setTestProvider}>
+                  <SelectTrigger id="test-provider">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Current delivery settings</SelectItem>
+                    <SelectItem value="smtp">SMTP only</SelectItem>
+                    <SelectItem value="resend">Resend only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button type="submit" disabled={sendTest.isPending} className="gap-1.5">
+                {sendTest.isPending ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" /> Sending…
+                  </>
                 ) : (
-                  <Send className="mr-1.5 size-3.5" />
+                  <>
+                    <Send className="size-3.5" /> Send Test Email
+                  </>
                 )}
-                {testMutation.isPending ? "Sending Test…" : "Send Test Email"}
               </Button>
             </div>
-          </div>
 
-          {/* Test Result Display */}
-          {testResult && (
-            <div
-              className={`mt-4 rounded-lg p-3 text-xs border ${
-                testResult.success
-                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
-                  : "bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300"
-              }`}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2 font-medium">
-                  {testResult.success ? (
-                    <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
-                  ) : (
-                    <XCircle className="size-4 text-rose-600 dark:text-rose-400" />
-                  )}
-                  <span>{testResult.success ? "Test Dispatch Successful" : "Test Dispatch Failed"}</span>
-                </div>
-                <span className="font-mono text-[10px] opacity-75">{testResult.timestamp}</span>
-              </div>
-
-              {testResult.success ? (
-                <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono text-[11px] pt-2 border-t border-emerald-500/20">
-                  <div>
-                    <span className="opacity-70">Message ID:</span> {testResult.messageId || "N/A"}
-                  </div>
-                  <div>
-                    <span className="opacity-70">Provider:</span> {testResult.providerUsed?.toUpperCase()}
-                  </div>
-                  <div>
-                    <span className="opacity-70">Latency:</span> {testResult.durationMs}ms
-                  </div>
-                </div>
-              ) : (
-                <p className="mt-1 font-mono text-[11px] pt-1 text-rose-600 dark:text-rose-300">
-                  {testResult.error}
-                </p>
-              )}
-            </div>
-          )}
-        </section>
-
-        {/* ── Section 2: Multi-Provider & Automatic Fallback Pipeline ── */}
-        <section className="surface-panel p-5 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-border pb-3">
-            <div>
-              <h3 className="text-sm font-semibold text-foreground">Delivery Provider & Automatic Fallback</h3>
-              <p className="text-xs text-muted-foreground">
-                Configure primary dispatch engine and automated failover strategy
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Label htmlFor="fallback-toggle" className="text-xs font-medium cursor-pointer">
-                Automatic Failover
-              </Label>
-              <Switch
-                id="fallback-toggle"
-                checked={fallbackEnabled}
-                onCheckedChange={setFallbackEnabled}
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            {/* Primary Provider Selector */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Primary Active Provider</Label>
-              <Select
-                value={activeProvider}
-                onValueChange={(val: "smtp" | "resend") => {
-                  setActiveProvider(val);
-                  setFallbackOrder(val === "smtp" ? "smtp_first" : "resend_first");
-                }}
+            {/* Test Email Result Output */}
+            {testResult && (
+              <div
+                className={`rounded-lg border p-4 text-xs ${
+                  testResult.success
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300"
+                    : "border-destructive/30 bg-destructive/10 text-destructive dark:text-destructive"
+                }`}
               >
-                <SelectTrigger className="h-9 text-xs bg-card">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="smtp">SMTP (Institutional Mail / Gmail)</SelectItem>
-                  <SelectItem value="resend">Resend API (Cloud Delivery)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Fallback Order Selector */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Failover Routing Order</Label>
-              <Select
-                disabled={!fallbackEnabled}
-                value={fallbackOrder}
-                onValueChange={(val: any) => setFallbackOrder(val)}
-              >
-                <SelectTrigger className="h-9 text-xs bg-card">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="smtp_first">SMTP First → Fallback to Resend</SelectItem>
-                  <SelectItem value="resend_first">Resend First → Fallback to SMTP</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Visual Fallback Pipeline Badge */}
-          <div className="rounded-md bg-muted/60 p-3 text-xs flex items-center gap-3">
-            <span className="font-semibold text-foreground">Active Dispatch Flow:</span>
-            {fallbackEnabled ? (
-              <div className="flex items-center gap-2 font-mono text-[11px]">
-                <span className="rounded bg-primary/10 px-2 py-0.5 font-bold text-primary">
-                  {fallbackOrder === "smtp_first" ? "1. SMTP Server" : "1. Resend API"}
-                </span>
-                <ArrowRight className="size-3.5 text-muted-foreground" />
-                <span className="rounded bg-accent/20 px-2 py-0.5 font-bold text-accent-foreground">
-                  {fallbackOrder === "smtp_first" ? "2. Resend API (Fallback)" : "2. SMTP Server (Fallback)"}
-                </span>
+                {testResult.success ? (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold">
+                      <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+                      <span>Test email sent successfully</span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 text-[11px] font-mono">
+                      <div>
+                        <span className="text-muted-foreground block font-sans">Provider:</span>
+                        <span className="font-semibold">{testResult.provider}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground block font-sans">Message ID:</span>
+                        <span className="truncate block">{testResult.messageId}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground block font-sans">Time:</span>
+                        <span>{testResult.timestamp}</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold">
+                      <AlertCircle className="size-4 text-destructive" />
+                      <span>Test email failed</span>
+                    </div>
+                    <p className="pt-1 text-[11px] font-mono leading-relaxed">
+                      Reason: {testResult.error}
+                    </p>
+                  </div>
+                )}
               </div>
-            ) : (
-              <span className="font-mono text-[11px] text-muted-foreground">
-                Single provider ({activeProvider.toUpperCase()}) with failover disabled
-              </span>
             )}
+          </form>
+        </section>
+
+        {/* ── 2. Email Provider ── */}
+        <section className="surface-panel p-6">
+          <div className="border-b border-border pb-4">
+            <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+              <Zap className="size-4 text-amber-500" /> Email Provider
+            </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Select primary dispatch provider and automated fallback policy.
+            </p>
+          </div>
+
+          <div className="mt-5 grid gap-5 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Primary provider</Label>
+              <Select
+                value={form.activeProvider}
+                onValueChange={(v: "smtp" | "resend") => updateField("activeProvider", v)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="smtp">SMTP</SelectItem>
+                  <SelectItem value="resend">Resend</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Automatic fallback</Label>
+              <Select
+                value={form.fallbackEnabled ? "on" : "off"}
+                onValueChange={(v) => updateField("fallbackEnabled", v === "on")}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="on">ON</SelectItem>
+                  <SelectItem value="off">OFF</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Provider Status Display */}
+          <div className="mt-5 rounded-lg border border-border bg-card p-4">
+            <div className="grid grid-cols-2 gap-4 text-xs">
+              <div className="flex items-center justify-between border-r border-border pr-4">
+                <span className="font-semibold text-foreground">SMTP</span>
+                <span
+                  className={`inline-flex items-center gap-1 font-medium ${
+                    isSmtpConfigured
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  <span className={`size-2 rounded-full ${isSmtpConfigured ? "bg-emerald-500" : "bg-muted-foreground/50"}`} />
+                  {isSmtpConfigured ? "Configured ✓" : "Not configured"}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between pl-2">
+                <span className="font-semibold text-foreground">Resend</span>
+                <span
+                  className={`inline-flex items-center gap-1 font-medium ${
+                    isResendConfigured
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  <span className={`size-2 rounded-full ${isResendConfigured ? "bg-emerald-500" : "bg-muted-foreground/50"}`} />
+                  {isResendConfigured ? "Configured ✓" : "Not configured"}
+                </span>
+              </div>
+            </div>
           </div>
         </section>
 
-        {/* ── Section 3: SMTP Credentials & Masking ── */}
-        <section className="surface-panel p-5 space-y-4">
-          <div className="flex items-center gap-2 border-b border-border pb-3">
-            <Server className="size-4 text-primary" />
-            <h3 className="text-sm font-semibold text-foreground">SMTP Server Credentials</h3>
+        {/* ── 3. SMTP Settings ── */}
+        <section className="surface-panel p-6">
+          <div className="border-b border-border pb-4">
+            <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+              <Server className="size-4 text-primary" /> SMTP Settings
+            </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Standard SMTP server credentials for outbound delivery.
+            </p>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">SMTP Host</Label>
+          <div className="mt-5 grid gap-5 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="smtp-host">SMTP host</Label>
               <Input
-                value={smtpHost}
-                onChange={(e) => setSmtpHost(e.target.value)}
+                id="smtp-host"
                 placeholder="smtp.gmail.com"
-                className="h-8 text-xs bg-card"
+                value={form.smtpHost}
+                onChange={(e) => updateField("smtpHost", e.target.value)}
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">SMTP Port</Label>
+            <div className="space-y-2">
+              <Label htmlFor="smtp-port">SMTP port</Label>
               <Input
-                value={smtpPort}
-                onChange={(e) => setSmtpPort(e.target.value)}
+                id="smtp-port"
+                type="number"
                 placeholder="587"
-                className={`h-8 text-xs bg-card ${!isSmtpPortValid ? "border-rose-500" : ""}`}
+                value={form.smtpPort}
+                onChange={(e) => updateField("smtpPort", parseInt(e.target.value, 10) || 587)}
               />
-              {!isSmtpPortValid && (
-                <p className="text-[10px] text-rose-500">Must be a valid port (e.g. 587, 465)</p>
-              )}
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Encryption Mode</Label>
-              <Select value={smtpEncryption} onValueChange={(val: any) => setSmtpEncryption(val)}>
-                <SelectTrigger className="h-8 text-xs bg-card">
+            <div className="space-y-2">
+              <Label>Encryption</Label>
+              <Select
+                value={form.smtpEncryption}
+                onValueChange={(v: "none" | "tls" | "ssl") => updateField("smtpEncryption", v)}
+              >
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="tls">STARTTLS (Port 587)</SelectItem>
-                  <SelectItem value="ssl">SSL / TLS (Port 465)</SelectItem>
-                  <SelectItem value="none">None (Insecure / Port 25)</SelectItem>
+                  <SelectItem value="ssl">SSL (Port 465)</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
-              <Label className="text-xs font-medium">SMTP Username / Email</Label>
+            <div className="space-y-2">
+              <Label htmlFor="smtp-user">SMTP username / email</Label>
               <Input
-                value={smtpUsername}
-                onChange={(e) => setSmtpUsername(e.target.value)}
+                id="smtp-user"
                 placeholder="reports@jntugvcev.edu.in"
-                className="h-8 text-xs bg-card"
+                value={form.smtpUsername}
+                onChange={(e) => updateField("smtpUsername", e.target.value)}
               />
             </div>
 
-            {/* Masked Password Field with Eye Toggle */}
-            <div className="space-y-1.5 sm:col-span-2 lg:col-span-2">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label className="text-xs font-medium">SMTP App Password</Label>
-                {settings?.hasSmtpPassword && (
+                <Label htmlFor="smtp-pass">SMTP app password</Label>
+                {settings?.hasSmtpPassword && !form.smtpPassword && (
                   <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
-                    ✓ Password saved in database
+                    ● Password saved (leave empty to keep)
                   </span>
                 )}
               </div>
-              <div className="relative">
-                <Input
-                  type={showSmtpPassword ? "text" : "password"}
-                  value={smtpPassword}
-                  onChange={(e) => setSmtpPassword(e.target.value)}
-                  placeholder={settings?.hasSmtpPassword ? "•••••••••••••••• (leave blank to keep current)" : "Enter 16-character Google App Password"}
-                  className="h-8 pr-9 text-xs bg-card font-mono"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowSmtpPassword(!showSmtpPassword)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showSmtpPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                </button>
-              </div>
-              <p className="text-[10px] text-muted-foreground">
-                For Gmail, generate a 16-character App Password under Google Account &gt; Security &gt; 2-Step Verification.
-              </p>
+              <Input
+                id="smtp-pass"
+                type="password"
+                placeholder={settings?.hasSmtpPassword ? "••••••••••••" : "Enter SMTP app password"}
+                value={form.smtpPassword || ""}
+                onChange={(e) => updateField("smtpPassword", e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="smtp-timeout">Connection timeout (seconds)</Label>
+              <Input
+                id="smtp-timeout"
+                type="number"
+                placeholder="30"
+                value={form.smtpTimeout}
+                onChange={(e) => updateField("smtpTimeout", parseInt(e.target.value, 10) || 30)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="smtp-pool">Connections (pool size)</Label>
+              <Input
+                id="smtp-pool"
+                type="number"
+                placeholder="5"
+                value={form.smtpPoolSize}
+                onChange={(e) => updateField("smtpPoolSize", parseInt(e.target.value, 10) || 5)}
+              />
             </div>
           </div>
         </section>
 
-        {/* ── Section 4: Resend API Configuration & Masking ── */}
-        <section className="surface-panel p-5 space-y-4">
-          <div className="flex items-center gap-2 border-b border-border pb-3">
-            <Mailbox className="size-4 text-primary" />
-            <h3 className="text-sm font-semibold text-foreground">Resend Cloud API Settings</h3>
+        {/* ── 4. Resend Settings ── */}
+        <section className="surface-panel p-6">
+          <div className="border-b border-border pb-4">
+            <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+              <Mail className="size-4 text-primary" /> Resend Settings
+            </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Direct HTTPS transactional email delivery via Resend API.
+            </p>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            {/* Masked Resend API Key */}
-            <div className="space-y-1.5 sm:col-span-2">
+          <div className="mt-5 grid gap-5 sm:grid-cols-2">
+            <div className="space-y-2 sm:col-span-2">
               <div className="flex items-center justify-between">
-                <Label className="text-xs font-medium">Resend API Key</Label>
-                {settings?.hasResendApiKey && (
+                <Label htmlFor="resend-key">Resend API key</Label>
+                {settings?.hasResendApiKey && !form.resendApiKey && (
                   <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
-                    ✓ API Key configured ({settings.resend_api_key})
+                    ● API Key saved (leave empty to keep)
                   </span>
                 )}
               </div>
-              <div className="relative">
-                <Input
-                  type={showResendApiKey ? "text" : "password"}
-                  value={resendApiKey}
-                  onChange={(e) => setResendApiKey(e.target.value)}
-                  placeholder={settings?.hasResendApiKey ? "•••••••••••••••• (leave blank to keep current)" : "re_123456789..."}
-                  className={`h-8 pr-9 text-xs bg-card font-mono ${!isResendKeyValid ? "border-rose-500" : ""}`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowResendApiKey(!showResendApiKey)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showResendApiKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                </button>
-              </div>
-              {!isResendKeyValid && (
-                <p className="text-[10px] text-rose-500">Resend API keys typically start with 're_'</p>
-              )}
+              <Input
+                id="resend-key"
+                type="password"
+                placeholder={settings?.hasResendApiKey ? "re_••••••••••••••••" : "re_123456789..."}
+                value={form.resendApiKey || ""}
+                onChange={(e) => updateField("resendApiKey", e.target.value)}
+              />
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Verified Sending Domain</Label>
+            <div className="space-y-2">
+              <Label htmlFor="resend-domain">Verified sending domain</Label>
               <Input
-                value={resendDomain}
-                onChange={(e) => setResendDomain(e.target.value)}
+                id="resend-domain"
                 placeholder="notify.jntugvcev.edu.in"
-                className="h-8 text-xs bg-card"
+                value={form.resendDomain}
+                onChange={(e) => updateField("resendDomain", e.target.value)}
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Dispatch Tag</Label>
+            <div className="space-y-2">
+              <Label htmlFor="resend-tag">Email tag</Label>
               <Input
-                value={resendTag}
-                onChange={(e) => setResendTag(e.target.value)}
+                id="resend-tag"
                 placeholder="apfrs-monthly"
-                className="h-8 text-xs bg-card"
+                value={form.resendTag}
+                onChange={(e) => updateField("resendTag", e.target.value)}
               />
             </div>
           </div>
         </section>
 
-        {/* ── Section 5: Sender Identity & Template ── */}
-        <section className="surface-panel p-5 space-y-4">
-          <div className="flex items-center gap-2 border-b border-border pb-3">
-            <ShieldCheck className="size-4 text-primary" />
-            <h3 className="text-sm font-semibold text-foreground">Sender Identity & Subject Template</h3>
+        {/* ── 5. Sender Settings ── */}
+        <section className="surface-panel p-6">
+          <div className="border-b border-border pb-4">
+            <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+              <Shield className="size-4 text-primary" /> Sender Settings
+            </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Official branding, sender identity, and email subject formatting.
+            </p>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">From Name</Label>
+          <div className="mt-5 grid gap-5 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="from-name">From name</Label>
               <Input
-                value={fromName}
-                onChange={(e) => setFromName(e.target.value)}
+                id="from-name"
                 placeholder="APFRS Reporting Cell"
-                className="h-8 text-xs bg-card"
+                value={form.fromName}
+                onChange={(e) => updateField("fromName", e.target.value)}
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">From Email</Label>
+            <div className="space-y-2">
+              <Label htmlFor="from-email">From email</Label>
               <Input
-                value={fromEmail}
-                onChange={(e) => setFromEmail(e.target.value)}
+                id="from-email"
+                type="email"
                 placeholder="reports@jntugvcev.edu.in"
-                className={`h-8 text-xs bg-card ${!isFromEmailValid ? "border-rose-500" : ""}`}
+                value={form.fromEmail}
+                onChange={(e) => updateField("fromEmail", e.target.value)}
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Reply-To Email</Label>
+            <div className="space-y-2">
+              <Label htmlFor="reply-to">Reply-to email</Label>
               <Input
-                value={replyTo}
-                onChange={(e) => setReplyTo(e.target.value)}
+                id="reply-to"
+                type="email"
                 placeholder="admin@apfrs.in"
-                className={`h-8 text-xs bg-card ${!isReplyToValid ? "border-rose-500" : ""}`}
+                value={form.replyTo}
+                onChange={(e) => updateField("replyTo", e.target.value)}
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Subject Template</Label>
+            <div className="space-y-2">
+              <Label htmlFor="subject-template">Subject template</Label>
               <Input
-                value={subjectTemplate}
-                onChange={(e) => setSubjectTemplate(e.target.value)}
+                id="subject-template"
                 placeholder="Monthly Attendance Statement — {{month}} {{year}}"
-                className="h-8 text-xs bg-card font-mono"
+                value={form.subjectTemplate}
+                onChange={(e) => updateField("subjectTemplate", e.target.value)}
               />
+              <p className="text-[11px] text-muted-foreground">
+                Supported variables: <code className="font-mono text-primary">{"{{month}}"}</code> and <code className="font-mono text-primary">{"{{year}}"}</code>.
+              </p>
             </div>
-          </div>
-        </section>
 
-        {/* ── Section 6: Configuration Change Log Audit Trail ── */}
-        <section className="surface-panel overflow-hidden">
-          <div className="flex items-center gap-2 border-b border-border p-4">
-            <History className="size-4 text-primary" />
-            <div>
-              <h3 className="text-sm font-semibold text-foreground">Configuration Change Log</h3>
-              <p className="text-xs text-muted-foreground">
-                Audit history of SMTP and Resend configuration modifications
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="signature">Email signature (optional)</Label>
+              <Textarea
+                id="signature"
+                rows={3}
+                placeholder="Regards,&#10;APFRS Reporting Cell&#10;JNTU-GV College of Engineering"
+                value={form.signature}
+                onChange={(e) => updateField("signature", e.target.value)}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Plain text appended to the bottom of all dispatched attendance statements.
               </p>
             </div>
           </div>
+        </section>
 
-          {logs.length === 0 ? (
-            <div className="p-8 text-center text-xs text-muted-foreground">
-              No configuration changes recorded in audit log yet.
+        {/* ── 6. Sending Settings ── */}
+        <section className="surface-panel p-6">
+          <div className="border-b border-border pb-4">
+            <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+              <Clock className="size-4 text-primary" /> Sending Settings
+            </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Rate limits, automatic retry policies, and sandbox simulation mode.
+            </p>
+          </div>
+
+          <div className="mt-5 grid gap-5 sm:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor="retries">Retry attempts</Label>
+              <Input
+                id="retries"
+                type="number"
+                min={0}
+                max={10}
+                placeholder="3"
+                value={form.retries}
+                onChange={(e) => updateField("retries", parseInt(e.target.value, 10) || 0)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="batch-delay">Delay between emails (ms)</Label>
+              <Input
+                id="batch-delay"
+                type="number"
+                min={0}
+                max={10000}
+                placeholder="200"
+                value={form.batchDelay}
+                onChange={(e) => updateField("batchDelay", parseInt(e.target.value, 10) || 0)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Test mode (Sandbox)</Label>
+              <Select
+                value={form.sandboxMode ? "on" : "off"}
+                onValueChange={(v) => updateField("sandboxMode", v === "on")}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="off">OFF (Live delivery)</SelectItem>
+                  <SelectItem value="on">ON (Simulate delivery)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </section>
+
+        {/* ── 7. Configuration History ── */}
+        <section className="surface-panel p-6 space-y-4">
+          <div className="border-b border-border pb-4">
+            <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+              <Info className="size-4 text-primary" /> Configuration History
+            </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Audit trail of email delivery configuration updates.
+            </p>
+          </div>
+
+          {logs.length > 0 ? (
+            <div className="divide-y divide-border">
+              {logs.map((log) => (
+                <div key={log.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-foreground">{log.updated_by}</span>
+                      <span className="text-muted-foreground">·</span>
+                      <span className="font-mono text-muted-foreground">
+                        {new Date(log.created_at).toLocaleString("en-IN", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-muted-foreground font-medium">
+                      {log.summary}
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="border-b border-border bg-muted/40 font-medium text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-2.5">Timestamp</th>
-                    <th className="px-4 py-2.5">Author</th>
-                    <th className="px-4 py-2.5">Summary</th>
-                    <th className="px-4 py-2.5">Changed Fields</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {logs.map((log: any) => {
-                    const fields = Array.isArray(log.changed_fields)
-                      ? log.changed_fields
-                      : typeof log.changed_fields === "string"
-                      ? JSON.parse(log.changed_fields || "[]")
-                      : [];
-
-                    return (
-                      <tr key={log.id} className="hover:bg-muted/30 transition-colors">
-                        <td className="px-4 py-2.5 font-mono text-muted-foreground">
-                          {new Date(log.created_at).toLocaleString("en-IN")}
-                        </td>
-                        <td className="px-4 py-2.5 font-medium text-foreground">
-                          {log.updated_by}
-                        </td>
-                        <td className="px-4 py-2.5 text-foreground">{log.summary}</td>
-                        <td className="px-4 py-2.5">
-                          <div className="flex flex-wrap gap-1">
-                            {fields.map((f: any, idx: number) => (
-                              <span
-                                key={idx}
-                                className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-mono text-foreground"
-                              >
-                                {f.field}
-                              </span>
-                            ))}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <p className="text-xs text-muted-foreground py-2 italic">
+              No configuration changes recorded yet.
+            </p>
           )}
         </section>
       </div>

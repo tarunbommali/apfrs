@@ -211,13 +211,12 @@ export class AdminController {
       const settings = await emailSettingsRepository.getSettings();
       const logs = await emailSettingsRepository.getLogs(15);
       
-      // Mask sensitive passwords before sending to frontend
+      // Never expose actual password or API key to frontend
+      const { smtp_password, resend_api_key, ...safeSettings } = settings;
       const masked = {
-        ...settings,
-        smtp_password: settings.smtp_password ? '********' : '',
-        resend_api_key: settings.resend_api_key ? (settings.resend_api_key.slice(0, 7) + '...' + settings.resend_api_key.slice(-4)) : '',
-        hasSmtpPassword: Boolean(settings.smtp_password),
-        hasResendApiKey: Boolean(settings.resend_api_key),
+        ...safeSettings,
+        hasSmtpPassword: Boolean(smtp_password && smtp_password.trim() !== ''),
+        hasResendApiKey: Boolean(resend_api_key && resend_api_key.trim() !== ''),
       };
 
       return sendSuccess(res, { settings: masked, logs });

@@ -13,7 +13,7 @@ class EmailService {
       const dbSettings = await emailSettingsRepository.getSettings();
       if (dbSettings) return dbSettings;
     } catch (err) {
-      logger.warn('Could not read email_settings from DB, using env config', { error: err.message });
+      logger.warn('Could not read email_settings from DB, using fallback defaults', { error: err.message });
     }
 
     return {
@@ -29,10 +29,15 @@ class EmailService {
       smtp_timeout: 30,
       resend_api_key: process.env.RESEND_API_KEY || '',
       resend_domain: 'notify.jntugvcev.edu.in',
+      resend_tag: 'apfrs-monthly',
       from_name: 'APFRS Reporting Cell',
       from_email: config.smtp?.user || 'reports@jntugvcev.edu.in',
       reply_to: 'admin@apfrs.in',
       subject_template: 'Monthly Attendance Statement — {{month}} {{year}}',
+      signature: '',
+      retries: 3,
+      batch_delay: 200,
+      sandbox_mode: false,
     };
   }
 
@@ -66,6 +71,13 @@ class EmailService {
   }
 
   async _sendViaSmtp(mailOptions, settings) {
+    if (!settings.smtp_host || !settings.smtp_username) {
+      throw new Error('SMTP host and username must be configured.');
+    }
+    if (!settings.smtp_password) {
+      throw new Error('SMTP app password is not configured.');
+    }
+
     const transporter = this.getTransporter(settings);
     const info = await transporter.sendMail(mailOptions);
     return {
@@ -112,7 +124,7 @@ class EmailService {
     };
   }
 
-  async _logEmail({ emailId, batchId, recipientEmail, recipientName, subject, status, messageId, errorMessage }) {
+  async _logEmail({ emailId, batchId, recipientEmail, recipientName, subject, status, messageId, errorMessage, provider }) {
     try {
       await db.query(
         `INSERT INTO email_logs
@@ -149,51 +161,90 @@ class EmailService {
     const settings = customSettings || (await this.getEffectiveSettings());
     const startTime = Date.now();
 
+    // 1. Subject template formatting: {{month}} {{year}}
+    let subject = emailData.subject || settings.subject_template || 'Monthly Attendance Statement — {{month}} {{year}}';
+    if (emailData.month) subject = subject.replace(/\{\{month\}\}/g, String(emailData.month));
+    if (emailData.year) subject = subject.replace(/\{\{year\}\}/g, String(emailData.year));
+
+    // 2. Body signature formatting
+    let html = emailData.html || '';
+    let text = emailData.text || '';
+    if (settings.signature && settings.signature.trim() && !emailData.skipSignature) {
+      const escapedSig = settings.signature.trim();
+      if (html && !html.includes(escapedSig)) {
+        html += `<br><br><div style="white-space: pre-wrap; font-family: inherit; font-size: 13px; color: #475569; border-top: 1px solid #e2e8f0; padding-top: 12px; margin-top: 20px;">${escapedSig.replace(/\n/g, '<br>')}</div>`;
+      }
+      if (text && !text.includes(escapedSig)) {
+        text += `\n\n---\n${escapedSig}`;
+      }
+    }
+
     const fromAddress = `"${settings.from_name || 'APFRS Reports'}" <${settings.from_email || settings.smtp_username}>`;
     const mailOptions = {
       from: emailData.from || fromAddress,
       to: Array.isArray(emailData.to) ? emailData.to.join(', ') : emailData.to,
-      subject: emailData.subject || 'APFRS Attendance Notification',
-      html: emailData.html,
-      text: emailData.text,
+      subject,
+      html,
+      text,
       replyTo: emailData.replyTo || settings.reply_to,
       attachments: emailData.attachments || [],
     };
 
-    const fallbackOrder = settings.fallback_order || 'smtp_first';
+    // 3. Test mode (Sandbox mode): Simulate success without dispatching
+    if (settings.sandbox_mode) {
+      logger.info('Sandbox mode enabled: Email not dispatched to live network', { to: mailOptions.to, subject });
+      const fakeMsgId = `sandbox-${uuidv4().split('-')[0]}`;
+      await this._logEmail({
+        emailId,
+        recipientEmail: mailOptions.to,
+        subject: mailOptions.subject,
+        status: 'sent',
+        messageId: fakeMsgId,
+        provider: 'sandbox',
+      });
+      return {
+        success: true,
+        messageId: fakeMsgId,
+        providerUsed: 'sandbox',
+        durationMs: Date.now() - startTime,
+        emailId,
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    // 4. Primary and Fallback provider resolution
+    const primary = settings.active_provider === 'resend' ? 'resend' : 'smtp';
+    const fallback = primary === 'smtp' ? 'resend' : 'smtp';
     const fallbackEnabled = settings.fallback_enabled !== false;
-    
-    const hasSmtp = Boolean(settings.smtp_host && settings.smtp_username && settings.smtp_password);
-    const hasResend = Boolean(settings.resend_api_key);
 
-    let providerChain = [];
-    if (fallbackOrder === 'resend_first') {
-      if (hasResend) providerChain.push('resend');
-      if (fallbackEnabled && hasSmtp) providerChain.push('smtp');
-    } else {
-      if (hasSmtp) providerChain.push('smtp');
-      if (fallbackEnabled && hasResend) providerChain.push('resend');
-    }
-
-    // If neither was matched through configured check (e.g. initial testing), fall back to active provider
-    if (providerChain.length === 0) {
-      providerChain = [settings.active_provider || 'smtp'];
-    }
-
-    let lastError = null;
     let result = null;
+    let primaryError = null;
+    let fallbackError = null;
 
-    for (const provider of providerChain) {
+    // Attempt Primary Provider
+    try {
+      if (primary === 'smtp') {
+        result = await this._sendViaSmtp(mailOptions, settings);
+      } else {
+        result = await this._sendViaResend(mailOptions, settings);
+      }
+    } catch (err) {
+      primaryError = err;
+      logger.warn(`Primary email provider (${primary}) failed:`, { error: err.message });
+    }
+
+    // Attempt Fallback Provider if primary failed and fallback is enabled
+    if (!result && fallbackEnabled) {
+      logger.info(`Attempting automatic fallback to ${fallback}...`);
       try {
-        if (provider === 'smtp') {
+        if (fallback === 'smtp') {
           result = await this._sendViaSmtp(mailOptions, settings);
-        } else if (provider === 'resend') {
+        } else {
           result = await this._sendViaResend(mailOptions, settings);
         }
-        break; // Successfully sent
       } catch (err) {
-        lastError = err;
-        logger.warn(`Provider ${provider} failed:`, { error: err.message });
+        fallbackError = err;
+        logger.warn(`Fallback email provider (${fallback}) failed:`, { error: err.message });
       }
     }
 
@@ -204,6 +255,7 @@ class EmailService {
         subject: mailOptions.subject,
         status: 'sent',
         messageId: result.messageId,
+        provider: result.provider,
       });
 
       return {
@@ -216,63 +268,80 @@ class EmailService {
       };
     }
 
+    // Both/Active failed
+    let finalErrorMessage = primaryError?.message || 'Email delivery failed';
+    if (fallbackEnabled && fallbackError) {
+      finalErrorMessage = `Both email providers failed. Primary (${primary}): ${primaryError?.message || 'Failed'}; Fallback (${fallback}): ${fallbackError?.message || 'Failed'}`;
+    }
+
     await this._logEmail({
       emailId,
       recipientEmail: Array.isArray(emailData.to) ? emailData.to.join(', ') : (emailData.to || ''),
-      subject: emailData.subject,
+      subject: mailOptions.subject,
       status: 'failed',
-      errorMessage: lastError?.message || 'All providers failed',
+      errorMessage: finalErrorMessage,
+      provider: primary,
     });
 
-    throw new AppError(500, `Email dispatch failed: ${lastError?.message || 'All providers failed'}`);
+    throw new AppError(500, finalErrorMessage);
   }
 
-  // ── Send Test Email ──────────────────────────────────────────────────────────
+  // ── Send Test Email (Uses unsaved form values without persisting) ────────────
   async sendTestEmail(recipientEmail, providerOverride = null, tempConfig = null) {
     const settings = await this.getEffectiveSettings();
-    if (providerOverride) {
+
+    if (providerOverride && providerOverride !== 'all') {
       settings.active_provider = providerOverride;
       settings.fallback_enabled = false;
     }
+
+    // Apply temporary unsaved credentials
     if (tempConfig) {
+      if (tempConfig.activeProvider) settings.active_provider = tempConfig.activeProvider;
+      if (tempConfig.fallbackEnabled !== undefined) settings.fallback_enabled = Boolean(tempConfig.fallbackEnabled);
       if (tempConfig.smtpHost) settings.smtp_host = tempConfig.smtpHost;
       if (tempConfig.smtpPort) settings.smtp_port = parseInt(tempConfig.smtpPort, 10);
       if (tempConfig.smtpEncryption) settings.smtp_encryption = tempConfig.smtpEncryption;
       if (tempConfig.smtpUsername) settings.smtp_username = tempConfig.smtpUsername;
       if (tempConfig.smtpPassword) settings.smtp_password = tempConfig.smtpPassword;
+      if (tempConfig.smtpTimeout) settings.smtp_timeout = parseInt(tempConfig.smtpTimeout, 10);
+      if (tempConfig.smtpPoolSize) settings.smtp_pool_size = parseInt(tempConfig.smtpPoolSize, 10);
       if (tempConfig.resendApiKey) settings.resend_api_key = tempConfig.resendApiKey;
+      if (tempConfig.resendDomain) settings.resend_domain = tempConfig.resendDomain;
+      if (tempConfig.resendTag) settings.resend_tag = tempConfig.resendTag;
       if (tempConfig.fromEmail) settings.from_email = tempConfig.fromEmail;
       if (tempConfig.fromName) settings.from_name = tempConfig.fromName;
+      if (tempConfig.replyTo) settings.reply_to = tempConfig.replyTo;
+      if (tempConfig.signature !== undefined) settings.signature = tempConfig.signature;
     }
 
     const testHtml = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; rounded: 8px; background-color: #ffffff;">
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;">
         <div style="background-color: #1e3a8a; padding: 16px; border-radius: 6px; text-align: center; color: #ffffff;">
-          <h2 style="margin: 0; font-size: 20px;">e-Office APFRS Email Delivery Test</h2>
+          <h2 style="margin: 0; font-size: 20px;">APFRS Email Delivery Test</h2>
           <p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.85;">Attendance & Faculty Reporting System</p>
         </div>
         <div style="padding: 20px 0; color: #334155;">
-          <p>Hello,</p>
-          <p>This is an automated verification email confirming that your APFRS email delivery pipeline is operational.</p>
+          <p>Hello Administrator,</p>
+          <p>This is an automated test message confirming that your APFRS email configuration is active and capable of sending messages.</p>
           <div style="background: #f8fafc; padding: 14px; border-radius: 6px; font-size: 13px; font-family: monospace; border: 1px solid #e2e8f0; margin: 16px 0;">
-            <strong>Provider:</strong> ${providerOverride || settings.active_provider || 'SMTP (with fallback)'}<br>
+            <strong>Provider Used:</strong> ${settings.active_provider?.toUpperCase() || 'SMTP'}<br>
             <strong>Sender:</strong> ${settings.from_name} &lt;${settings.from_email}&gt;<br>
             <strong>Timestamp:</strong> ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST<br>
-            <strong>Status:</strong> Handshake verified
+            <strong>Status:</strong> Ready for monthly attendance statements
           </div>
-          <p style="font-size: 12px; color: #64748b;">If you received this message, attendance dispatching to faculty will function correctly.</p>
+          <p style="font-size: 12px; color: #64748b;">If you received this message, attendance dispatching to faculty will function properly.</p>
         </div>
       </div>
     `;
 
-    const res = await this.sendEmail({
+    return this.sendEmail({
       to: recipientEmail,
-      subject: `[Test] APFRS Email Configuration Verification — ${new Date().toLocaleTimeString()}`,
+      subject: `[Test] APFRS Email Configuration — ${new Date().toLocaleTimeString()}`,
       html: testHtml,
-      text: `e-Office APFRS Email Delivery Test verified for ${recipientEmail}.`,
+      text: `APFRS Email Delivery Test successfully verified for ${recipientEmail}.`,
+      skipSignature: false,
     }, settings);
-
-    return res;
   }
 
   // ── Bulk Email Dispatch ──────────────────────────────────────────────────────
@@ -319,34 +388,10 @@ class EmailService {
       success: failedCount === 0,
       batchId,
       total: emails.length,
-      sent: sentCount,
-      failed: failedCount,
+      sentCount,
+      failedCount,
       results,
-      timestamp: new Date().toISOString(),
     };
-  }
-
-  // ── Status lookup (DB-backed) ────────────────────────────────────────────────
-  async getEmailStatus(id) {
-    const rowsByEmailId = await db.query(
-      `SELECT * FROM email_logs WHERE email_id = ? ORDER BY created_at DESC LIMIT 1`,
-      [id]
-    );
-    if (rowsByEmailId.length > 0) return rowsByEmailId[0];
-
-    const rowsByBatchId = await db.query(
-      `SELECT
-         batch_id                        AS batchId,
-         COUNT(*)                        AS total,
-         SUM(status = 'sent')            AS sent,
-         SUM(status = 'failed')          AS failed,
-         MAX(created_at)                 AS timestamp
-       FROM email_logs
-       WHERE batch_id = ?
-       GROUP BY batch_id`,
-      [id]
-    );
-    return rowsByBatchId[0] || null;
   }
 }
 
