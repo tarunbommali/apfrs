@@ -1,15 +1,20 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Suspense, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   UploadCloud,
   Search,
-  Filter,
   Calendar,
   Building2,
-  CheckCircle2,
   Users,
   Download,
+  Table2,
+  ListFilter,
+  CheckCircle2,
+  Briefcase,
+  Layers,
+  ArrowUpDown,
+  FileSpreadsheet,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -30,14 +35,14 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/detailed")({
   head: () => ({
     meta: [
-      { title: "Day-by-Day Detailed Attendance — e-Office Jntugv" },
+      { title: "Attendance — e-Office Jntugv" },
       {
         name: "description",
-        content: "Filterable day-by-day attendance matrix with faculty search, department filtering, cadre selection, and holiday indicators.",
+        content: "Manage faculty attendance data with Summary and Day-by-Day Daily views.",
       },
     ],
   }),
-  component: DetailedViewRoute,
+  component: AttendancePage,
 });
 
 const MONTH_NAMES = [
@@ -54,25 +59,7 @@ const cellStyle: Record<string, string> = {
   Late: "bg-orange-500/15 text-orange-600 dark:text-orange-400 font-bold",
 };
 
-function DetailedViewRoute() {
-  return (
-    <Suspense fallback={<DetailedSkeleton />}>
-      <DetailedViewPage />
-    </Suspense>
-  );
-}
-
-function DetailedSkeleton() {
-  return (
-    <AppShell title="Detailed View" subtitle="Loading day-by-day attendance grid…">
-      <div className="space-y-6">
-        <div className="surface-panel h-96 animate-pulse" />
-      </div>
-    </AppShell>
-  );
-}
-
-function DetailedViewPage() {
+function AttendancePage() {
   const { data: monthsData, isLoading: monthsLoading } = useQuery(attendanceMonthsQuery());
   const availableMonths = monthsData?.months || [];
 
@@ -81,6 +68,9 @@ function DetailedViewPage() {
 
   const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
   const [selectedYear, setSelectedYear] = useState(defaultYear);
+
+  // Tab State: "summary" | "daily"
+  const [viewMode, setViewMode] = useState<"summary" | "daily">("summary");
 
   const { data: attendanceData, isLoading: recordsLoading } = useQuery(
     monthlyAttendanceQuery(selectedMonth, selectedYear)
@@ -109,8 +99,8 @@ function DetailedViewPage() {
       const matchSearch =
         search === "" ||
         (r.name && r.name.toLowerCase().includes(search.toLowerCase())) ||
-        (r.cfmsId && r.cfmsId.includes(search)) ||
-        (r.cfms_id && r.cfms_id.includes(search)) ||
+        (r.cfmsId && String(r.cfmsId).includes(search)) ||
+        (r.cfms_id && String(r.cfms_id).includes(search)) ||
         (r.department && r.department.toLowerCase().includes(search.toLowerCase())) ||
         (r.designation && r.designation.toLowerCase().includes(search.toLowerCase()));
 
@@ -118,7 +108,7 @@ function DetailedViewPage() {
       const matchCadre =
         selectedCadre === "all" ||
         (selectedCadre === "regular" && (r.jobStatus || r.job_status || "").toLowerCase() === "regular") ||
-        (selectedCadre === "contract" && (r.jobStatus || r.job_status || "").toLowerCase() === "contract");
+        (selectedCadre === "contract" && (r.jobStatus || r.job_status || "").toLowerCase().includes("contract"));
 
       return matchSearch && matchDept && matchCadre;
     });
@@ -134,6 +124,14 @@ function DetailedViewPage() {
     return list;
   }, [totalDaysInMonth]);
 
+  // High level KPIs
+  const totalFaculty = records.length;
+  const avgAttendance = useMemo(() => {
+    if (!records.length) return 0;
+    const sum = records.reduce((acc: number, r: any) => acc + (parseFloat(r.attendancePercentage || r.percentage || 0) || 0), 0);
+    return Math.round((sum / records.length) * 10) / 10;
+  }, [records]);
+
   const handleExportExcel = async () => {
     if (!filteredRecords.length) {
       toast.error("No records to export.");
@@ -141,43 +139,61 @@ function DetailedViewPage() {
     }
     try {
       const XLSX = await import("xlsx");
-      const rows = filteredRecords.map((r: any, idx: number) => {
-        const daily = Array.isArray(r.attendance)
-          ? r.attendance
-          : Array.isArray(r.dailyRecords)
-          ? r.dailyRecords
-          : Array.isArray(r.daily_records)
-          ? r.daily_records
-          : [];
+      let rows: any[];
 
-        const rowObj: Record<string, any> = {
+      if (viewMode === "daily") {
+        rows = filteredRecords.map((r: any, idx: number) => {
+          const daily = Array.isArray(r.attendance)
+            ? r.attendance
+            : Array.isArray(r.dailyRecords)
+            ? r.dailyRecords
+            : Array.isArray(r.daily_records)
+            ? r.daily_records
+            : [];
+
+          const rowObj: Record<string, any> = {
+            "S.No": idx + 1,
+            "CFMS ID": r.cfmsId || r.cfms_id || "",
+            "Faculty Name": r.name || "",
+            "Department": r.department || "",
+            "Designation": r.designation || "",
+            "Cadre": r.jobStatus || r.job_status || "Regular",
+          };
+
+          dayNumbers.forEach((dayNum) => {
+            const dayPad = String(dayNum).padStart(2, "0");
+            const rec = daily[dayNum - 1] || daily.find((d: any) => String(d?.date).endsWith(`-${dayPad}`));
+            rowObj[`Day ${dayNum}`] = rec?.status || "—";
+          });
+
+          rowObj["Present"] = r.presentDays || r.present_days || 0;
+          rowObj["Absent"] = r.absentDays || r.absent_days || 0;
+          rowObj["Leaves"] = r.leaveDays || r.leave_days || 0;
+          rowObj["Working Days"] = r.totalWorkingDays || r.total_working_days || workingDays;
+          rowObj["Attendance %"] = `${r.attendancePercentage || r.percentage || 0}%`;
+
+          return rowObj;
+        });
+      } else {
+        rows = filteredRecords.map((r: any, idx: number) => ({
           "S.No": idx + 1,
           "CFMS ID": r.cfmsId || r.cfms_id || "",
           "Faculty Name": r.name || "",
           "Department": r.department || "",
           "Designation": r.designation || "",
           "Cadre": r.jobStatus || r.job_status || "Regular",
-        };
-
-        dayNumbers.forEach((dayNum) => {
-          const dayPad = String(dayNum).padStart(2, "0");
-          const rec = daily[dayNum - 1] || daily.find((d: any) => String(d?.date).endsWith(`-${dayPad}`));
-          rowObj[`Day ${dayNum}`] = rec?.status || "—";
-        });
-
-        rowObj["Present"] = r.presentDays || r.present_days || 0;
-        rowObj["Absent"] = r.absentDays || r.absent_days || 0;
-        rowObj["Leaves"] = r.leaveDays || r.leave_days || 0;
-        rowObj["Working Days"] = r.totalWorkingDays || r.total_working_days || workingDays;
-        rowObj["Attendance %"] = `${r.attendancePercentage || r.percentage || 0}%`;
-
-        return rowObj;
-      });
+          "Present": r.presentDays || r.present_days || 0,
+          "Absent": r.absentDays || r.absent_days || 0,
+          "Leaves": r.leaveDays || r.leave_days || 0,
+          "Working Days": r.totalWorkingDays || r.total_working_days || workingDays,
+          "Attendance %": `${r.attendancePercentage || r.percentage || 0}%`,
+        }));
+      }
 
       const ws = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, `Detailed_${monthName}_${selectedYear}`);
-      XLSX.writeFile(wb, `Detailed_Attendance_${monthName}_${selectedYear}.xlsx`);
+      XLSX.utils.book_append_sheet(wb, ws, `${viewMode === "daily" ? "Daily" : "Summary"}_${monthName}_${selectedYear}`);
+      XLSX.writeFile(wb, `Attendance_${viewMode === "daily" ? "Daily" : "Summary"}_${monthName}_${selectedYear}.xlsx`);
       toast.success(`Exported ${filteredRecords.length} records to Excel.`);
     } catch (e) {
       toast.error("Export failed: " + String(e));
@@ -188,14 +204,14 @@ function DetailedViewPage() {
     return (
       <AppShell
         roles={["admin"]}
-        title="Detailed View"
+        title="Attendance"
         subtitle="No attendance data loaded"
       >
         <div className="surface-panel flex flex-col items-center gap-4 p-16 text-center">
           <UploadCloud className="size-12 text-muted-foreground/40" strokeWidth={1} />
           <h2 className="text-lg font-semibold">No attendance sheets imported yet</h2>
           <p className="text-sm text-muted-foreground">
-            Upload a monthly biometric sheet to view the day-by-day attendance grid.
+            Upload a monthly biometric sheet to view attendance summary and daily records.
           </p>
           <Button asChild className="mt-4">
             <Link to="/import">
@@ -210,236 +226,330 @@ function DetailedViewPage() {
   return (
     <AppShell
       roles={["admin"]}
-      title="Detailed View"
-      subtitle={`Day-by-day biometric attendance grid · ${monthName} ${selectedYear} (${records.length} enrolled, ${workingDays} working days)`}
+      title="Attendance"
+      subtitle={`Monthly attendance records · ${monthName} ${selectedYear} (${records.length} faculty enrolled, ${workingDays} working days)`}
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Month Chooser Dropdown */}
           <Select
             value={`${selectedMonth}-${selectedYear}`}
             onValueChange={(val) => {
-              const [m, y] = val.split("-");
-              if (m && y) {
-                setSelectedMonth(parseInt(m, 10));
-                setSelectedYear(parseInt(y, 10));
-              }
+              const [m, y] = val.split("-").map(Number);
+              setSelectedMonth(m);
+              setSelectedYear(y);
             }}
           >
-            <SelectTrigger className="h-8 w-44 text-xs bg-card">
+            <SelectTrigger className="h-9 w-44 font-semibold text-xs">
               <Calendar className="mr-1.5 size-3.5 text-muted-foreground" />
-              <SelectValue placeholder="Choose Month" />
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {availableMonths.map((am: any) => (
+              {availableMonths.map((am) => (
                 <SelectItem key={`${am.month}-${am.year}`} value={`${am.month}-${am.year}`}>
-                  {MONTH_NAMES[am.month - 1]} {am.year} ({am.total_faculty || am.totalFaculty} faculty)
+                  {MONTH_NAMES[am.month - 1]} {am.year}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
 
-          <Button size="sm" variant="outline" onClick={handleExportExcel}>
-            <Download className="mr-1.5 size-3.5" /> Export Grid
+          {/* Export Excel Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportExcel}
+            className="gap-1.5"
+            disabled={recordsLoading || filteredRecords.length === 0}
+          >
+            <Download className="size-3.5" /> Export Excel
+          </Button>
+
+          {/* Import Link */}
+          <Button size="sm" asChild className="gap-1.5">
+            <Link to="/import">
+              <UploadCloud className="size-3.5" /> Import Data
+            </Link>
           </Button>
         </div>
       }
     >
       <div className="space-y-6">
-        {/* ── Legend Banner ── */}
-        <div className="surface-panel flex flex-wrap items-center justify-between gap-4 p-4 text-xs">
-          <div className="flex flex-wrap items-center gap-4">
-            <span className="font-semibold text-foreground">Status Legend:</span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-flex size-5 items-center justify-center rounded bg-emerald-500/15 font-bold text-emerald-600 dark:text-emerald-400">P</span>
-              Present
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-flex size-5 items-center justify-center rounded bg-rose-500/15 font-bold text-rose-600 dark:text-rose-400">A</span>
-              Absent
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-flex size-5 items-center justify-center rounded bg-amber-500/20 font-bold text-amber-600 dark:text-amber-400">L</span>
-              Leave
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-flex size-5 items-center justify-center rounded bg-muted font-semibold text-muted-foreground">H</span>
-              Holiday / Sunday
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-flex size-5 items-center justify-center rounded bg-indigo-500/15 font-bold text-indigo-600 dark:text-indigo-400">HD</span>
-              Half-Day
-            </span>
+        {/* ── Summary Metric Strip ── */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="surface-panel p-4 flex items-center justify-between">
+            <div>
+              <p className="label-caps">Total Faculty</p>
+              <p className="mt-1 font-mono text-2xl font-bold text-foreground">{totalFaculty}</p>
+              <p className="text-[11px] text-muted-foreground">{monthName} {selectedYear}</p>
+            </div>
+            <Users className="size-6 text-primary/80" />
           </div>
 
-          <div className="font-mono text-xs text-muted-foreground">
-            Official Working Days: <strong className="text-foreground">{workingDays}</strong>
+          <div className="surface-panel p-4 flex items-center justify-between">
+            <div>
+              <p className="label-caps">Working Days</p>
+              <p className="mt-1 font-mono text-2xl font-bold text-foreground">{workingDays}</p>
+              <p className="text-[11px] text-muted-foreground">Synchronized with calendar</p>
+            </div>
+            <Calendar className="size-6 text-amber-500/80" />
+          </div>
+
+          <div className="surface-panel p-4 flex items-center justify-between">
+            <div>
+              <p className="label-caps">Average Attendance</p>
+              <p className="mt-1 font-mono text-2xl font-bold text-foreground">{avgAttendance}%</p>
+              <p className="text-[11px] text-muted-foreground">College-wide rate</p>
+            </div>
+            <CheckCircle2 className="size-6 text-emerald-500/80" />
+          </div>
+
+          <div className="surface-panel p-4 flex items-center justify-between">
+            <div>
+              <p className="label-caps">Departments</p>
+              <p className="mt-1 font-mono text-2xl font-bold text-foreground">{departmentsList.length}</p>
+              <p className="text-[11px] text-muted-foreground">Active in reporting</p>
+            </div>
+            <Building2 className="size-6 text-indigo-500/80" />
           </div>
         </div>
 
-        {/* ── Main Grid Panel ── */}
-        <section className="surface-panel overflow-hidden">
-          {/* Controls Bar: Search, Department Filter, Cadre Filter, Month Chooser */}
-          <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="relative max-w-sm flex-1">
-              <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        {/* ── View Mode Tabs & Filter Bar ── */}
+        <div className="surface-panel p-4 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
+            {/* Segmented View Switcher: Summary vs Daily View */}
+            <div className="inline-flex rounded-lg border border-border bg-muted/40 p-1">
+              <button
+                type="button"
+                onClick={() => setViewMode("summary")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                  viewMode === "summary"
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <ListFilter className="size-3.5" /> Summary View
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("daily")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                  viewMode === "daily"
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Table2 className="size-3.5" /> Daily View (Day 1..{totalDaysInMonth})
+              </button>
+            </div>
+
+            <div className="text-xs text-muted-foreground font-mono">
+              Showing <span className="font-bold text-foreground">{filteredRecords.length}</span> of {records.length} records
+            </div>
+          </div>
+
+          {/* Filters Row */}
+          <div className="grid gap-3 sm:grid-cols-[1.5fr_1fr_1fr]">
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
               <Input
+                placeholder="Search faculty name, CFMS ID, designation..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search faculty name, CFMS ID, designation…"
-                className="h-8 pl-8 text-xs"
+                className="pl-9 h-9 text-xs"
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <Select value={selectedDept} onValueChange={setSelectedDept}>
-                <SelectTrigger className="h-8 w-40 text-xs bg-card">
-                  <SelectValue placeholder="Department" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Departments</SelectItem>
-                  {departmentsList.map((d) => (
-                    <SelectItem key={d} value={d}>
-                      {d}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <Select value={selectedDept} onValueChange={setSelectedDept}>
+              <SelectTrigger className="h-9 text-xs">
+                <Building2 className="mr-1.5 size-3.5 text-muted-foreground" />
+                <SelectValue placeholder="Department" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Departments ({departmentsList.length})</SelectItem>
+                {departmentsList.map((d) => (
+                  <SelectItem key={d} value={d}>
+                    {d}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-              <Select value={selectedCadre} onValueChange={setSelectedCadre}>
-                <SelectTrigger className="h-8 w-32 text-xs bg-card">
-                  <SelectValue placeholder="Cadre" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Cadres</SelectItem>
-                  <SelectItem value="regular">Regular</SelectItem>
-                  <SelectItem value="contract">Contract</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <Select value={selectedCadre} onValueChange={setSelectedCadre}>
+              <SelectTrigger className="h-9 text-xs">
+                <Briefcase className="mr-1.5 size-3.5 text-muted-foreground" />
+                <SelectValue placeholder="Cadre" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Cadres</SelectItem>
+                <SelectItem value="regular">Regular Faculty</SelectItem>
+                <SelectItem value="contract">Contract / Adjunct</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
+        </div>
 
-          {/* Matrix Table */}
-          <div className="relative isolate overflow-x-auto w-full">
-            <table className="w-full border-collapse text-left text-xs">
-              <thead className="border-b border-border bg-muted/60 font-medium text-muted-foreground">
-                <tr>
-                  <th className="sticky left-0 z-10 min-w-[200px] border-r border-border bg-muted px-4 py-2.5 font-medium text-foreground">
-                    Faculty Member
-                  </th>
-                  <th className="min-w-[70px] border-r border-border px-2 py-2.5 text-center">
-                    Cadre
-                  </th>
-                  {dayNumbers.map((day) => {
-                    const dateStr = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-                    const isSunday = new Date(dateStr).getDay() === 0;
+        {/* ── Table Container ── */}
+        <div className="surface-panel overflow-hidden">
+          {recordsLoading ? (
+            <div className="py-20 text-center text-sm text-muted-foreground">
+              Loading attendance records…
+            </div>
+          ) : filteredRecords.length === 0 ? (
+            <div className="py-16 text-center text-sm text-muted-foreground">
+              No matching records found.
+            </div>
+          ) : viewMode === "summary" ? (
+            /* ── VIEW 1: SUMMARY TABLE ── */
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="border-b border-border bg-muted/30 font-semibold text-muted-foreground uppercase text-[10px] tracking-wider">
+                  <tr>
+                    <th className="py-3 px-4 w-12 text-center">#</th>
+                    <th className="py-3 px-4">CFMS ID</th>
+                    <th className="py-3 px-4">Faculty Name</th>
+                    <th className="py-3 px-4">Department</th>
+                    <th className="py-3 px-4">Designation</th>
+                    <th className="py-3 px-4 text-center">Cadre</th>
+                    <th className="py-3 px-3 text-center">Present</th>
+                    <th className="py-3 px-3 text-center">Absent</th>
+                    <th className="py-3 px-3 text-center">Leaves</th>
+                    <th className="py-3 px-3 text-center">Working</th>
+                    <th className="py-3 px-4 text-right">Attendance %</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filteredRecords.map((r: any, idx: number) => {
+                    const pct = parseFloat(r.attendancePercentage || r.percentage || 0);
+                    const isLow = pct < 75;
+                    const isRegular = (r.jobStatus || r.job_status || "").toLowerCase() === "regular";
 
                     return (
-                      <th
-                        key={day}
-                        className={`min-w-[32px] border-r border-border/60 px-1.5 py-2 text-center font-mono ${
-                          isSunday ? "bg-muted text-muted-foreground" : "text-foreground"
-                        }`}
-                        title={dateStr}
-                      >
-                        {day}
-                      </th>
+                      <tr key={r.id || r.cfmsId || idx} className="hover:bg-muted/20 transition-colors">
+                        <td className="py-3 px-4 text-center font-mono text-muted-foreground">{idx + 1}</td>
+                        <td className="py-3 px-4 font-mono font-medium text-foreground">{r.cfmsId || r.cfms_id || "—"}</td>
+                        <td className="py-3 px-4">
+                          <div className="font-semibold text-foreground">{r.name}</div>
+                          <div className="text-[10px] text-muted-foreground font-mono">{r.email || ""}</div>
+                        </td>
+                        <td className="py-3 px-4 font-medium text-foreground">{r.department || "—"}</td>
+                        <td className="py-3 px-4 text-muted-foreground">{r.designation || "—"}</td>
+                        <td className="py-3 px-4 text-center">
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                              isRegular
+                                ? "bg-primary/10 text-primary border border-primary/20"
+                                : "bg-muted text-muted-foreground border border-border"
+                            }`}
+                          >
+                            {r.jobStatus || r.job_status || "Regular"}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          {r.presentDays || r.present_days || 0}
+                        </td>
+                        <td className="py-3 px-3 text-center font-mono font-bold text-rose-600 dark:text-rose-400">
+                          {r.absentDays || r.absent_days || 0}
+                        </td>
+                        <td className="py-3 px-3 text-center font-mono font-medium text-amber-600 dark:text-amber-400">
+                          {r.leaveDays || r.leave_days || 0}
+                        </td>
+                        <td className="py-3 px-3 text-center font-mono text-muted-foreground">
+                          {r.totalWorkingDays || r.total_working_days || workingDays}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span
+                            className={`inline-block font-mono font-bold px-2 py-0.5 rounded text-xs ${
+                              isLow
+                                ? "bg-rose-500/15 text-rose-600 dark:text-rose-400"
+                                : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                            }`}
+                          >
+                            {pct}%
+                          </span>
+                        </td>
+                      </tr>
                     );
                   })}
-                  <th className="min-w-[90px] border-l border-border px-3 py-2.5 text-center">
-                    P / Working
-                  </th>
-                  <th className="min-w-[70px] px-3 py-2.5 text-right">
-                    %
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filteredRecords.map((r: any, idx: number) => {
-                  const daily = Array.isArray(r.attendance)
-                    ? r.attendance
-                    : Array.isArray(r.dailyRecords)
-                    ? r.dailyRecords
-                    : Array.isArray(r.daily_records)
-                    ? r.daily_records
-                    : [];
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            /* ── VIEW 2: DAY-BY-DAY ATTENDANCE GRID ── */
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="border-b border-border bg-muted/30 font-semibold text-muted-foreground uppercase text-[10px] tracking-wider sticky top-0">
+                  <tr>
+                    <th className="py-3 px-3 w-10 text-center sticky left-0 bg-card z-10">#</th>
+                    <th className="py-3 px-4 min-w-[200px] sticky left-10 bg-card z-10 border-r border-border">
+                      Faculty / Cadre
+                    </th>
+                    {dayNumbers.map((d) => (
+                      <th key={d} className="py-2.5 px-1.5 text-center min-w-[28px] font-mono">
+                        {d}
+                      </th>
+                    ))}
+                    <th className="py-3 px-3 text-center border-l border-border bg-card sticky right-16">P</th>
+                    <th className="py-3 px-3 text-center bg-card sticky right-8">A</th>
+                    <th className="py-3 px-3 text-right bg-card sticky right-0 font-bold">%</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filteredRecords.map((r: any, idx: number) => {
+                    const daily = Array.isArray(r.attendance)
+                      ? r.attendance
+                      : Array.isArray(r.dailyRecords)
+                      ? r.dailyRecords
+                      : Array.isArray(r.daily_records)
+                      ? r.daily_records
+                      : [];
 
-                  const pDays = r.presentDays || r.present_days || 0;
-                  const wDays = r.totalWorkingDays || r.total_working_days || workingDays;
-                  const pct = parseFloat(r.attendancePercentage || r.percentage || "0");
+                    const pct = parseFloat(r.attendancePercentage || r.percentage || 0);
 
-                  return (
-                    <tr key={idx} className="hover:bg-muted/30 transition-colors">
-                      {/* Sticky Faculty Info */}
-                      <td className="sticky left-0 z-10 border-r border-border bg-card px-4 py-2">
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-foreground">{r.name}</span>
-                          <span className="font-mono text-[10px] text-muted-foreground">
-                            {r.cfmsId || r.cfms_id || "—"} · {r.department || "General"}
+                    return (
+                      <tr key={r.id || r.cfmsId || idx} className="hover:bg-muted/20 transition-colors">
+                        <td className="py-2.5 px-3 text-center font-mono text-muted-foreground sticky left-0 bg-card z-10">
+                          {idx + 1}
+                        </td>
+                        <td className="py-2.5 px-4 sticky left-10 bg-card z-10 border-r border-border">
+                          <div className="font-semibold text-foreground truncate">{r.name}</div>
+                          <div className="text-[10px] text-muted-foreground truncate">
+                            {r.department} · {r.jobStatus || r.job_status || "Regular"}
+                          </div>
+                        </td>
+
+                        {dayNumbers.map((dayNum) => {
+                          const dayPad = String(dayNum).padStart(2, "0");
+                          const rec = daily[dayNum - 1] || daily.find((d: any) => String(d?.date).endsWith(`-${dayPad}`));
+                          const status = rec?.status || "—";
+                          const badge = cellStyle[status] || "bg-muted/30 text-muted-foreground";
+
+                          return (
+                            <td key={dayNum} className="py-2 px-1 text-center font-mono">
+                              <span className={`inline-flex size-6 items-center justify-center rounded text-[11px] ${badge}`}>
+                                {status}
+                              </span>
+                            </td>
+                          );
+                        })}
+
+                        <td className="py-2.5 px-3 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400 border-l border-border bg-card sticky right-16">
+                          {r.presentDays || r.present_days || 0}
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-mono font-bold text-rose-600 dark:text-rose-400 bg-card sticky right-8">
+                          {r.absentDays || r.absent_days || 0}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono font-bold bg-card sticky right-0">
+                          <span className={pct < 75 ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}>
+                            {pct}%
                           </span>
-                        </div>
-                      </td>
-
-                      {/* Cadre */}
-                      <td className="border-r border-border px-2 py-2 text-center">
-                        <span
-                          className={`rounded-sm px-1 py-0.5 text-[9px] font-bold ${
-                            (r.jobStatus || r.job_status || "").toLowerCase() === "regular"
-                              ? "bg-primary/10 text-primary"
-                              : "bg-muted text-muted-foreground"
-                          }`}
-                        >
-                          {(r.jobStatus || r.job_status || "REG").slice(0, 3).toUpperCase()}
-                        </span>
-                      </td>
-
-                      {/* Day Status Badges */}
-                      {dayNumbers.map((dayNum) => {
-                        const dayPad = String(dayNum).padStart(2, "0");
-                        const dayRec = daily[dayNum - 1] || daily.find((d: any) => String(d?.date).endsWith(`-${dayPad}`));
-                        const status = dayRec?.status || "A";
-                        const inTime = dayRec?.inTime || "";
-                        const outTime = dayRec?.outTime || "";
-                        const timingTooltip = inTime || outTime ? `In: ${inTime || "—"} | Out: ${outTime || "—"}` : `Day ${dayNum}: ${status}`;
-
-                        return (
-                          <td
-                            key={dayNum}
-                            className="border-r border-border/40 p-1 text-center font-mono"
-                            title={timingTooltip}
-                          >
-                            <span
-                              className={`inline-flex size-6 items-center justify-center rounded text-[11px] ${
-                                cellStyle[status] || cellStyle.A
-                              }`}
-                            >
-                              {status}
-                            </span>
-                          </td>
-                        );
-                      })}
-
-                      {/* Summary P / Working */}
-                      <td className="border-l border-border px-3 py-2 text-center font-mono font-semibold">
-                        <span className="text-emerald-600 dark:text-emerald-400">{pDays}</span>
-                        <span className="text-muted-foreground"> / {wDays}</span>
-                      </td>
-
-                      {/* % */}
-                      <td className="px-3 py-2 text-right font-mono font-bold text-foreground">
-                        {pct}%
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="flex items-center justify-between border-t border-border px-4 py-2.5 text-xs text-muted-foreground">
-            <span>Showing {filteredRecords.length} of {records.length} faculty members</span>
-            <span>Month: <strong>{monthName} {selectedYear}</strong></span>
-          </div>
-        </section>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </AppShell>
   );

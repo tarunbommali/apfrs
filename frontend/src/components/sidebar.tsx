@@ -44,14 +44,18 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  { to: "/", label: "Overview", icon: LayoutDashboard, roles: ["admin"], section: "main" },
+  // WORKSPACE
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, roles: ["admin"], section: "main" },
+  { to: "/detailed", label: "Attendance", icon: Table2, roles: ["admin"], section: "main" },
   { to: "/reports", label: "Reports", icon: BarChart3, roles: ["admin"], section: "main" },
-  { to: "/detailed", label: "Detailed View", icon: Table2, roles: ["admin"], section: "main" },
-  { to: "/consolidated", label: "Bulk Dispatch", icon: Mails, roles: ["admin"], section: "main" },
-  { to: "/status-dashboard", label: "Delivery Status", icon: Radio, roles: ["admin"], section: "main" },
+  { to: "/consolidated", label: "Dispatch", icon: Mails, roles: ["admin"], section: "main" },
+
+  // MANAGEMENT
+  { to: "/admin-dashboard", label: "Faculty", icon: UserRound, roles: ["admin"], section: "management" },
   { to: "/calendar", label: "Academic Calendar", icon: CalendarDays, roles: ["admin", "faculty"], section: "management" },
-  { to: "/admin-dashboard", label: "Faculty Registry", icon: UserRound, roles: ["admin"], section: "management" },
   { to: "/email-config", label: "Email Settings", icon: Mailbox, roles: ["admin"], section: "management" },
+
+  // FACULTY ROLE
   { to: "/faculty-profile", label: "My Profile", icon: User, roles: ["faculty"], section: "main" },
 ];
 
