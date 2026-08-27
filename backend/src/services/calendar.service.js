@@ -1,6 +1,6 @@
 // backend/src/services/calendar.service.js
 import { calendarRepository } from '../repositories/calendar.repository.js';
-import { AppError } from '../middleware/errorHandler.js';
+import { AppError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
 
 export const VALID_HOLIDAY_TYPES = [
