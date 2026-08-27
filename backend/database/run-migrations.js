@@ -239,6 +239,59 @@ async function runMigrations() {
       logger.info('✅ working_days added to monthly_attendance_sheets');
     }
 
+    // ────────────────────────────────────────────────
+    // 11. Faculty photo_url column on users
+    // ────────────────────────────────────────────────
+    if (!(await columnExists('users', 'photo_url'))) {
+      await db.query(`
+        ALTER TABLE users
+        ADD COLUMN photo_url VARCHAR(500) NULL AFTER email
+      `);
+      logger.info('✅ photo_url column added to users');
+    } else {
+      logger.info('✅ photo_url column already present on users');
+    }
+
+    // ────────────────────────────────────────────────
+    // 12. Faculty incharge assignments table & backfill
+    // ────────────────────────────────────────────────
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS faculty_incharge_assignments (
+        id VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL PRIMARY KEY,
+        faculty_id VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+        role VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+        start_date DATE NOT NULL,
+        end_date DATE NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_faculty_id (faculty_id),
+        INDEX idx_dates (start_date, end_date),
+        FOREIGN KEY (faculty_id) REFERENCES users(id) ON DELETE CASCADE
+      ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+    `);
+    logger.info('✅ faculty_incharge_assignments table verified/created');
+
+    // Backfill legacy incharge assignments if present
+    if (await columnExists('users', 'incharge')) {
+      await db.query(`
+        INSERT INTO faculty_incharge_assignments (id, faculty_id, role, start_date, end_date, created_at, updated_at)
+        SELECT 
+          CONCAT('inc-', SUBSTRING(MD5(CONCAT(id, incharge, created_at)), 1, 12)),
+          id,
+          incharge,
+          DATE(created_at),
+          NULL,
+          created_at,
+          updated_at
+        FROM users
+        WHERE incharge IS NOT NULL 
+          AND incharge != 'None' 
+          AND incharge != ''
+        ON DUPLICATE KEY UPDATE updated_at = NOW()
+      `);
+      logger.info('✅ Backfilled existing user incharge roles to faculty_incharge_assignments');
+    }
+
     logger.info('🎉 All migrations applied successfully.');
     await db.close();
     process.exit(0);

@@ -95,8 +95,9 @@ function AdminDashboard() {
     [facultyList],
   );
   const regularCount = facultyList.filter((f) => (f.jobStatus || "").toLowerCase() === "regular").length;
-  const contractCount = totalCount - regularCount;
-  const inchargeCount = facultyList.filter((f) => f.incharge && f.incharge !== "None").length;
+  const inchargeCount = facultyList.filter(
+    (f) => Boolean(f.currentIncharge?.role || (f.incharge && f.incharge !== "None"))
+  ).length;
 
   // Pagination calculation
   const totalPages = Math.max(1, Math.ceil(filteredList.length / PAGE_SIZE));
@@ -243,20 +244,39 @@ function AdminDashboard() {
             </thead>
             <tbody>
               {paginatedList.map((f) => {
-                const hasIncharge = f.incharge && f.incharge !== "None";
+                const inchargeRole = f.currentIncharge?.role || (f.incharge && f.incharge !== "None" ? f.incharge : null);
+                const photoSrc = f.photoURL || f.photo_url;
                 return (
                   <tr key={f.id} className="border-b border-border/60 last:border-0 hover:bg-muted/50 transition-colors">
                     <td className="px-5 py-3 font-mono text-xs font-semibold text-foreground">
                       {f.cfmsId || f.cfms_id || "—"}
                     </td>
                     <td className="px-5 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-foreground">{f.name}</span>
-                        {hasIncharge ? (
-                          <span className="rounded border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
-                            {f.incharge}
-                          </span>
-                        ) : null}
+                      <div className="flex items-center gap-2.5">
+                        <div className="size-7 rounded-full overflow-hidden bg-muted border border-border flex items-center justify-center shrink-0">
+                          {photoSrc ? (
+                            <img
+                              src={photoSrc}
+                              alt={f.name}
+                              className="size-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = "none";
+                              }}
+                            />
+                          ) : (
+                            <span className="text-[10px] font-bold text-muted-foreground">
+                              {f.name ? f.name.slice(0, 1) : "F"}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-foreground">{f.name}</span>
+                          {inchargeRole ? (
+                            <span className="rounded border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                              {inchargeRole}
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                     </td>
                     <td className="px-5 py-3 font-mono text-xs text-muted-foreground">{f.email}</td>

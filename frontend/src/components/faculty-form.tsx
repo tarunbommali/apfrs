@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Save } from "lucide-react";
+import { Save, User as UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,12 +18,12 @@ export const emptyFaculty: FacultyInput = {
   cfmsId: "",
   name: "",
   email: "",
+  photoURL: null,
   designation: "Assistant Professor",
   department: "IT",
   mobile: "",
   gender: "male",
   jobStatus: "Regular",
-  incharge: "None",
   present: 0,
   absent: 0,
   leave: 0,
@@ -45,6 +45,7 @@ export function FacultyForm({
 }) {
   const [values, setValues] = useState<FacultyInput>(initial);
   const [errors, setErrors] = useState<Errors>({});
+  const [imgError, setImgError] = useState(false);
 
   const set = <K extends keyof FacultyInput>(key: K, value: FacultyInput[K]) =>
     setValues((v) => ({ ...v, [key]: value }));
@@ -68,13 +69,52 @@ export function FacultyForm({
   const field = (key: keyof FacultyInput) =>
     errors[key] ? <p className="text-xs font-medium text-destructive">{errors[key]}</p> : null;
 
+  const initials = values.name
+    ? values.name
+        .split(" ")
+        .map((p) => p[0])
+        .filter(Boolean)
+        .slice(0, 2)
+        .join("")
+        .toUpperCase()
+    : "FA";
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {/* ── Identity Section ── */}
       <section className="surface-panel p-6">
-        <h2 className="text-base font-semibold">Identity</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          CFMS ID and email are used to match biometric records and deliver monthly statements.
-        </p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
+          <div>
+            <h2 className="text-base font-semibold">Identity</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              CFMS ID, institutional email, and faculty profile credentials.
+            </p>
+          </div>
+
+          {/* Photo Avatar Preview */}
+          <div className="flex items-center gap-3">
+            <div className="size-14 rounded-full overflow-hidden border-2 border-primary/20 bg-muted flex items-center justify-center shrink-0 shadow-sm">
+              {values.photoURL && !imgError ? (
+                <img
+                  src={values.photoURL}
+                  alt={values.name || "Faculty preview"}
+                  className="size-full object-cover"
+                  onError={() => setImgError(true)}
+                  onLoad={() => setImgError(false)}
+                />
+              ) : (
+                <span className="font-semibold text-sm text-muted-foreground">{initials}</span>
+              )}
+            </div>
+            <div className="text-xs">
+              <span className="font-medium block text-foreground">Avatar Preview</span>
+              <span className="text-[11px] text-muted-foreground">
+                {values.photoURL && !imgError ? "Photo linked" : "Initials fallback"}
+              </span>
+            </div>
+          </div>
+        </div>
+
         <div className="mt-5 grid gap-5 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="cfmsId">CFMS ID</Label>
@@ -87,6 +127,7 @@ export function FacultyForm({
             />
             {field("cfmsId")}
           </div>
+
           <div className="space-y-2">
             <Label htmlFor="name">Full name</Label>
             <Input
@@ -98,6 +139,7 @@ export function FacultyForm({
             />
             {field("name")}
           </div>
+
           <div className="space-y-2">
             <Label htmlFor="email">Institutional email</Label>
             <Input
@@ -110,6 +152,7 @@ export function FacultyForm({
             />
             {field("email")}
           </div>
+
           <div className="space-y-2">
             <Label htmlFor="mobile">Mobile</Label>
             <Input
@@ -122,6 +165,7 @@ export function FacultyForm({
             />
             {field("mobile")}
           </div>
+
           <div className="space-y-2">
             <Label>Gender</Label>
             <Select
@@ -139,12 +183,33 @@ export function FacultyForm({
             </Select>
             {field("gender")}
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="photoURL">Photo URL (optional)</Label>
+            <Input
+              id="photoURL"
+              type="url"
+              value={values.photoURL || ""}
+              maxLength={500}
+              onChange={(e) => {
+                setImgError(false);
+                set("photoURL", e.target.value.trim() ? e.target.value.trim() : null);
+              }}
+              placeholder="https://example.com/photos/avatar.jpg"
+            />
+            {field("photoURL")}
+          </div>
         </div>
       </section>
 
+      {/* ── Posting & Department Section ── */}
       <section className="surface-panel p-6">
-        <h2 className="text-base font-semibold">Posting & Leadership</h2>
-        <div className="mt-5 grid gap-5 sm:grid-cols-2">
+        <h2 className="text-base font-semibold">Posting & Department</h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Academic department, official designation, and employment status.
+        </p>
+
+        <div className="mt-5 grid gap-5 sm:grid-cols-3">
           <div className="space-y-2">
             <Label htmlFor="department">Department</Label>
             <Input
@@ -161,6 +226,7 @@ export function FacultyForm({
             </datalist>
             {field("department")}
           </div>
+
           <div className="space-y-2">
             <Label htmlFor="designation">Designation</Label>
             <Input
@@ -171,6 +237,7 @@ export function FacultyForm({
             />
             {field("designation")}
           </div>
+
           <div className="space-y-2">
             <Label>Job status</Label>
             <Select
@@ -189,26 +256,6 @@ export function FacultyForm({
               </SelectContent>
             </Select>
             {field("jobStatus")}
-          </div>
-          <div className="space-y-2">
-            <Label>Incharge Role</Label>
-            <Select
-              value={values.incharge || "None"}
-              onValueChange={(v) => set("incharge", v as FacultyInput["incharge"])}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="None">None</SelectItem>
-                <SelectItem value="HOD">HOD (Head of Department)</SelectItem>
-                <SelectItem value="Principal">Principal</SelectItem>
-                <SelectItem value="Vice Principal">Vice Principal</SelectItem>
-                <SelectItem value="Vice Chancellor (VC)">Vice Chancellor (VC)</SelectItem>
-                <SelectItem value="Registrar">Registrar</SelectItem>
-              </SelectContent>
-            </Select>
-            {field("incharge")}
           </div>
         </div>
       </section>

@@ -13,6 +13,7 @@ export class User {
     this.cfms_id = (rawCfms && String(rawCfms).trim().length > 0) ? String(rawCfms).trim() : null;
 
     this.email = data.email?.toLowerCase().trim() || '';
+    this.photo_url = data.photo_url || data.photoURL || null;
     this.name = data.name?.trim() || '';
     this.designation = data.designation?.trim() || 'Assistant Professor';
     this.department = data.department?.trim() || 'General';
@@ -23,7 +24,9 @@ export class User {
     const rawJob = String(data.job_status || data.jobStatus || 'Regular').trim().toLowerCase();
     this.job_status = rawJob === 'regular' ? 'Regular' : 'contract';
 
+    // Legacy incharge fallback compatibility
     this.incharge = String(data.incharge || 'None').trim();
+    this.currentIncharge = data.currentIncharge || null;
 
     this.role = data.role || 'faculty';
     this.isActive = data.isActive !== undefined
@@ -58,10 +61,13 @@ export class User {
       ...safe,
       cfmsId: this.cfms_id || '',
       cfms_id: this.cfms_id || '',
+      photoURL: this.photo_url || null,
+      photo_url: this.photo_url || null,
       jobStatus: this.job_status,
       job_status: this.job_status,
       gender: this.gender,
-      incharge: this.incharge,
+      incharge: this.currentIncharge?.role || (this.incharge !== 'None' ? this.incharge : 'None'),
+      currentIncharge: this.currentIncharge || (this.incharge && this.incharge !== 'None' ? { role: this.incharge } : null),
       createdAt: this.createdAt,
       created_at: this.createdAt,
       dateOfJoining: this.createdAt,

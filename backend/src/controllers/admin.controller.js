@@ -1,6 +1,7 @@
 // backend/src/controllers/admin.controller.js
 import { userService } from '../services/user.service.js';
 import { attendanceService } from '../services/attendance.service.js';
+import { inchargeService } from '../services/incharge.service.js';
 import { emailService } from '../services/email.service.js';
 import { calendarService } from '../services/calendar.service.js';
 import { calendarRepository } from '../repositories/calendar.repository.js';
@@ -255,10 +256,56 @@ export class AdminController {
     }
   }
 
-  async getEmailConfigLogs(req, res, next) {
+  // ── Incharge Assignment Management ──
+  async getFacultyIncharge(req, res, next) {
     try {
-      const logs = await emailSettingsRepository.getLogs(50);
-      return sendSuccess(res, { logs });
+      const result = await inchargeService.getAssignments(req.params.id);
+      return sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async createFacultyIncharge(req, res, next) {
+    try {
+      const assignment = await inchargeService.createAssignment(req.params.id, req.body);
+      return sendCreated(res, {
+        assignment,
+        message: `Incharge assignment (${assignment.role}) created successfully.`,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateFacultyIncharge(req, res, next) {
+    try {
+      const assignment = await inchargeService.updateAssignment(req.params.assignmentId, req.body);
+      return sendSuccess(res, {
+        assignment,
+        message: 'Incharge assignment updated successfully.',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async endFacultyIncharge(req, res, next) {
+    try {
+      const assignment = await inchargeService.endAssignment(req.params.assignmentId, req.body?.endDate);
+      return sendSuccess(res, {
+        assignment,
+        message: `Incharge assignment (${assignment.role}) ended as of ${assignment.endDate}.`,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async deleteFacultyIncharge(req, res, next) {
+    try {
+      const result = await inchargeService.deleteAssignment(req.params.assignmentId);
+      return sendSuccess(res, result);
     } catch (error) {
       next(error);
     }

@@ -4,7 +4,13 @@ import { adminController } from '../controllers/admin.controller.js';
 import { verifyToken } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
 import { validate } from '../middleware/validation.js';
-import { facultyCreateSchema, facultyUpdateSchema, attendanceSendSchema } from '../validators/admin.validator.js';
+import {
+  facultyCreateSchema,
+  facultyUpdateSchema,
+  inchargeCreateSchema,
+  inchargeUpdateSchema,
+  attendanceSendSchema,
+} from '../validators/admin.validator.js';
 
 const router = Router();
 
@@ -17,6 +23,13 @@ router.get('/faculty/:id', (req, res, next) => adminController.getFacultyById(re
 router.post('/faculty', validate(facultyCreateSchema), (req, res, next) => adminController.createFaculty(req, res, next));
 router.put('/faculty/:id', validate(facultyUpdateSchema), (req, res, next) => adminController.updateFaculty(req, res, next));
 router.delete('/faculty/:id', (req, res, next) => adminController.deleteFaculty(req, res, next));
+
+// Faculty Incharge Assignment management
+router.get('/faculty/:id/incharge', (req, res, next) => adminController.getFacultyIncharge(req, res, next));
+router.post('/faculty/:id/incharge', validate(inchargeCreateSchema), (req, res, next) => adminController.createFacultyIncharge(req, res, next));
+router.put('/faculty/:id/incharge/:assignmentId', validate(inchargeUpdateSchema), (req, res, next) => adminController.updateFacultyIncharge(req, res, next));
+router.post('/faculty/:id/incharge/:assignmentId/end', (req, res, next) => adminController.endFacultyIncharge(req, res, next));
+router.delete('/faculty/:id/incharge/:assignmentId', (req, res, next) => adminController.deleteFacultyIncharge(req, res, next));
 
 // Attendance management
 router.get('/attendance/batches', (req, res, next) => adminController.getAttendanceBatches(req, res, next));

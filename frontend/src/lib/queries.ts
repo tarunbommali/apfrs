@@ -1,6 +1,6 @@
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./api";
-import type { Faculty, JobStatus } from "./apfrs-data";
+import type { Faculty, JobStatus, InchargeAssignment } from "./apfrs-data";
 
 // ─── Faculty ─────────────────────────────────────────────────────────────────
 
@@ -73,6 +73,92 @@ export function useDeleteFaculty() {
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch(`/api/admin/faculty/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["faculty"] });
+    },
+  });
+}
+
+// ─── Faculty Incharge Assignments ───────────────────────────────────────────
+
+export const facultyInchargeQuery = (facultyId: string) =>
+  queryOptions({
+    queryKey: ["faculty", "incharge", facultyId],
+    queryFn: () =>
+      apiFetch<{
+        facultyId: string;
+        currentIncharge: InchargeAssignment | null;
+        inchargeHistory: InchargeAssignment[];
+      }>(`/api/admin/faculty/${facultyId}/incharge`),
+    enabled: !!facultyId,
+  });
+
+export function useCreateInchargeAssignment(facultyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { role: string; startDate: string; endDate?: string | null }) =>
+      apiFetch<{ assignment: InchargeAssignment; message: string }>(`/api/admin/faculty/${facultyId}/incharge`, {
+        method: "POST",
+        body: data,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["faculty"] });
+    },
+  });
+}
+
+export function useUpdateInchargeAssignment(facultyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      assignmentId,
+      ...data
+    }: {
+      assignmentId: string;
+      role?: string;
+      startDate?: string;
+      endDate?: string | null;
+    }) =>
+      apiFetch<{ assignment: InchargeAssignment; message: string }>(
+        `/api/admin/faculty/${facultyId}/incharge/${assignmentId}`,
+        {
+          method: "PUT",
+          body: data,
+        }
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["faculty"] });
+    },
+  });
+}
+
+export function useEndInchargeAssignment(facultyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ assignmentId, endDate }: { assignmentId: string; endDate?: string }) =>
+      apiFetch<{ assignment: InchargeAssignment; message: string }>(
+        `/api/admin/faculty/${facultyId}/incharge/${assignmentId}/end`,
+        {
+          method: "POST",
+          body: { endDate },
+        }
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["faculty"] });
+    },
+  });
+}
+
+export function useDeleteInchargeAssignment(facultyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (assignmentId: string) =>
+      apiFetch<{ success: boolean; message: string }>(
+        `/api/admin/faculty/${facultyId}/incharge/${assignmentId}`,
+        {
+          method: "DELETE",
+        }
+      ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["faculty"] });
     },

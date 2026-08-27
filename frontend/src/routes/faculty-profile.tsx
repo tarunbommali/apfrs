@@ -194,8 +194,19 @@ function FacultyProfile() {
         {/* ── Left Card: Identity Details ── */}
         <section className="surface-panel p-6">
           <div className="flex items-center gap-4 border-b border-border/60 pb-5">
-            <div className="ink-gradient flex size-14 shrink-0 items-center justify-center rounded-full font-mono text-lg font-semibold text-sidebar-accent-foreground">
-              {me.name ? me.name.slice(0, 1) : "F"}
+            <div className="size-14 shrink-0 overflow-hidden rounded-full border-2 border-primary/20 bg-muted flex items-center justify-center font-mono text-lg font-semibold text-foreground shadow-sm">
+              {(me as any).photoURL || (me as any).photo_url ? (
+                <img
+                  src={(me as any).photoURL || (me as any).photo_url}
+                  alt={me.name || "Faculty avatar"}
+                  className="size-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = "none";
+                  }}
+                />
+              ) : (
+                <span>{me.name ? me.name.slice(0, 1) : "F"}</span>
+              )}
             </div>
             <div>
               <div className="flex items-center gap-2">

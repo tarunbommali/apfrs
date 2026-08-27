@@ -1,6 +1,7 @@
 // backend/src/services/user.service.js
 import { User } from '../models/User.js';
 import { userRepository } from '../repositories/user.repository.js';
+import { inchargeRepository } from '../repositories/incharge.repository.js';
 import { emailService } from './email.service.js';
 import { AppError, ConflictError, NotFoundError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
@@ -14,7 +15,6 @@ class UserService {
     const limit = parseInt(filters.limit, 10) || config.pagination.defaultLimit;
     const offset = (page - 1) * limit;
 
-    // Phase 3: push pagination fully into SQL — no more full-table load + JS slice
     const [rows, total, departmentRows] = await Promise.all([
       userRepository.findAllFaculty({ ...filters, limit, offset }),
       userRepository.countFaculty(filters),
@@ -40,7 +40,11 @@ class UserService {
     if (!faculty || faculty.role !== 'faculty') {
       throw new NotFoundError('Faculty member');
     }
-    return faculty.toProfile();
+    const inchargeHistory = await inchargeRepository.findByFacultyId(id);
+    return {
+      ...faculty.toProfile(),
+      inchargeHistory: inchargeHistory.map((h) => h.toJSON()),
+    };
   }
 
   async createFaculty(data) {
@@ -49,19 +53,18 @@ class UserService {
       throw new ConflictError('A faculty member with this email already exists.');
     }
 
+    const photoUrl = data.photo_url || data.photoURL || null;
+
     const user = new User({
       ...data,
+      photo_url: photoUrl,
       role: 'faculty',
     });
 
-    // Phase 8: replace predictable cfms_id-as-password with a one-time
-    // activation token. The raw token is emailed; only its SHA-256 hash is stored.
-    // The account is unusable for login until the /api/auth/activate endpoint is called.
     const rawToken = generateActivationToken();
     const tokenHash = hashActivationToken(rawToken);
     const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000); // 72-hour window
 
-    // Set a random unusable placeholder so password_hash is NOT NULL
     await user.setPassword(generateActivationToken());
 
     user.activationTokenHash = tokenHash;
@@ -70,8 +73,6 @@ class UserService {
 
     const created = await userRepository.create(user);
 
-    // Best-effort activation email — if SMTP is not configured, the admin
-    // can retrieve the token hash from the DB or re-trigger via an admin action.
     try {
       const activationUrl = `${config.frontendUrl}/activate?token=${rawToken}`;
       await emailService.sendEmail({
@@ -87,7 +88,6 @@ class UserService {
       });
       logger.info('Activation email sent', { facultyId: created.id, email: created.email });
     } catch (emailErr) {
-      // Log but do not fail the faculty creation — admin can resend activation
       logger.error('Activation email failed (faculty created, activation pending)', {
         facultyId: created.id,
         email: created.email,
@@ -112,8 +112,11 @@ class UserService {
       }
     }
 
-    const updated = await userRepository.update(id, data);
-    logger.info('Faculty updated', { facultyId: id, updates: Object.keys(data) });
+    const updates = { ...data };
+    if (data.photoURL !== undefined) updates.photo_url = data.photoURL;
+
+    const updated = await userRepository.update(id, updates);
+    logger.info('Faculty updated', { facultyId: id, updates: Object.keys(updates) });
     return updated.toProfile();
   }
 
@@ -124,7 +127,7 @@ class UserService {
     }
 
     await userRepository.delete(id);
-    logger.info('Faculty removed', { facultyId: id, email: user.email });
+    logger.info('Faculty removed (soft deleted)', { facultyId: id, email: user.email });
     return { success: true, message: 'Faculty member removed successfully.' };
   }
 
@@ -140,6 +143,7 @@ class UserService {
       colleagues: colleagues.map((c) => ({
         id: c.id,
         name: c.name,
+        photoURL: c.photo_url || null,
         designation: c.designation,
         department: c.department,
         mobile: c.mobile,
@@ -153,57 +157,27 @@ class UserService {
     return userRepository.getStats();
   }
 
-  async initializeUsers() {
-    await userRepository.initializeMemoryStore();
-  }
-
-  async updateMyProfile(userId, { mobile, email }) {
+  async updateMyProfile(userId, { mobile, email, photoURL }) {
     const user = await userRepository.findById(userId);
     if (!user) {
       throw new NotFoundError('User');
     }
 
-      const updates = {};
-      if (mobile !== undefined) updates.mobile = String(mobile).trim();
-      if (email && email.toLowerCase() !== user.email.toLowerCase()) {
-        const existing = await userRepository.findByEmail(email);
-        if (existing && existing.id !== userId) {
-          throw new ConflictError('Email address is already in use.');
-        }
-        updates.email = email.toLowerCase().trim();
+    const updates = {};
+    if (mobile !== undefined) updates.mobile = mobile;
+    if (photoURL !== undefined) updates.photo_url = photoURL;
+    if (email && email.toLowerCase() !== user.email.toLowerCase()) {
+      const existing = await userRepository.findByEmail(email);
+      if (existing && existing.id !== userId) {
+        throw new ConflictError('Email address is already in use.');
       }
-
-      const updated = await userRepository.update(userId, updates);
-      logger.info('Faculty self-updated profile', { userId, updates: Object.keys(updates) });
-      return updated.toProfile();
+      updates.email = email.toLowerCase().trim();
     }
 
-  async changePassword(userId, currentPassword, newPassword) {
-      const user = await userRepository.findById(userId);
-      if (!user) {
-        throw new NotFoundError('User');
-      }
-
-      const isValid = await user.verifyPassword(currentPassword);
-      if (!isValid) {
-        throw new ValidationError('Current password does not match.');
-      }
-
-      if (!newPassword || newPassword.length < 6) {
-        throw new ValidationError('New password must be at least 6 characters.');
-      }
-
-      await user.setPassword(newPassword);
-      await userRepository.update(userId, {
-        password_hash: user.passwordHash,
-        must_change_password: false,
-      });
-
-      logger.info('User password changed successfully', { userId });
-      return { success: true, message: 'Password changed successfully.' };
-    }
+    const updated = await userRepository.update(userId, updates);
+    return updated.toProfile();
   }
+}
 
-  export const userService = new UserService();
+export const userService = new UserService();
 export default userService;
-
