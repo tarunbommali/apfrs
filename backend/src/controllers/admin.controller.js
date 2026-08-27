@@ -4,6 +4,7 @@ import { attendanceService } from '../services/attendance.service.js';
 import { inchargeService } from '../services/incharge.service.js';
 import { emailService } from '../services/email.service.js';
 import { calendarService } from '../services/calendar.service.js';
+import { departmentService } from '../services/department.service.js';
 import { calendarRepository } from '../repositories/calendar.repository.js';
 import { emailSettingsRepository } from '../repositories/email-settings.repository.js';
 import { sendSuccess, sendCreated } from '../utils/response.js';
@@ -305,6 +306,84 @@ export class AdminController {
     try {
       const result = await inchargeService.deleteAssignment(req.params.assignmentId);
       return sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ─── Departments Management ──────────────────────────────────────────────────
+
+  async getDepartmentsList(req, res, next) {
+    try {
+      const filters = {
+        status: req.query.status,
+        search: req.query.search,
+      };
+      const departments = await departmentService.getDepartmentsList(filters);
+      return sendSuccess(res, { departments });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getDepartmentById(req, res, next) {
+    try {
+      const department = await departmentService.getDepartmentById(req.params.id);
+      return sendSuccess(res, { department });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async createDepartment(req, res, next) {
+    try {
+      const department = await departmentService.createDepartment(req.body);
+      return sendCreated(res, { message: 'Department created successfully.', department });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateDepartment(req, res, next) {
+    try {
+      const department = await departmentService.updateDepartment(req.params.id, req.body);
+      return sendSuccess(res, { message: 'Department updated successfully.', department });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async deleteDepartment(req, res, next) {
+    try {
+      const result = await departmentService.deleteDepartment(req.params.id);
+      return sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async assignDepartmentIncharge(req, res, next) {
+    try {
+      const department = await departmentService.assignIncharge(req.params.id, req.body);
+      return sendSuccess(res, { message: 'Department leadership updated successfully.', department });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateDepartmentStatus(req, res, next) {
+    try {
+      const department = await departmentService.updateStatus(req.params.id, req.body.status);
+      return sendSuccess(res, { message: 'Department status updated successfully.', department });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getDepartmentFaculty(req, res, next) {
+    try {
+      const faculty = await departmentService.getDepartmentFaculty(req.params.id);
+      return sendSuccess(res, { faculty });
     } catch (error) {
       next(error);
     }

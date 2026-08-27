@@ -29,6 +29,7 @@ import {
 import {
   attendanceMonthsQuery,
   monthlyAttendanceQuery,
+  departmentsQuery,
 } from "@/lib/queries";
 import { toast } from "sonner";
 
@@ -84,14 +85,18 @@ function AttendancePage() {
   const [selectedDept, setSelectedDept] = useState("all");
   const [selectedCadre, setSelectedCadre] = useState("all");
 
+  const { data: deptsData } = useQuery(departmentsQuery());
+  const dbDepartments = deptsData?.departments || [];
+
   // Departments list for filter
   const departmentsList = useMemo(() => {
-    const set = new Set<string>();
-    records.forEach((r: any) => {
-      if (r.department) set.add(r.department);
-    });
-    return Array.from(set).sort();
-  }, [records]);
+    const list = dbDepartments.map((d) => d.code);
+    const cleanList = Array.from(new Set(list));
+    if (!cleanList.some(code => code.toLowerCase() === "uncategorized")) {
+      cleanList.push("Uncategorized");
+    }
+    return cleanList.sort();
+  }, [dbDepartments]);
 
   // Filtered records
   const filteredRecords = useMemo(() => {
@@ -104,7 +109,8 @@ function AttendancePage() {
         (r.department && r.department.toLowerCase().includes(search.toLowerCase())) ||
         (r.designation && r.designation.toLowerCase().includes(search.toLowerCase()));
 
-      const matchDept = selectedDept === "all" || r.department === selectedDept;
+      const rDept = (r.department || "Uncategorized").toLowerCase();
+      const matchDept = selectedDept === "all" || rDept === selectedDept.toLowerCase();
       const matchCadre =
         selectedCadre === "all" ||
         (selectedCadre === "regular" && (r.jobStatus || r.job_status || "").toLowerCase() === "regular") ||

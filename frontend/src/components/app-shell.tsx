@@ -57,7 +57,6 @@ function AppShellInner({
               ) : null}
             </div>
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-              {role === "admin" ? <GlobalSearch /> : null}
               {actions}
             </div>
           </div>

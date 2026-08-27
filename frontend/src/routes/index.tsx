@@ -30,6 +30,7 @@ import {
   attendanceMonthsQuery,
   monthlyAttendanceQuery,
   batchesQuery,
+  departmentsQuery,
 } from "@/lib/queries";
 import { calculateOverallStats } from "@/lib/attendance-helpers";
 
@@ -79,6 +80,9 @@ function DashboardPage() {
     monthlyAttendanceQuery(selectedMonth, selectedYear)
   );
 
+  const { data: deptsData } = useQuery(departmentsQuery());
+  const dbDepartments = deptsData?.departments || [];
+
   // Fetch recent batches
   const { data: batchesData } = useQuery(batchesQuery({ limit: 5 }));
   const recentBatches = batchesData?.batches || [];
@@ -107,13 +111,7 @@ function DashboardPage() {
   }, [records]);
 
   // Department counts
-  const departmentCount = useMemo(() => {
-    const set = new Set<string>();
-    records.forEach((r: any) => {
-      if (r.department) set.add(r.department);
-    });
-    return set.size;
-  }, [records]);
+  const departmentCount = dbDepartments.length;
 
   if (monthsLoading) {
     return <DashboardSkeleton />;

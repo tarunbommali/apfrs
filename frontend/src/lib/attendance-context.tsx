@@ -153,6 +153,8 @@ function normalizeRecords(records: EmployeeRecord[]): EmployeeRecord[] {
     void refreshFromDb();
   }, [refreshFromDb]);
 
+
+
   const loadMonth = useCallback(async (month: number, year: number) => {
     try {
       setLoading(true);

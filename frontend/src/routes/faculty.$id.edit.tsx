@@ -81,6 +81,7 @@ function EditFacultyPage() {
 
   const [endModalOpen, setEndModalOpen] = useState(false);
   const [assignmentToEnd, setAssignmentToEnd] = useState<InchargeAssignment | null>(null);
+  const [endEffectiveDate, setEndEffectiveDate] = useState("");
   if (isLoading) {
     return (
       <AppShell title="Edit Faculty" subtitle="Loading record details…">

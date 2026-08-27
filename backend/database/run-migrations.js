@@ -292,6 +292,43 @@ async function runMigrations() {
       logger.info('✅ Backfilled existing user incharge roles to faculty_incharge_assignments');
     }
 
+    // ────────────────────────────────────────────────
+    // 13. Departments master data table verification
+    // ────────────────────────────────────────────────
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS departments (
+        id             VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL PRIMARY KEY,
+        name           VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL UNIQUE,
+        code           VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL UNIQUE,
+        description    TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+        status         ENUM('active', 'inactive') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'active',
+        hod_id         VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+        created_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (hod_id) REFERENCES users(id) ON DELETE SET NULL,
+        INDEX idx_code (code),
+        INDEX idx_status (status)
+      ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+    `);
+    logger.info('✅ departments table verified/created');
+
+    // Seed default departments if table is empty
+    const deptCountRows = await db.query('SELECT COUNT(*) as count FROM departments');
+    if (deptCountRows[0].count === 0) {
+      await db.query(`
+        INSERT INTO departments (id, name, code, description, status, hod_id) VALUES
+        ('dept-cse', 'Computer Science & Engineering', 'CSE', 'Department of Computer Science & Engineering', 'active', NULL),
+        ('dept-ece', 'Electronics & Communication Engineering', 'ECE', 'Department of Electronics & Communication Engineering', 'active', NULL),
+        ('dept-eee', 'Electrical & Electronics Engineering', 'EEE', 'Department of Electrical & Electronics Engineering', 'active', NULL),
+        ('dept-it', 'Information Technology', 'IT', 'Department of Information Technology', 'active', NULL),
+        ('dept-me', 'Mechanical Engineering', 'ME', 'Department of Mechanical Engineering', 'active', NULL),
+        ('dept-civil', 'Civil Engineering', 'CIVIL', 'Department of Civil Engineering', 'active', NULL),
+        ('dept-bsh', 'Basic Sciences & Humanities', 'BS&HSS', 'Department of Basic Sciences & Humanities', 'active', NULL),
+        ('dept-admin', 'Administration', 'Administration', 'College Administration', 'active', NULL)
+      `);
+      logger.info('✅ Seeded default departments');
+    }
+
     logger.info('🎉 All migrations applied successfully.');
     await db.close();
     process.exit(0);

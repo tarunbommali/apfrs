@@ -2,6 +2,7 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useState } from "react";
 import {
   BarChart3,
+  Building2,
   CalendarDays,
   ChevronUp,
   LayoutDashboard,
@@ -54,6 +55,7 @@ const navItems: NavItem[] = [
 
   // MANAGEMENT
   { to: "/admin-dashboard", label: "Faculty", icon: UserRound, roles: ["admin"], section: "management" },
+  { to: "/departments", label: "Departments", icon: Building2, roles: ["admin"], section: "management" },
   { to: "/calendar", label: "Academic Calendar", icon: CalendarDays, roles: ["admin", "faculty"], section: "management" },
   { to: "/email-config", label: "Email Settings", icon: Mailbox, roles: ["admin"], section: "management" },
 

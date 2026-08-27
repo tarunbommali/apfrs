@@ -394,6 +394,36 @@ class MonthlyAttendanceRepository {
 
     return new FacultyMonthlyAttendance(rows[0]);
   }
+
+  /**
+   * Syncs user changes to all of their records in the monthly attendance registry.
+   */
+  async updateFacultyRegistryInfo(facultyId, updates) {
+    const fields = [];
+    const params = [];
+    const allowed = ['name', 'email', 'cfms_id', 'department', 'designation', 'gender', 'job_status', 'incharge'];
+
+    for (const key of allowed) {
+      let val = updates[key];
+      if (key === 'cfms_id' && updates.cfmsId !== undefined) {
+        val = updates.cfmsId;
+      }
+      if (key === 'job_status' && updates.jobStatus !== undefined) {
+        val = updates.jobStatus;
+      }
+
+      if (val !== undefined) {
+        fields.push(`${key} = ?`);
+        params.push(val);
+      }
+    }
+
+    if (fields.length === 0) return;
+
+    params.push(facultyId);
+    const sql = `UPDATE faculty_monthly_attendance SET ${fields.join(', ')}, updated_at = NOW() WHERE faculty_id = ?`;
+    return db.query(sql, params);
+  }
 }
 
 export const monthlyAttendanceRepository = new MonthlyAttendanceRepository();

@@ -24,6 +24,16 @@ router.post('/faculty', validate(facultyCreateSchema), (req, res, next) => admin
 router.put('/faculty/:id', validate(facultyUpdateSchema), (req, res, next) => adminController.updateFaculty(req, res, next));
 router.delete('/faculty/:id', (req, res, next) => adminController.deleteFaculty(req, res, next));
 
+// Departments management
+router.get('/departments', (req, res, next) => adminController.getDepartmentsList(req, res, next));
+router.get('/departments/:id', (req, res, next) => adminController.getDepartmentById(req, res, next));
+router.post('/departments', (req, res, next) => adminController.createDepartment(req, res, next));
+router.put('/departments/:id', (req, res, next) => adminController.updateDepartment(req, res, next));
+router.delete('/departments/:id', (req, res, next) => adminController.deleteDepartment(req, res, next));
+router.put('/departments/:id/incharge', (req, res, next) => adminController.assignDepartmentIncharge(req, res, next));
+router.put('/departments/:id/status', (req, res, next) => adminController.updateDepartmentStatus(req, res, next));
+router.get('/departments/:id/faculty', (req, res, next) => adminController.getDepartmentFaculty(req, res, next));
+
 // Faculty Incharge Assignment management
 router.get('/faculty/:id/incharge', (req, res, next) => adminController.getFacultyIncharge(req, res, next));
 router.post('/faculty/:id/incharge', validate(inchargeCreateSchema), (req, res, next) => adminController.createFacultyIncharge(req, res, next));

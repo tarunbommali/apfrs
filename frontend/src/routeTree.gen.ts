@@ -13,17 +13,18 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminDashboardRouteImport } from './routes/admin-dashboard'
 import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as ConsolidatedRouteImport } from './routes/consolidated'
+import { Route as DepartmentsRouteImport } from './routes/departments'
 import { Route as DetailedRouteImport } from './routes/detailed'
+import { Route as EmailConfigRouteImport } from './routes/email-config'
 import { Route as FacultyProfileRouteImport } from './routes/faculty-profile'
 import { Route as ImportRouteImport } from './routes/import'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ReportsRouteImport } from './routes/reports'
-import { Route as ReportsMonthYearRouteImport } from './routes/reports.$month.$year'
 import { Route as StatusDashboardRouteImport } from './routes/status-dashboard'
-import { Route as EmailConfigRouteImport } from './routes/email-config'
+import { Route as EditCalendarRouteImport } from './routes/edit.calendar'
 import { Route as FacultyNewRouteImport } from './routes/faculty.new'
 import { Route as FacultyIdEditRouteImport } from './routes/faculty.$id.edit'
-import { Route as EditCalendarRouteImport } from './routes/edit.calendar'
+import { Route as ReportsMonthYearRouteImport } from './routes/reports.$month.$year'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -45,9 +46,19 @@ const ConsolidatedRoute = ConsolidatedRouteImport.update({
   path: '/consolidated',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DepartmentsRoute = DepartmentsRouteImport.update({
+  id: '/departments',
+  path: '/departments',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DetailedRoute = DetailedRouteImport.update({
   id: '/detailed',
   path: '/detailed',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmailConfigRoute = EmailConfigRouteImport.update({
+  id: '/email-config',
+  path: '/email-config',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FacultyProfileRoute = FacultyProfileRouteImport.update({
@@ -70,19 +81,14 @@ const ReportsRoute = ReportsRouteImport.update({
   path: '/reports',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ReportsMonthYearRoute = ReportsMonthYearRouteImport.update({
-  id: '/reports/$month/$year',
-  path: '/reports/$month/$year',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const StatusDashboardRoute = StatusDashboardRouteImport.update({
   id: '/status-dashboard',
   path: '/status-dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
-const EmailConfigRoute = EmailConfigRouteImport.update({
-  id: '/email-config',
-  path: '/email-config',
+const EditCalendarRoute = EditCalendarRouteImport.update({
+  id: '/edit/calendar',
+  path: '/edit/calendar',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FacultyNewRoute = FacultyNewRouteImport.update({
@@ -95,10 +101,10 @@ const FacultyIdEditRoute = FacultyIdEditRouteImport.update({
   path: '/faculty/$id/edit',
   getParentRoute: () => rootRouteImport,
 } as any)
-const EditCalendarRoute = EditCalendarRouteImport.update({
-  id: '/edit/calendar',
-  path: '/edit/calendar',
-  getParentRoute: () => rootRouteImport,
+const ReportsMonthYearRoute = ReportsMonthYearRouteImport.update({
+  id: '/$month/$year',
+  path: '/$month/$year',
+  getParentRoute: () => ReportsRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -106,34 +112,36 @@ export interface FileRoutesByFullPath {
   '/admin-dashboard': typeof AdminDashboardRoute
   '/calendar': typeof CalendarRoute
   '/consolidated': typeof ConsolidatedRoute
+  '/departments': typeof DepartmentsRoute
   '/detailed': typeof DetailedRoute
+  '/email-config': typeof EmailConfigRoute
   '/faculty-profile': typeof FacultyProfileRoute
   '/import': typeof ImportRoute
   '/login': typeof LoginRoute
-  '/reports': typeof ReportsRoute
-  '/reports/$month/$year': typeof ReportsMonthYearRoute
+  '/reports': typeof ReportsRouteWithChildren
   '/status-dashboard': typeof StatusDashboardRoute
-  '/email-config': typeof EmailConfigRoute
+  '/edit/calendar': typeof EditCalendarRoute
   '/faculty/new': typeof FacultyNewRoute
   '/faculty/$id/edit': typeof FacultyIdEditRoute
-  '/edit/calendar': typeof EditCalendarRoute
+  '/reports/$month/$year': typeof ReportsMonthYearRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin-dashboard': typeof AdminDashboardRoute
   '/calendar': typeof CalendarRoute
   '/consolidated': typeof ConsolidatedRoute
+  '/departments': typeof DepartmentsRoute
   '/detailed': typeof DetailedRoute
+  '/email-config': typeof EmailConfigRoute
   '/faculty-profile': typeof FacultyProfileRoute
   '/import': typeof ImportRoute
   '/login': typeof LoginRoute
-  '/reports': typeof ReportsRoute
-  '/reports/$month/$year': typeof ReportsMonthYearRoute
+  '/reports': typeof ReportsRouteWithChildren
   '/status-dashboard': typeof StatusDashboardRoute
-  '/email-config': typeof EmailConfigRoute
+  '/edit/calendar': typeof EditCalendarRoute
   '/faculty/new': typeof FacultyNewRoute
   '/faculty/$id/edit': typeof FacultyIdEditRoute
-  '/edit/calendar': typeof EditCalendarRoute
+  '/reports/$month/$year': typeof ReportsMonthYearRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -141,17 +149,18 @@ export interface FileRoutesById {
   '/admin-dashboard': typeof AdminDashboardRoute
   '/calendar': typeof CalendarRoute
   '/consolidated': typeof ConsolidatedRoute
+  '/departments': typeof DepartmentsRoute
   '/detailed': typeof DetailedRoute
+  '/email-config': typeof EmailConfigRoute
   '/faculty-profile': typeof FacultyProfileRoute
   '/import': typeof ImportRoute
   '/login': typeof LoginRoute
-  '/reports': typeof ReportsRoute
-  '/reports/$month/$year': typeof ReportsMonthYearRoute
+  '/reports': typeof ReportsRouteWithChildren
   '/status-dashboard': typeof StatusDashboardRoute
-  '/email-config': typeof EmailConfigRoute
+  '/edit/calendar': typeof EditCalendarRoute
   '/faculty/new': typeof FacultyNewRoute
   '/faculty/$id/edit': typeof FacultyIdEditRoute
-  '/edit/calendar': typeof EditCalendarRoute
+  '/reports/$month/$year': typeof ReportsMonthYearRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -160,51 +169,54 @@ export interface FileRouteTypes {
     | '/admin-dashboard'
     | '/calendar'
     | '/consolidated'
+    | '/departments'
     | '/detailed'
+    | '/email-config'
     | '/faculty-profile'
     | '/import'
     | '/login'
     | '/reports'
-    | '/reports/$month/$year'
     | '/status-dashboard'
-    | '/email-config'
+    | '/edit/calendar'
     | '/faculty/new'
     | '/faculty/$id/edit'
-    | '/edit/calendar'
+    | '/reports/$month/$year'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/admin-dashboard'
     | '/calendar'
     | '/consolidated'
+    | '/departments'
     | '/detailed'
+    | '/email-config'
     | '/faculty-profile'
     | '/import'
     | '/login'
     | '/reports'
-    | '/reports/$month/$year'
     | '/status-dashboard'
-    | '/email-config'
+    | '/edit/calendar'
     | '/faculty/new'
     | '/faculty/$id/edit'
-    | '/edit/calendar'
+    | '/reports/$month/$year'
   id:
     | '__root__'
     | '/'
     | '/admin-dashboard'
     | '/calendar'
     | '/consolidated'
+    | '/departments'
     | '/detailed'
+    | '/email-config'
     | '/faculty-profile'
     | '/import'
     | '/login'
     | '/reports'
-    | '/reports/$month/$year'
     | '/status-dashboard'
-    | '/email-config'
+    | '/edit/calendar'
     | '/faculty/new'
     | '/faculty/$id/edit'
-    | '/edit/calendar'
+    | '/reports/$month/$year'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -212,17 +224,17 @@ export interface RootRouteChildren {
   AdminDashboardRoute: typeof AdminDashboardRoute
   CalendarRoute: typeof CalendarRoute
   ConsolidatedRoute: typeof ConsolidatedRoute
+  DepartmentsRoute: typeof DepartmentsRoute
   DetailedRoute: typeof DetailedRoute
+  EmailConfigRoute: typeof EmailConfigRoute
   FacultyProfileRoute: typeof FacultyProfileRoute
   ImportRoute: typeof ImportRoute
   LoginRoute: typeof LoginRoute
-  ReportsRoute: typeof ReportsRoute
-  ReportsMonthYearRoute: typeof ReportsMonthYearRoute
+  ReportsRoute: typeof ReportsRouteWithChildren
   StatusDashboardRoute: typeof StatusDashboardRoute
-  EmailConfigRoute: typeof EmailConfigRoute
+  EditCalendarRoute: typeof EditCalendarRoute
   FacultyNewRoute: typeof FacultyNewRoute
   FacultyIdEditRoute: typeof FacultyIdEditRoute
-  EditCalendarRoute: typeof EditCalendarRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -255,11 +267,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConsolidatedRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/departments': {
+      id: '/departments'
+      path: '/departments'
+      fullPath: '/departments'
+      preLoaderRoute: typeof DepartmentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/detailed': {
       id: '/detailed'
       path: '/detailed'
       fullPath: '/detailed'
       preLoaderRoute: typeof DetailedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/email-config': {
+      id: '/email-config'
+      path: '/email-config'
+      fullPath: '/email-config'
+      preLoaderRoute: typeof EmailConfigRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/faculty-profile': {
@@ -290,13 +316,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReportsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/reports/$month/$year': {
-      id: '/reports/$month/$year'
-      path: '/reports/$month/$year'
-      fullPath: '/reports/$month/$year'
-      preLoaderRoute: typeof ReportsMonthYearRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/status-dashboard': {
       id: '/status-dashboard'
       path: '/status-dashboard'
@@ -304,11 +323,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StatusDashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/email-config': {
-      id: '/email-config'
-      path: '/email-config'
-      fullPath: '/email-config'
-      preLoaderRoute: typeof EmailConfigRouteImport
+    '/edit/calendar': {
+      id: '/edit/calendar'
+      path: '/edit/calendar'
+      fullPath: '/edit/calendar'
+      preLoaderRoute: typeof EditCalendarRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/faculty/new': {
@@ -325,43 +344,44 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FacultyIdEditRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/edit/calendar': {
-      id: '/edit/calendar'
-      path: '/edit/calendar'
-      fullPath: '/edit/calendar'
-      preLoaderRoute: typeof EditCalendarRouteImport
-      parentRoute: typeof rootRouteImport
+    '/reports/$month/$year': {
+      id: '/reports/$month/$year'
+      path: '/$month/$year'
+      fullPath: '/reports/$month/$year'
+      preLoaderRoute: typeof ReportsMonthYearRouteImport
+      parentRoute: typeof ReportsRoute
     }
   }
 }
+
+interface ReportsRouteChildren {
+  ReportsMonthYearRoute: typeof ReportsMonthYearRoute
+}
+
+const ReportsRouteChildren: ReportsRouteChildren = {
+  ReportsMonthYearRoute: ReportsMonthYearRoute,
+}
+
+const ReportsRouteWithChildren =
+  ReportsRoute._addFileChildren(ReportsRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminDashboardRoute: AdminDashboardRoute,
   CalendarRoute: CalendarRoute,
   ConsolidatedRoute: ConsolidatedRoute,
+  DepartmentsRoute: DepartmentsRoute,
   DetailedRoute: DetailedRoute,
+  EmailConfigRoute: EmailConfigRoute,
   FacultyProfileRoute: FacultyProfileRoute,
   ImportRoute: ImportRoute,
   LoginRoute: LoginRoute,
-  ReportsRoute: ReportsRoute,
-  ReportsMonthYearRoute: ReportsMonthYearRoute,
+  ReportsRoute: ReportsRouteWithChildren,
   StatusDashboardRoute: StatusDashboardRoute,
-  EmailConfigRoute: EmailConfigRoute,
+  EditCalendarRoute: EditCalendarRoute,
   FacultyNewRoute: FacultyNewRoute,
   FacultyIdEditRoute: FacultyIdEditRoute,
-  EditCalendarRoute: EditCalendarRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

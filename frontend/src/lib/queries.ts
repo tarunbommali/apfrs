@@ -64,6 +64,7 @@ export function useUpdateFaculty(id: string) {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["faculty"] });
+      qc.invalidateQueries({ queryKey: ["attendance"] });
     },
   });
 }
@@ -508,6 +509,135 @@ export function useSendTestEmail() {
           body: payload,
         }
       ),
+  });
+}
+
+// ─── Departments Management (TanStack Query Hooks) ──────────────────────────
+
+export type Department = {
+  id: string;
+  name: string;
+  code: string;
+  description: string | null;
+  status: "active" | "inactive";
+  hod_id: string | null;
+  hod_name?: string | null;
+  hod_email?: string | null;
+  hod_photo_url?: string | null;
+  faculty_count?: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export const departmentsQuery = (filters: { status?: string; search?: string } = {}) => {
+  const params = new URLSearchParams();
+  if (filters.status) params.set("status", filters.status);
+  if (filters.search) params.set("search", filters.search);
+  const qs = params.toString();
+
+  return queryOptions({
+    queryKey: ["departments", filters],
+    queryFn: () =>
+      apiFetch<{ departments: Department[] }>(
+        `/api/admin/departments${qs ? `?${qs}` : ""}`,
+      ),
+  });
+};
+
+export const departmentByIdQuery = (id: string) =>
+  queryOptions({
+    queryKey: ["departments", "detail", id],
+    queryFn: () =>
+      apiFetch<{ department: Department }>(`/api/admin/departments/${id}`),
+    enabled: !!id,
+  });
+
+export const departmentFacultyQuery = (id: string) =>
+  queryOptions({
+    queryKey: ["departments", "faculty", id],
+    queryFn: () =>
+      apiFetch<{ faculty: Faculty[] }>(`/api/admin/departments/${id}/faculty`),
+    enabled: !!id,
+  });
+
+export function useCreateDepartment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: {
+      name: string;
+      code: string;
+      description?: string;
+      status?: "active" | "inactive";
+      hodId?: string | null;
+    }) =>
+      apiFetch<{ department: Department; message: string }>("/api/admin/departments", {
+        method: "POST",
+        body: data,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["departments"] });
+    },
+  });
+}
+
+export function useUpdateDepartment(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: {
+      name?: string;
+      code?: string;
+      description?: string | null;
+      status?: "active" | "inactive";
+    }) =>
+      apiFetch<{ department: Department; message: string }>(`/api/admin/departments/${id}`, {
+        method: "PUT",
+        body: data,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["departments"] });
+    },
+  });
+}
+
+export function useDeleteDepartment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<{ success: boolean; message: string }>(`/api/admin/departments/${id}`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["departments"] });
+    },
+  });
+}
+
+export function useAssignDepartmentIncharge(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { hodId: string | null; role: string; startDate?: string | null; endDate?: string | null }) =>
+      apiFetch<{ department: Department; message: string }>(`/api/admin/departments/${id}/incharge`, {
+        method: "PUT",
+        body: data,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["departments"] });
+      qc.invalidateQueries({ queryKey: ["faculty"] });
+    },
+  });
+}
+
+export function useUpdateDepartmentStatus(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (status: "active" | "inactive") =>
+      apiFetch<{ department: Department; message: string }>(`/api/admin/departments/${id}/status`, {
+        method: "PUT",
+        body: { status },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["departments"] });
+    },
   });
 }
 

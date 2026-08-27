@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "@tanstack/react-router";
 import { Save, User as UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/select";
 import { departments } from "@/lib/apfrs-data";
 import { facultySchema, jobStatuses, type FacultyInput } from "@/lib/faculty-registry";
+import { useQuery } from "@tanstack/react-query";
+import { departmentsQuery } from "@/lib/queries";
 
 export const emptyFaculty: FacultyInput = {
   cfmsId: "",
@@ -46,6 +48,16 @@ export function FacultyForm({
   const [values, setValues] = useState<FacultyInput>(initial);
   const [errors, setErrors] = useState<Errors>({});
   const [imgError, setImgError] = useState(false);
+
+  const { data: deptsData } = useQuery(departmentsQuery({ status: "active" }));
+  const dbDepartments = useMemo(() => {
+    const list = deptsData?.departments?.map((d) => d.code) || departments;
+    const cleanList = Array.from(new Set(list));
+    if (!cleanList.some(code => code.toLowerCase() === "uncategorized")) {
+      cleanList.push("Uncategorized");
+    }
+    return cleanList;
+  }, [deptsData]);
 
   const set = <K extends keyof FacultyInput>(key: K, value: FacultyInput[K]) =>
     setValues((v) => ({ ...v, [key]: value }));
@@ -212,18 +224,21 @@ export function FacultyForm({
         <div className="mt-5 grid gap-5 sm:grid-cols-3">
           <div className="space-y-2">
             <Label htmlFor="department">Department</Label>
-            <Input
-              id="department"
-              list="apfrs-departments"
+            <Select
               value={values.department}
-              maxLength={40}
-              onChange={(e) => set("department", e.target.value)}
-            />
-            <datalist id="apfrs-departments">
-              {departments.map((d) => (
-                <option key={d} value={d} />
-              ))}
-            </datalist>
+              onValueChange={(v) => set("department", v)}
+            >
+              <SelectTrigger id="department">
+                <SelectValue placeholder="Select Department" />
+              </SelectTrigger>
+              <SelectContent>
+                {dbDepartments.map((d) => (
+                  <SelectItem key={d} value={d}>
+                    {d}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             {field("department")}
           </div>
 

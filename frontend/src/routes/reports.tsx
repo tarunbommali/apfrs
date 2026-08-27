@@ -28,6 +28,7 @@ import {
 import {
   attendanceMonthsQuery,
   monthlyAttendanceQuery,
+  departmentsQuery,
 } from "@/lib/queries";
 import { toast } from "sonner";
 
@@ -64,9 +65,34 @@ function ReportsArchivePage() {
     monthlyAttendanceQuery(selectedMonth, selectedYear)
   );
 
+  const { data: deptsData } = useQuery(departmentsQuery());
+  const dbDepartments = deptsData?.departments || [];
+  const registeredCodes = useMemo(() => new Set(dbDepartments.map((d) => d.code.toUpperCase())), [dbDepartments]);
+
   const activeRecords = activeAttendance?.records || [];
   const activeWorkingDays = activeAttendance?.sheet?.workingDays || activeAttendance?.workingDays || 27;
   const activeMonthName = MONTH_NAMES[selectedMonth - 1] || "Monthly";
+
+  const departmentStats = useMemo(() => {
+    const deptsMap: Record<string, { totalPct: number; count: number; name: string }> = {};
+    activeRecords.forEach((r: any) => {
+      const dept = r.department || "General";
+      if (!registeredCodes.has(dept.toUpperCase())) return;
+
+      const pct = parseFloat(r.attendancePercentage || r.percentage || r.attendance_percentage || 0);
+      if (!deptsMap[dept]) {
+        deptsMap[dept] = { totalPct: 0, count: 0, name: dept };
+      }
+      deptsMap[dept].totalPct += pct;
+      deptsMap[dept].count += 1;
+    });
+
+    return Object.values(deptsMap).map((d) => ({
+      name: d.name,
+      count: d.count,
+      avgAttendance: d.count > 0 ? Math.round((d.totalPct / d.count) * 10) / 10 : 0,
+    })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [activeRecords, registeredCodes]);
 
   const handleExportExcel = async (m: number, y: number, recs: any[]) => {
     if (!recs.length) {
@@ -183,6 +209,39 @@ function ReportsArchivePage() {
               <p className="text-[11px] text-muted-foreground">Ready for export and dispatch</p>
             </div>
           </div>
+
+          {/* Department Breakdown Section */}
+          {activeRecords.length > 0 && (
+            <div className="mt-6 pt-6 border-t border-border">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                Department Attendance Breakdown
+              </h3>
+              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+                {departmentStats.map((dept) => (
+                  <div key={dept.name} className="flex items-center justify-between rounded-lg border border-border bg-card/50 p-3 text-xs">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="size-4 text-muted-foreground" />
+                      <div>
+                        <span className="font-semibold text-foreground">{dept.name}</span>
+                        <span className="text-[10px] text-muted-foreground block">
+                          {dept.count} {dept.count === 1 ? "Faculty" : "Faculty"}
+                        </span>
+                      </div>
+                    </div>
+                    <span className={`font-mono font-bold ${
+                      dept.avgAttendance >= 90
+                        ? "text-[var(--status-present-fg)]"
+                        : dept.avgAttendance < 75
+                        ? "text-[var(--status-absent-fg)]"
+                        : "text-foreground"
+                    }`}>
+                      {dept.avgAttendance}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* ── Section 2: Available Monthly Statements Archive ── */}

@@ -34,6 +34,7 @@ import {
   monthlyAttendanceQuery,
   batchesQuery,
   useSendAttendance,
+  departmentsQuery,
   type EmailBatch,
 } from "@/lib/queries";
 import { useAuth } from "@/lib/auth";
@@ -110,14 +111,18 @@ function DispatchPage() {
   // Selected faculty IDs for dispatch
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+  const { data: deptsData } = useQuery(departmentsQuery());
+  const dbDepartments = deptsData?.departments || [];
+
   // Departments list for filter
   const departmentsList = useMemo(() => {
-    const set = new Set<string>();
-    records.forEach((r: any) => {
-      if (r.department) set.add(r.department);
-    });
-    return Array.from(set).sort();
-  }, [records]);
+    const list = dbDepartments.map((d) => d.code);
+    const cleanList = Array.from(new Set(list));
+    if (!cleanList.some(code => code.toLowerCase() === "uncategorized")) {
+      cleanList.push("Uncategorized");
+    }
+    return cleanList.sort();
+  }, [dbDepartments]);
 
   // Filtered records
   const filteredRecords = useMemo(() => {
@@ -129,7 +134,8 @@ function DispatchPage() {
         (r.cfmsId && String(r.cfmsId).includes(search)) ||
         (r.department && r.department.toLowerCase().includes(search.toLowerCase()));
 
-      const matchDept = selectedDept === "all" || r.department === selectedDept;
+      const rDept = (r.department || "Uncategorized").toLowerCase();
+      const matchDept = selectedDept === "all" || rDept === selectedDept.toLowerCase();
       const matchCadre =
         selectedCadre === "all" ||
         (selectedCadre === "regular" && (r.jobStatus || r.job_status || "").toLowerCase() === "regular") ||

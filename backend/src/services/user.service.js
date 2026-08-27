@@ -2,6 +2,7 @@
 import { User } from '../models/User.js';
 import { userRepository } from '../repositories/user.repository.js';
 import { inchargeRepository } from '../repositories/incharge.repository.js';
+import { monthlyAttendanceRepository } from '../repositories/monthly-attendance.repository.js';
 import { emailService } from './email.service.js';
 import { AppError, ConflictError, NotFoundError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
@@ -116,6 +117,14 @@ class UserService {
     if (data.photoURL !== undefined) updates.photo_url = data.photoURL;
 
     const updated = await userRepository.update(id, updates);
+
+    // Auto-update denormalized monthly attendance sheet records to stay in sync
+    try {
+      await monthlyAttendanceRepository.updateFacultyRegistryInfo(id, updates);
+    } catch (syncErr) {
+      logger.error('Failed to sync updated faculty registry info to monthly attendance records:', { error: syncErr.message });
+    }
+
     logger.info('Faculty updated', { facultyId: id, updates: Object.keys(updates) });
     return updated.toProfile();
   }

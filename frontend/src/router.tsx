@@ -6,11 +6,11 @@ export const getRouter = () => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 1000 * 60 * 15, // 15 minutes fresh cache (zero redundant fetches on page switch)
+        staleTime: 1000 * 5, // 5 seconds stale time
         gcTime: 1000 * 60 * 60, // 1 hour memory persistence
-        refetchOnWindowFocus: false, // Prevent background network requests on tab focus
-        refetchOnMount: false, // Reuse cached data when switching routes
-        refetchOnReconnect: false,
+        refetchOnWindowFocus: true, // Auto-refetch on tab focus
+        refetchOnMount: true, // Refetch on mount if stale
+        refetchOnReconnect: true,
         retry: 1,
       },
     },

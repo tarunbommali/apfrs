@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { facultyListQuery, useDeleteFaculty } from "@/lib/queries";
+import { facultyListQuery, useDeleteFaculty, departmentsQuery } from "@/lib/queries";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin-dashboard")({
@@ -66,12 +66,23 @@ function AdminDashboard() {
   );
   const deleteFaculty = useDeleteFaculty();
 
+  const { data: deptsData } = useQuery(departmentsQuery());
+  const dbDepartments = deptsData?.departments ?? [];
+  const filterDepartments = useMemo(() => {
+    const list = dbDepartments.map((d) => ({ id: d.id, code: d.code }));
+    if (!list.some((d) => d.code.toLowerCase() === "uncategorized")) {
+      list.push({ id: "uncategorized", code: "Uncategorized" });
+    }
+    return list;
+  }, [dbDepartments]);
+
   const facultyList = data?.faculty ?? [];
 
   // Filtered dataset
   const filteredList = useMemo(() => {
     return facultyList.filter((f) => {
-      const matchDept = dept === "all" || f.department.toLowerCase() === dept.toLowerCase();
+      const fDept = (f.department || "Uncategorized").toLowerCase();
+      const matchDept = dept === "all" || fDept === dept.toLowerCase();
       const term = q.toLowerCase().trim();
       const matchSearch =
         !term ||
@@ -160,7 +171,7 @@ function AdminDashboard() {
             <p className="label-caps">Departments</p>
             <Building2 className="size-4 text-accent" />
           </div>
-          <p className="mt-2 font-mono text-3xl font-bold text-accent">{departmentsList.length}</p>
+          <p className="mt-2 font-mono text-3xl font-bold text-accent">{dbDepartments.length}</p>
           <p className="mt-1 text-xs text-muted-foreground">Academic departments</p>
         </div>
 
@@ -212,11 +223,14 @@ function AdminDashboard() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All departments ({totalCount})</SelectItem>
-            {departmentsList.map((d) => {
-              const count = facultyList.filter((f) => f.department === d).length;
+            {filterDepartments.map((d) => {
+              const count = facultyList.filter((f) => {
+                const fDept = (f.department || "Uncategorized").toLowerCase();
+                return fDept === d.code.toLowerCase();
+              }).length;
               return (
-                <SelectItem key={d} value={d}>
-                  {d} ({count})
+                <SelectItem key={d.id} value={d.code}>
+                  {d.code} ({count})
                 </SelectItem>
               );
             })}
