@@ -51,12 +51,12 @@ const MONTH_NAMES = [
 ];
 
 const cellStyle: Record<string, string> = {
-  P: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold",
-  A: "bg-rose-500/15 text-rose-600 dark:text-rose-400 font-bold",
-  L: "bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold",
-  H: "bg-muted text-muted-foreground font-medium",
-  HD: "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-bold",
-  Late: "bg-orange-500/15 text-orange-600 dark:text-orange-400 font-bold",
+  P: "bg-[var(--status-present-bg)] text-[var(--status-present-fg)] font-bold",
+  A: "bg-[var(--status-absent-bg)] text-[var(--status-absent-fg)] font-bold",
+  L: "bg-[var(--status-leave-bg)] text-[var(--status-leave-fg)] font-bold",
+  H: "bg-[var(--status-holiday-bg)] text-[var(--status-holiday-fg)] font-medium",
+  HD: "bg-[var(--status-halfday-bg)] text-[var(--status-halfday-fg)] font-bold",
+  Late: "bg-[var(--status-leave-bg)] text-[var(--status-leave-fg)] font-bold",
 };
 
 function AttendancePage() {
@@ -434,22 +434,22 @@ function AttendancePage() {
                         <td className="py-3 px-4 text-muted-foreground">{r.designation || "—"}</td>
                         <td className="py-3 px-4 text-center">
                           <span
-                            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
                               isRegular
-                                ? "bg-primary/10 text-primary border border-primary/20"
-                                : "bg-muted text-muted-foreground border border-border"
+                                ? "bg-[var(--badge-accent-bg)] text-[var(--badge-accent-fg)] border-[rgba(94,106,210,0.2)]"
+                                : "bg-[var(--badge-muted-bg)] text-[var(--badge-muted-fg)] border-[rgba(255,255,255,0.08)]"
                             }`}
                           >
                             {r.jobStatus || r.job_status || "Regular"}
                           </span>
                         </td>
-                        <td className="py-3 px-3 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                        <td className="py-3 px-3 text-center font-mono font-bold text-[var(--status-present-fg)]">
                           {r.presentDays || r.present_days || 0}
                         </td>
-                        <td className="py-3 px-3 text-center font-mono font-bold text-rose-600 dark:text-rose-400">
+                        <td className="py-3 px-3 text-center font-mono font-bold text-[var(--status-absent-fg)]">
                           {r.absentDays || r.absent_days || 0}
                         </td>
-                        <td className="py-3 px-3 text-center font-mono font-medium text-amber-600 dark:text-amber-400">
+                        <td className="py-3 px-3 text-center font-mono font-medium text-[var(--status-leave-fg)]">
                           {r.leaveDays || r.leave_days || 0}
                         </td>
                         <td className="py-3 px-3 text-center font-mono text-muted-foreground">
@@ -459,8 +459,8 @@ function AttendancePage() {
                           <span
                             className={`inline-block font-mono font-bold px-2 py-0.5 rounded text-xs ${
                               isLow
-                                ? "bg-rose-500/15 text-rose-600 dark:text-rose-400"
-                                : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                                ? "bg-[var(--status-absent-bg)] text-[var(--status-absent-fg)]"
+                                : "bg-[var(--status-present-bg)] text-[var(--status-present-fg)]"
                             }`}
                           >
                             {pct}%
@@ -531,14 +531,14 @@ function AttendancePage() {
                           );
                         })}
 
-                        <td className="py-2.5 px-3 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400 border-l border-border bg-card sticky right-16">
+                        <td className="py-2.5 px-3 text-center font-mono font-bold text-[var(--status-present-fg)] border-l border-border bg-card sticky right-16">
                           {r.presentDays || r.present_days || 0}
                         </td>
-                        <td className="py-2.5 px-3 text-center font-mono font-bold text-rose-600 dark:text-rose-400 bg-card sticky right-8">
+                        <td className="py-2.5 px-3 text-center font-mono font-bold text-[var(--status-absent-fg)] bg-card sticky right-8">
                           {r.absentDays || r.absent_days || 0}
                         </td>
                         <td className="py-2.5 px-3 text-right font-mono font-bold bg-card sticky right-0">
-                          <span className={pct < 75 ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}>
+                          <span className={pct < 75 ? "text-[var(--status-absent-fg)]" : "text-[var(--status-present-fg)]"}>
                             {pct}%
                           </span>
                         </td>

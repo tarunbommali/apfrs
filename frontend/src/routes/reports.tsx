@@ -177,9 +177,9 @@ function ReportsArchivePage() {
             <div className="rounded-lg border border-border bg-card p-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Status</span>
-                <CheckCircle2 className="size-4 text-emerald-500" />
+                <CheckCircle2 className="size-4 text-[var(--status-present-fg)]" />
               </div>
-              <p className="mt-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400">Statement Generated</p>
+              <p className="mt-2 text-sm font-semibold text-[var(--status-present-fg)]">Statement Generated</p>
               <p className="text-[11px] text-muted-foreground">Ready for export and dispatch</p>
             </div>
           </div>
@@ -225,7 +225,7 @@ function ReportsArchivePage() {
                           {mName} {m.year}
                         </span>
                         {isSelected && (
-                          <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                          <span className="rounded bg-[var(--badge-accent-bg)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--badge-accent-fg)] border border-[rgba(94,106,210,0.2)]">
                             Selected
                           </span>
                         )}

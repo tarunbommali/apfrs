@@ -8,10 +8,12 @@ import {
   LogOut,
   Mailbox,
   Mails,
+  Moon,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
   Radio,
+  Sun,
   Table2,
   User,
   UserRound,
@@ -64,6 +66,27 @@ export function Sidebar() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const role = user?.role ?? "admin";
+
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem("apfrs.theme") === "dark" ? "dark" : "light";
+    } catch {
+      return "light";
+    }
+  });
+
+  const toggleTheme = () => {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    setTheme(nextTheme);
+    try {
+      localStorage.setItem("apfrs.theme", nextTheme);
+      if (nextTheme === "dark") {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+    } catch (_) {}
+  };
 
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
@@ -375,6 +398,23 @@ export function Sidebar() {
                 <Link to="/email-config" className="flex items-center gap-2">
                   <Mailbox className="size-3.5" /> Email Settings
                 </Link>
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator className="bg-sidebar-border" />
+
+              <DropdownMenuItem
+                onClick={toggleTheme}
+                className="hover:bg-sidebar-accent text-xs cursor-pointer flex items-center gap-2 text-sidebar-foreground"
+              >
+                {theme === "dark" ? (
+                  <>
+                    <Sun className="size-3.5 text-amber-400" /> Light Mode
+                  </>
+                ) : (
+                  <>
+                    <Moon className="size-3.5 text-indigo-400" /> Dark Mode
+                  </>
+                )}
               </DropdownMenuItem>
 
               <DropdownMenuSeparator className="bg-sidebar-border" />

@@ -170,7 +170,7 @@ function DashboardPage() {
               <p className="mt-1 font-mono text-3xl font-bold text-foreground">{records.length}</p>
               <p className="text-xs text-muted-foreground mt-0.5">Enrolled in {monthName}</p>
             </div>
-            <div className="rounded-full bg-primary/10 p-3 text-primary">
+            <div className="rounded-full bg-[var(--badge-accent-bg)] p-3 text-[var(--badge-accent-fg)]">
               <Users className="size-5" />
             </div>
           </div>
@@ -181,7 +181,7 @@ function DashboardPage() {
               <p className="mt-1 font-mono text-3xl font-bold text-foreground">{departmentCount}</p>
               <p className="text-xs text-muted-foreground mt-0.5">Reporting branches</p>
             </div>
-            <div className="rounded-full bg-indigo-500/10 p-3 text-indigo-500">
+            <div className="rounded-full bg-[var(--badge-accent-bg)] p-3 text-[var(--badge-accent-fg)]">
               <Building2 className="size-5" />
             </div>
           </div>
@@ -192,7 +192,7 @@ function DashboardPage() {
               <p className="mt-1 font-mono text-3xl font-bold text-foreground">{workingDays}</p>
               <p className="text-xs text-muted-foreground mt-0.5">Academic calendar</p>
             </div>
-            <div className="rounded-full bg-amber-500/10 p-3 text-amber-500">
+            <div className="rounded-full bg-[var(--status-leave-bg)] p-3 text-[var(--status-leave-fg)]">
               <Calendar className="size-5" />
             </div>
           </div>
@@ -203,7 +203,7 @@ function DashboardPage() {
               <p className="mt-1 font-mono text-3xl font-bold text-foreground">{overallStats.avgAttendance}%</p>
               <p className="text-xs text-muted-foreground mt-0.5">College-wide rate</p>
             </div>
-            <div className="rounded-full bg-emerald-500/10 p-3 text-emerald-500">
+            <div className="rounded-full bg-[var(--status-present-bg)] p-3 text-[var(--status-present-fg)]">
               <TrendingUp className="size-5" />
             </div>
           </div>
@@ -226,7 +226,7 @@ function DashboardPage() {
           <div className="grid gap-4 sm:grid-cols-4 pt-2">
             <div className="rounded-lg border border-border bg-card p-4">
               <span className="text-xs font-semibold text-muted-foreground uppercase">Present Days</span>
-              <p className="mt-2 font-mono text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+              <p className="mt-2 font-mono text-2xl font-bold text-[var(--status-present-fg)]">
                 {overallStats.totalPresent}
               </p>
               <p className="text-[11px] text-muted-foreground">Logged biometric punches</p>
@@ -234,7 +234,7 @@ function DashboardPage() {
 
             <div className="rounded-lg border border-border bg-card p-4">
               <span className="text-xs font-semibold text-muted-foreground uppercase">Absent Days</span>
-              <p className="mt-2 font-mono text-2xl font-bold text-rose-600 dark:text-rose-400">
+              <p className="mt-2 font-mono text-2xl font-bold text-[var(--status-absent-fg)]">
                 {overallStats.totalAbsent}
               </p>
               <p className="text-[11px] text-muted-foreground">Unexcused absences</p>
@@ -242,7 +242,7 @@ function DashboardPage() {
 
             <div className="rounded-lg border border-border bg-card p-4">
               <span className="text-xs font-semibold text-muted-foreground uppercase">Sanctioned Leaves</span>
-              <p className="mt-2 font-mono text-2xl font-bold text-amber-600 dark:text-amber-400">
+              <p className="mt-2 font-mono text-2xl font-bold text-[var(--status-leave-fg)]">
                 {overallStats.totalLeave}
               </p>
               <p className="text-[11px] text-muted-foreground">Casual / academic / OD</p>
@@ -250,7 +250,7 @@ function DashboardPage() {
 
             <div className="rounded-lg border border-border bg-card p-4">
               <span className="text-xs font-semibold text-muted-foreground uppercase">Compliance Rate</span>
-              <p className="mt-2 font-mono text-2xl font-bold text-primary">
+              <p className="mt-2 font-mono text-2xl font-bold text-[var(--primary)]">
                 {overallStats.avgAttendance}%
               </p>
               <p className="text-[11px] text-muted-foreground">Against {workingDays} working days</p>
@@ -289,7 +289,7 @@ function DashboardPage() {
                         </p>
                       </div>
                       <div className="text-right">
-                        <span className="font-mono font-bold text-rose-600 dark:text-rose-400">
+                        <span className="font-mono font-bold text-[var(--status-absent-fg)]">
                           {pct}%
                         </span>
                         <p className="text-[10px] text-muted-foreground">

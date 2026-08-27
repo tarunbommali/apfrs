@@ -453,10 +453,10 @@ function ImportPage() {
           ) : null}
 
           {status === "done" ? (
-            <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-4">
+            <div className="mt-4 rounded-lg border border-[var(--linear-border-strong)] bg-[var(--badge-accent-bg)] p-4 space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <CheckCircle2 className="size-5 text-primary" />
+                  <CheckCircle2 className="size-5 text-[var(--badge-accent-fg)]" />
                   <div>
                     <p className="text-sm font-semibold text-foreground">{fileName}</p>
                     <p className="text-xs text-muted-foreground">
@@ -470,22 +470,22 @@ function ImportPage() {
               </div>
 
               {/* Sync Metrics Info Bar */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-primary/20 text-xs font-mono">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-[var(--linear-border)] text-xs font-mono">
                 <div className="rounded bg-card p-2 border border-border">
                   <span className="text-muted-foreground block text-[10px]">Total Faculty:</span>
                   <strong className="text-foreground text-sm">{parsedCount}</strong>
                 </div>
                 <div className="rounded bg-card p-2 border border-border">
                   <span className="text-muted-foreground block text-[10px]">Working Days:</span>
-                  <strong className="text-emerald-600 dark:text-emerald-400 text-sm">{monthWorkingDays} Days</strong>
+                  <strong className="text-[var(--status-present-fg)] text-sm">{monthWorkingDays} Days</strong>
                 </div>
                 <div className="rounded bg-card p-2 border border-border">
                   <span className="text-muted-foreground block text-[10px]">Sundays / Holidays:</span>
-                  <strong className="text-amber-600 dark:text-amber-400 text-sm">{monthHolidaysCount} Days</strong>
+                  <strong className="text-[var(--status-leave-fg)] text-sm">{monthHolidaysCount} Days</strong>
                 </div>
                 <div className="rounded bg-card p-2 border border-border">
                   <span className="text-muted-foreground block text-[10px]">Calendar Status:</span>
-                  <strong className="text-primary text-sm">Synced ✓</strong>
+                  <strong className="text-[var(--badge-accent-fg)] text-sm">Synced ✓</strong>
                 </div>
               </div>
 

@@ -387,20 +387,20 @@ function MonthReportPage({ month, year }: { month: number; year: number }) {
                         <td className="px-4 py-2 text-muted-foreground">{r.designation || "Assistant Professor"}</td>
                         <td className="px-3 py-2 text-center">
                           <span
-                            className={`rounded-sm px-1.5 py-0.5 text-[10px] font-bold ${
+                            className={`rounded-sm px-1.5 py-0.5 text-[10px] font-bold border ${
                               (r.jobStatus || r.job_status || "").toLowerCase() === "regular"
-                                ? "bg-primary/10 text-primary"
-                                : "bg-muted text-muted-foreground"
+                                ? "bg-[var(--badge-accent-bg)] text-[var(--badge-accent-fg)] border-[rgba(94,106,210,0.2)]"
+                                : "bg-[var(--badge-muted-bg)] text-[var(--badge-muted-fg)] border-[rgba(255,255,255,0.08)]"
                             }`}
                           >
                             {(r.jobStatus || r.job_status || "Regular").toUpperCase()}
                           </span>
                         </td>
                         <td className="px-4 py-2 text-center font-mono font-semibold text-foreground">
-                          <span className="text-emerald-600 dark:text-emerald-400">{pDays}</span>
+                          <span className="text-[var(--status-present-fg)]">{pDays}</span>
                           <span className="text-muted-foreground"> / {wDays}</span>
                         </td>
-                        <td className="px-3 py-2 text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                        <td className="px-3 py-2 text-right font-mono font-semibold text-[var(--status-present-fg)]">
                           {pDays}
                         </td>
                         <td className="px-3 py-2 text-right font-mono text-muted-foreground">
@@ -416,9 +416,9 @@ function MonthReportPage({ month, year }: { month: number; year: number }) {
                           <span
                             className={`font-mono text-xs font-bold ${
                               isHigh
-                                ? "text-emerald-600 dark:text-emerald-400"
+                                ? "text-[var(--status-present-fg)]"
                                 : isLow
-                                ? "text-rose-500"
+                                ? "text-[var(--status-absent-fg)]"
                                 : "text-foreground"
                             }`}
                           >

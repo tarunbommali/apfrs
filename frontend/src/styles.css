@@ -1,17 +1,18 @@
 @import "tailwindcss" source(none);
+@import "../../.layout/tokens.css";
 @source "../src";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 3px);
-  --radius-md: calc(var(--radius) - 1px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --radius-sm: var(--linear-radius-sm);
+  --radius-md: var(--linear-radius-md);
+  --radius-lg: var(--linear-radius-lg);
+  --radius-xl: var(--linear-radius-lg);
+  --radius-2xl: var(--linear-radius-lg);
+  --font-sans: var(--linear-font-sans);
+  --font-mono: var(--linear-font-mono);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -113,31 +114,109 @@
   );
   --shadow-panel: 0 1px 2px oklch(0.22 0.032 258 / 0.06), 0 12px 28px -18px oklch(0.22 0.032 258 / 0.35);
   --shadow-lift: 0 2px 4px oklch(0.22 0.032 258 / 0.05), 0 22px 44px -24px oklch(0.22 0.032 258 / 0.45);
+
+  /* Semantic status colors (Light Mode) */
+  --status-present-bg: rgba(16, 185, 129, 0.15);
+  --status-present-fg: rgb(5, 150, 105);
+  --status-absent-bg: rgba(239, 68, 68, 0.15);
+  --status-absent-fg: rgb(220, 38, 38);
+  --status-leave-bg: rgba(245, 158, 11, 0.15);
+  --status-leave-fg: rgb(217, 119, 6);
+  --status-holiday-bg: rgba(156, 163, 175, 0.15);
+  --status-holiday-fg: rgb(107, 114, 128);
+  --status-halfday-bg: rgba(99, 102, 241, 0.15);
+  --status-halfday-fg: rgb(79, 70, 229);
+
+  /* Badge colors (Light Mode) */
+  --badge-accent-bg: rgba(52, 78, 255, 0.1);
+  --badge-accent-fg: oklch(0.34 0.078 255);
+  --badge-muted-bg: oklch(0.94 0.011 250);
+  --badge-muted-fg: oklch(0.3 0.05 255);
 }
 
 .dark {
-  --background: oklch(0.19 0.028 258);
-  --foreground: oklch(0.95 0.008 250);
-  --card: oklch(0.235 0.032 258);
-  --card-foreground: oklch(0.95 0.008 250);
-  --popover: oklch(0.235 0.032 258);
-  --popover-foreground: oklch(0.95 0.008 250);
-  --primary: oklch(0.8 0.09 72);
-  --primary-foreground: oklch(0.22 0.04 60);
-  --secondary: oklch(0.29 0.036 258);
-  --secondary-foreground: oklch(0.95 0.008 250);
-  --muted: oklch(0.28 0.03 258);
-  --muted-foreground: oklch(0.7 0.02 252);
-  --accent: oklch(0.74 0.135 68);
-  --accent-foreground: oklch(0.22 0.04 60);
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 16%);
-  --ring: oklch(0.74 0.135 68);
+  --radius: var(--linear-radius-md);
+
+  --background: var(--linear-bg-app);
+  --foreground: var(--linear-text-primary);
+  --card: var(--linear-bg-surface);
+  --card-foreground: var(--linear-text-primary);
+  --popover: var(--linear-bg-elevated);
+  --popover-foreground: var(--linear-text-primary);
+
+  /* Linear Accent */
+  --primary: var(--linear-accent);
+  --primary-foreground: #ffffff;
+
+  --secondary: var(--linear-bg-hover);
+  --secondary-foreground: var(--linear-text-primary);
+
+  --muted: var(--linear-bg-surface);
+  --muted-foreground: var(--linear-text-secondary);
+
+  --accent: var(--linear-accent-subtle);
+  --accent-foreground: var(--linear-accent);
+
+  --destructive: oklch(0.55 0.2 25);
+  --destructive-foreground: oklch(0.98 0.006 95);
+  --success: rgba(76, 183, 130, 0.15);
+  --success-foreground: var(--linear-status-done);
+  --warning: rgba(242, 201, 76, 0.15);
+  --warning-foreground: var(--linear-status-active);
+  --info: var(--linear-accent-subtle);
+  --info-foreground: var(--linear-accent);
+
+  --border: var(--linear-border);
+  --input: var(--linear-border-strong);
+  --ring: var(--linear-border-focus);
+
+  --chart-1: var(--linear-accent);
+  --chart-2: var(--linear-status-active);
+  --chart-3: var(--linear-status-done);
+  --chart-4: var(--linear-status-backlog);
+  --chart-5: oklch(0.55 0.2 25);
+
+  --sidebar: var(--linear-bg-surface);
+  --sidebar-foreground: var(--linear-text-secondary);
+  --sidebar-primary: var(--linear-accent);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--linear-bg-hover);
+  --sidebar-accent-foreground: var(--linear-text-primary);
+  --sidebar-border: var(--linear-border);
+  --sidebar-ring: var(--linear-border-focus);
+
+  --gradient-ink: linear-gradient(
+    135deg,
+    var(--linear-bg-surface) 0%,
+    var(--linear-bg-app) 100%
+  );
+  --shadow-panel: none;
+  --shadow-lift: none;
+
+  /* Semantic status colors (Dark Mode / Linear Theme) */
+  --status-present-bg: rgba(76, 183, 130, 0.15);
+  --status-present-fg: var(--linear-status-done);
+  --status-absent-bg: rgba(239, 68, 68, 0.15);
+  --status-absent-fg: rgb(248, 113, 113);
+  --status-leave-bg: rgba(242, 201, 76, 0.15);
+  --status-leave-fg: var(--linear-status-active);
+  --status-holiday-bg: rgba(139, 139, 153, 0.15);
+  --status-holiday-fg: var(--linear-status-backlog);
+  --status-halfday-bg: var(--linear-accent-subtle);
+  --status-halfday-fg: var(--linear-accent);
+
+  /* Badge colors (Dark Mode) */
+  --badge-accent-bg: var(--linear-accent-subtle);
+  --badge-accent-fg: var(--linear-accent);
+  --badge-muted-bg: rgba(139, 139, 153, 0.15);
+  --badge-muted-fg: var(--linear-status-backlog);
 }
 
 @layer base {
   * {
     border-color: var(--color-border);
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-input) transparent;
   }
 
   body {
@@ -151,6 +230,25 @@
   h2,
   h3 {
     letter-spacing: -0.02em;
+  }
+
+  /* Webkit custom scrollbars styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-input);
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-ring);
   }
 }
 
