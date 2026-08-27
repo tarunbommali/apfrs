@@ -1,17 +1,7 @@
 // backend/src/services/job-queue.service.js
 //
-// Lightweight in-process durable job queue backed by MySQL.
-//
-// Why this instead of fire-and-forget:
-//   - Jobs survive server crashes and restarts (persisted in the `jobs` table)
-//   - Failed jobs are retried up to max_attempts times with exponential back-off
-//   - SELECT ... FOR UPDATE SKIP LOCKED prevents double-processing when multiple
-//     instances run (safe for horizontal scale within MySQL's capabilities)
-//
-// Usage:
-//   jobQueueService.register('my_type', async (payload) => { ... });
-//   await jobQueueService.enqueue('my_type', { ...data });
-//   await jobQueueService.start();   // called once in server.js after DB connects
+// Durable job queue backed by MySQL with transactional atomic claiming,
+// stale job lease recovery, and exponential retry back-off.
 
 import { v4 as uuidv4 } from 'uuid';
 import db from '../config/database.js';
@@ -26,6 +16,8 @@ class JobQueueService {
     this._handlers = new Map();
     this._pollInterval = null;
     this._running = false;
+    this._concurrencyLimit = 3;
+    this._activeJobs = 0;
   }
 
   /**
@@ -56,38 +48,14 @@ class JobQueueService {
 
   /**
    * Start the polling loop. Should be called once after DB connects.
-   * @param {number} [pollMs=5000] - Poll interval in milliseconds
+   * @param {number} [pollMs=3000] - Poll interval in milliseconds
    */
-  async start(pollMs = 5000) {
-    if (this._pollInterval) return; // already running
+  async start(pollMs = 3000) {
+    if (this._pollInterval) return;
 
-    try {
-      await db.query(`
-        CREATE TABLE IF NOT EXISTS jobs (
-          id           VARCHAR(50)  NOT NULL PRIMARY KEY,
-          type         VARCHAR(100) NOT NULL,
-          payload      JSON         NOT NULL,
-          status       ENUM('queued', 'running', 'done', 'failed') NOT NULL DEFAULT 'queued',
-          attempts     INT          NOT NULL DEFAULT 0,
-          max_attempts INT          NOT NULL DEFAULT 3,
-          run_after    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          started_at   TIMESTAMP    NULL,
-          done_at      TIMESTAMP    NULL,
-          error        TEXT         NULL,
-          created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          INDEX idx_status_run_after (status, run_after),
-          INDEX idx_type (type),
-          INDEX idx_created_at (created_at)
-        )
-      `);
-    } catch (err) {
-      logger.warn('Job table check warning:', err.message);
-    }
-
-    logger.info('Job queue worker started', { pollMs });
+    logger.info('Job queue worker started', { pollMs, concurrency: this._concurrencyLimit });
     this._pollInterval = setInterval(() => {
-      if (!this._running) this._tick().catch((err) =>
+      this._tick().catch((err) =>
         logger.error('Job queue tick error', { error: err.message })
       );
     }, pollMs);
@@ -101,79 +69,135 @@ class JobQueueService {
     }
   }
 
-  /** Claim and execute one queued job per tick. */
-  async _tick() {
-    this._running = true;
+  /**
+   * Reclaims jobs that were left in 'running' state if a worker instance crashed.
+   */
+  async _recoverStaleJobs() {
     try {
-      // Claim one job atomically — FOR UPDATE SKIP LOCKED prevents double-claiming
-      // when multiple instances run against the same DB.
-      const rows = await db.query(
-        `SELECT * FROM jobs
-         WHERE status = 'queued' AND run_after <= NOW()
-         ORDER BY created_at ASC
-         LIMIT 1
-         FOR UPDATE SKIP LOCKED`,
-        []
-      );
-
-      if (rows.length === 0) return;
-
-      const job = rows[0];
-
       await db.query(
-        `UPDATE jobs SET status = 'running', started_at = NOW(), attempts = attempts + 1, updated_at = NOW() WHERE id = ?`,
-        [job.id]
+        `UPDATE jobs
+         SET status = 'queued',
+             error = 'Worker lease expired / recovered after crash',
+             run_after = NOW(),
+             updated_at = NOW()
+         WHERE status = 'running'
+           AND updated_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)`
       );
+    } catch (err) {
+      logger.warn('Stale job recovery warning:', { error: err.message });
+    }
+  }
 
-      logger.info('Job started', { jobId: job.id, type: job.type, attempt: job.attempts + 1 });
+  /**
+   * Claim and execute jobs atomically inside a transaction.
+   */
+  async _tick() {
+    if (this._activeJobs >= this._concurrencyLimit) return;
 
-      const handler = this._handlers.get(job.type);
-      if (!handler) {
-        await db.query(
-          `UPDATE jobs SET status = 'failed', error = ?, done_at = NOW(), updated_at = NOW() WHERE id = ?`,
-          [`No handler registered for type '${job.type}'`, job.id]
-        );
-        logger.error('Job failed: no handler', { jobId: job.id, type: job.type });
-        return;
-      }
+    // Periodically recover stale jobs from dead workers
+    await this._recoverStaleJobs();
+
+    while (this._activeJobs < this._concurrencyLimit) {
+      let claimedJob = null;
 
       try {
-        const payload = typeof job.payload === 'string' ? JSON.parse(job.payload) : job.payload;
-        await handler(payload);
-
-        await db.query(
-          `UPDATE jobs SET status = 'done', done_at = NOW(), updated_at = NOW() WHERE id = ?`,
-          [job.id]
-        );
-        logger.info('Job completed', { jobId: job.id, type: job.type });
-      } catch (err) {
-        const nextAttempt = job.attempts + 1;
-        const maxAttempts = job.max_attempts || 3;
-
-        if (nextAttempt >= maxAttempts) {
-          await db.query(
-            `UPDATE jobs SET status = 'failed', error = ?, done_at = NOW(), updated_at = NOW() WHERE id = ?`,
-            [err.message, job.id]
+        // Atomic Claiming: SELECT ... FOR UPDATE SKIP LOCKED + UPDATE within the same transaction connection
+        await db.transaction(async (conn) => {
+          const [rows] = await conn.query(
+            `SELECT * FROM jobs
+             WHERE status = 'queued' AND run_after <= NOW()
+             ORDER BY created_at ASC
+             LIMIT 1
+             FOR UPDATE SKIP LOCKED`
           );
-          logger.error('Job permanently failed', {
-            jobId: job.id, type: job.type, attempts: nextAttempt, error: err.message,
-          });
-        } else {
-          // Exponential back-off: delay grows with each retry
-          const delaySec = RETRY_DELAYS_SECONDS[nextAttempt - 1] ?? 1800;
-          await db.query(
+
+          if (rows.length === 0) return;
+
+          const job = rows[0];
+          await conn.query(
             `UPDATE jobs
-             SET status = 'queued', error = ?, run_after = DATE_ADD(NOW(), INTERVAL ? SECOND), updated_at = NOW()
+             SET status = 'running',
+                 started_at = NOW(),
+                 attempts = attempts + 1,
+                 updated_at = NOW()
              WHERE id = ?`,
-            [err.message, delaySec, job.id]
+            [job.id]
           );
-          logger.warn('Job re-queued for retry', {
-            jobId: job.id, type: job.type, attempt: nextAttempt, retryInSec: delaySec,
-          });
-        }
+
+          claimedJob = { ...job, attempts: job.attempts + 1 };
+        });
+      } catch (err) {
+        logger.error('Failed to atomically claim job:', { error: err.message });
+        break;
       }
-    } finally {
-      this._running = false;
+
+      if (!claimedJob) break; // No more queued jobs ready
+
+      this._activeJobs++;
+      this._executeJob(claimedJob).finally(() => {
+        this._activeJobs--;
+      });
+    }
+  }
+
+  /**
+   * Executes handler outside transaction and writes final job status.
+   */
+  async _executeJob(job) {
+    logger.info('Job started execution', { jobId: job.id, type: job.type, attempt: job.attempts });
+
+    const handler = this._handlers.get(job.type);
+    if (!handler) {
+      await db.query(
+        `UPDATE jobs SET status = 'failed', error = ?, done_at = NOW(), updated_at = NOW() WHERE id = ?`,
+        [`No handler registered for type '${job.type}'`, job.id]
+      );
+      logger.error('Job failed: no handler registered', { jobId: job.id, type: job.type });
+      return;
+    }
+
+    try {
+      const payload = typeof job.payload === 'string' ? JSON.parse(job.payload) : job.payload;
+      await handler(payload);
+
+      await db.query(
+        `UPDATE jobs SET status = 'done', done_at = NOW(), updated_at = NOW() WHERE id = ?`,
+        [job.id]
+      );
+      logger.info('Job completed successfully', { jobId: job.id, type: job.type });
+    } catch (err) {
+      const maxAttempts = job.max_attempts || 3;
+
+      if (job.attempts >= maxAttempts) {
+        await db.query(
+          `UPDATE jobs SET status = 'failed', error = ?, done_at = NOW(), updated_at = NOW() WHERE id = ?`,
+          [err.message, job.id]
+        );
+        logger.error('Job permanently failed after maximum attempts', {
+          jobId: job.id,
+          type: job.type,
+          attempts: job.attempts,
+          error: err.message,
+        });
+      } else {
+        // Exponential back-off delay
+        const delaySec = RETRY_DELAYS_SECONDS[job.attempts - 1] ?? 1800;
+        await db.query(
+          `UPDATE jobs
+           SET status = 'queued',
+               error = ?,
+               run_after = DATE_ADD(NOW(), INTERVAL ? SECOND),
+               updated_at = NOW()
+           WHERE id = ?`,
+          [err.message, delaySec, job.id]
+        );
+        logger.warn('Job re-queued for retry with backoff', {
+          jobId: job.id,
+          type: job.type,
+          attempt: job.attempts,
+          retryInSec: delaySec,
+        });
+      }
     }
   }
 }

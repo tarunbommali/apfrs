@@ -70,38 +70,37 @@ class AttendanceRepository extends BaseRepository {
   // ── Update ──────────────────────────────────────────────────────────────────
 
   async updateBatchStatus(batchId, status, results = null) {
-    if (results && results.length > 0) {
-      // Update individual attendance records first so the subqueries below are accurate
-      for (const result of results) {
-        await db.query(
-          `UPDATE attendance_records
-           SET status = ?, message_id = ?, error_message = ?, sent_at = ?, updated_at = NOW()
-           WHERE batch_id = ? AND email = ?`,
-          [
-            result.success ? 'sent' : 'failed',
-            result.messageId || null,
-            result.error || null,
-            result.success ? new Date() : null,
-            batchId,
-            result.recipient || result.email,
-          ]
-        );
+    await db.transaction(async (conn) => {
+      if (results && results.length > 0) {
+        for (const result of results) {
+          await conn.query(
+            `UPDATE attendance_records
+             SET status = ?, message_id = ?, error_message = ?, sent_at = ?, updated_at = NOW()
+             WHERE batch_id = ? AND email = ?`,
+            [
+              result.success ? 'sent' : 'failed',
+              result.messageId || null,
+              result.error || null,
+              result.success ? new Date() : null,
+              batchId,
+              result.recipient || result.email,
+            ]
+          );
+        }
       }
-    }
 
-    // Phase 4: derive sent_count/failed_count from attendance_records so the
-    // batch counters always match the actual per-record states.
-    const completedAt = ['sent', 'failed', 'completed'].includes(status) ? new Date() : null;
-    await db.query(
-      `UPDATE attendance_batches
-       SET status       = ?,
-           updated_at   = NOW(),
-           completed_at = ?,
-           sent_count   = (SELECT COUNT(*) FROM attendance_records WHERE batch_id = ? AND status = 'sent'),
-           failed_count = (SELECT COUNT(*) FROM attendance_records WHERE batch_id = ? AND status = 'failed')
-       WHERE batch_id = ?`,
-      [status, completedAt, batchId, batchId, batchId]
-    );
+      const completedAt = ['sent', 'failed', 'completed'].includes(status) ? new Date() : null;
+      await conn.query(
+        `UPDATE attendance_batches
+         SET status       = ?,
+             updated_at   = NOW(),
+             completed_at = ?,
+             sent_count   = (SELECT COUNT(*) FROM attendance_records WHERE batch_id = ? AND status = 'sent'),
+             failed_count = (SELECT COUNT(*) FROM attendance_records WHERE batch_id = ? AND status = 'failed')
+         WHERE batch_id = ?`,
+        [status, completedAt, batchId, batchId, batchId]
+      );
+    });
 
     return this.findBatchById(batchId);
   }

@@ -164,28 +164,28 @@ class AuthService {
 
   /**
    * Ensures the configured administrator exists in the database on startup.
+   * Throws if initialization fails so the server does not run in an undefined state.
    */
   async ensureDefaultAdmin() {
-    try {
-      const adminEmail = (config.admin.email || 'admin@apfrs.in').toLowerCase().trim();
-      const existing = await userRepository.findByEmail(adminEmail);
-      if (!existing) {
-        logger.info('Default admin user not found, initializing...', { email: adminEmail });
-        const adminUser = new User({
-          id: 'admin-001',
-          email: adminEmail,
-          name: config.admin.name || 'APFRS Administrator',
-          designation: 'Administrator',
-          department: 'Administration',
-          role: 'admin',
-          isActive: true,
-        });
-        await adminUser.setPassword(config.admin.password || 'admin@123');
-        await userRepository.create(adminUser);
-        logger.info('✅ Default admin user initialized successfully');
+    const adminEmail = (config.admin.email || 'admin@apfrs.in').toLowerCase().trim();
+    const existing = await userRepository.findByEmail(adminEmail);
+    if (!existing) {
+      logger.info('Default admin user not found, initializing...', { email: adminEmail });
+      const adminUser = new User({
+        id: 'admin-001',
+        email: adminEmail,
+        name: config.admin.name || 'APFRS Administrator',
+        designation: 'Administrator',
+        department: 'Administration',
+        role: 'admin',
+        isActive: true,
+      });
+      await adminUser.setPassword(config.admin.password || 'admin@123');
+      const created = await userRepository.create(adminUser);
+      if (!created) {
+        throw new Error(`Failed to insert initial admin account (${adminEmail}) into database.`);
       }
-    } catch (err) {
-      logger.warn('Failed to ensure default admin user on startup:', { error: err.message });
+      logger.info('✅ Default admin user initialized successfully');
     }
   }
 }

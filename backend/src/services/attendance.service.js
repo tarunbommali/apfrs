@@ -67,12 +67,48 @@ class AttendanceService {
   async dispatchBatch(batchId, attendanceData, emailTemplate, facultyList) {
     try {
       await attendanceRepository.updateBatchStatus(batchId, 'processing');
+
+      // 1. Build O(1) lookup maps for faculty matching
+      const facultyByEmail = new Map();
+      const facultyByEmpId = new Map();
+      for (const f of facultyList) {
+        if (f.email) facultyByEmail.set(f.email.toLowerCase().trim(), f);
+        if (f.employeeId) facultyByEmpId.set(String(f.employeeId).trim(), f);
+        if (f.cfmsId) facultyByEmpId.set(String(f.cfmsId).trim(), f);
+        if (f.id) facultyByEmpId.set(String(f.id).trim(), f);
+      }
+
+      // 2. Check existing record statuses for idempotency (avoid re-sending already sent emails on retry)
+      let alreadySentEmails = new Set();
+      try {
+        const existingRecords = await attendanceRepository.getBatchRecords(batchId);
+        if (Array.isArray(existingRecords)) {
+          existingRecords
+            .filter((r) => r.status === 'sent')
+            .forEach((r) => {
+              if (r.email) alreadySentEmails.add(r.email.toLowerCase().trim());
+            });
+        }
+      } catch (err) {
+        logger.warn('Could not query existing batch records for idempotency check:', { error: err.message });
+      }
+
       const emails = [];
 
       for (const record of attendanceData) {
-        const faculty = facultyList.find((f) => f.email === record.email || f.employeeId === record.employeeId || f.cfmsId === record.cfmsId);
+        const recEmail = record.email?.toLowerCase().trim() || '';
+        const recEmpId = String(record.cfmsId || record.employeeId || '').trim();
+
+        // Skip if already successfully sent
+        if (recEmail && alreadySentEmails.has(recEmail)) {
+          logger.info('Skipping already-sent email in batch retry', { batchId, email: recEmail });
+          continue;
+        }
+
+        // O(1) resolution
+        const faculty = (recEmail && facultyByEmail.get(recEmail)) || (recEmpId && facultyByEmpId.get(recEmpId));
         const name = faculty?.name || record.name || record.employeeName || 'Faculty Member';
-        const empId = faculty?.employeeId || record.cfmsId || record.employeeId || '';
+        const empId = faculty?.employeeId || faculty?.cfmsId || recEmpId || '';
         const dept = faculty?.department || record.department || 'Academic Department';
         const desig = faculty?.designation || record.designation || 'Faculty';
 
@@ -124,14 +160,19 @@ class AttendanceService {
         });
       }
 
-      const bulkResult = await emailService.sendBulkEmails(emails);
-      await attendanceRepository.updateBatchStatus(batchId, bulkResult.success ? 'sent' : 'failed', bulkResult.results);
+      if (emails.length > 0) {
+        const bulkResult = await emailService.sendBulkEmails(emails);
+        await attendanceRepository.updateBatchStatus(batchId, bulkResult.success ? 'sent' : 'failed', bulkResult.results);
 
-      logger.info('Batch processing completed', {
-        batchId,
-        sent: bulkResult.sent,
-        failed: bulkResult.failed,
-      });
+        logger.info('Batch processing completed', {
+          batchId,
+          sent: bulkResult.sent,
+          failed: bulkResult.failed,
+        });
+      } else {
+        logger.info('All records in batch already sent', { batchId });
+        await attendanceRepository.updateBatchStatus(batchId, 'sent', []);
+      }
     } catch (error) {
       logger.error('Batch processing exception', { batchId, error: error.message });
       await attendanceRepository.updateBatchStatus(batchId, 'failed');
