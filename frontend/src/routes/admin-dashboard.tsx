@@ -38,11 +38,7 @@ export const Route = createFileRoute("/admin-dashboard")({
       },
     ],
   }),
-  component: () => (
-    <Suspense fallback={<RegistrySkeleton />}>
-      <AdminDashboard />
-    </Suspense>
-  ),
+  component: AdminDashboard,
 });
 
 function RegistrySkeleton() {
@@ -66,7 +62,7 @@ function AdminDashboard() {
   const [dept, setDept] = useState("all");
   const [page, setPage] = useState(1);
 
-  const { data, error, refetch } = useSuspenseQuery(
+  const { data, isLoading, error, refetch } = useQuery(
     facultyListQuery({ search: q || undefined, department: dept, limit: 200 }),
   );
   const deleteFaculty = useDeleteFaculty();
@@ -116,6 +112,10 @@ function AdminDashboard() {
       toast.error(err instanceof Error ? err.message : "Failed to delete");
     }
   };
+
+  if (isLoading) {
+    return <RegistrySkeleton />;
+  }
 
   if (error) {
     return (

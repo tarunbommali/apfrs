@@ -41,11 +41,7 @@ export const Route = createFileRoute("/faculty-profile")({
       },
     ],
   }),
-  component: () => (
-    <Suspense fallback={<ProfileSkeleton />}>
-      <FacultyProfile />
-    </Suspense>
-  ),
+  component: FacultyProfile,
 });
 
 function ProfileSkeleton() {
@@ -78,7 +74,11 @@ function formatDateOfJoin(dateVal?: string | null) {
 }
 
 function FacultyProfile() {
-  const { data: profileData, error: profileError } = useSuspenseQuery(facultyProfileQuery());
+  const { data: profileData, isLoading, error: profileError } = useQuery(facultyProfileQuery());
+
+  if (isLoading) {
+    return <ProfileSkeleton />;
+  }
 
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
