@@ -90,6 +90,7 @@ function AdminDashboard() {
     [facultyList],
   );
   const regularCount = facultyList.filter((f) => (f.jobStatus || "").toLowerCase() === "regular").length;
+  const contractCount = facultyList.filter((f) => (f.jobStatus || "").toLowerCase().includes("contract") || (f.jobStatus || "").toLowerCase().includes("adjunct")).length || Math.max(0, facultyList.length - regularCount);
   const inchargeCount = facultyList.filter(
     (f) => Boolean(f.currentIncharge?.role || (f.incharge && f.incharge !== "None"))
   ).length;
