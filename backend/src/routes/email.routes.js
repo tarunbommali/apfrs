@@ -9,9 +9,22 @@ import { emailSchema, bulkEmailSchema, testSMTPSchema } from '../validators/emai
 
 const router = Router();
 
-// Test SMTP can be called by admin
-router.post('/test-smtp', validate(testSMTPSchema), (req, res, next) => emailController.testSMTP(req, res, next));
-router.get('/status/:id', (req, res, next) => emailController.getEmailStatus(req, res, next));
+// Test SMTP — admin only (was previously unauthenticated, which allowed SSRF-class abuse)
+router.post(
+  '/test-smtp',
+  verifyToken,
+  requireRole('admin'),
+  emailLimiter,
+  validate(testSMTPSchema),
+  (req, res, next) => emailController.testSMTP(req, res, next)
+);
+// Email status — admin only
+router.get(
+  '/status/:id',
+  verifyToken,
+  requireRole('admin'),
+  (req, res, next) => emailController.getEmailStatus(req, res, next)
+);
 
 // Sending requires authentication
 router.post('/send', verifyToken, requireRole('admin'), emailLimiter, validate(emailSchema), (req, res, next) =>

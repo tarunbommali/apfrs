@@ -1,6 +1,9 @@
 // backend/src/controllers/admin.controller.js
 import { userService } from '../services/user.service.js';
 import { attendanceService } from '../services/attendance.service.js';
+import { emailService } from '../services/email.service.js';
+import { calendarRepository } from '../repositories/calendar.repository.js';
+import { emailSettingsRepository } from '../repositories/email-settings.repository.js';
 import { sendSuccess, sendCreated } from '../utils/response.js';
 
 export class AdminController {
@@ -106,7 +109,125 @@ export class AdminController {
       next(error);
     }
   }
+
+  async importAttendance(req, res, next) {
+    try {
+      const result = await attendanceService.importAttendanceData(req.body, req.user?.email || 'Admin');
+      return sendCreated(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getAttendanceRecords(req, res, next) {
+    try {
+      const { month, year } = req.query;
+      const result = await attendanceService.getMonthlyAttendanceRecords(month, year);
+      return sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getAttendanceMonths(req, res, next) {
+    try {
+      const months = await attendanceService.getAvailableMonths();
+      return sendSuccess(res, { months });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getAttendanceAnalytics(req, res, next) {
+    try {
+      const { month, year } = req.query;
+      const analytics = await attendanceService.getMonthlyAnalytics(month, year);
+      return sendSuccess(res, { analytics });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getCalendar(req, res, next) {
+    try {
+      const holidays = await calendarRepository.getHolidays();
+      return sendSuccess(res, { holidays });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async saveCalendar(req, res, next) {
+    try {
+      const { holidays } = req.body;
+      const saved = await calendarRepository.saveHolidays(holidays || []);
+      return sendSuccess(res, { holidays: saved, message: 'Academic calendar updated successfully.' });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ── Email Configuration & Multi-Provider Settings ──
+  async getEmailConfig(req, res, next) {
+    try {
+      const settings = await emailSettingsRepository.getSettings();
+      const logs = await emailSettingsRepository.getLogs(15);
+      
+      // Mask sensitive passwords before sending to frontend
+      const masked = {
+        ...settings,
+        smtp_password: settings.smtp_password ? '********' : '',
+        resend_api_key: settings.resend_api_key ? (settings.resend_api_key.slice(0, 7) + '...' + settings.resend_api_key.slice(-4)) : '',
+        hasSmtpPassword: Boolean(settings.smtp_password),
+        hasResendApiKey: Boolean(settings.resend_api_key),
+      };
+
+      return sendSuccess(res, { settings: masked, logs });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateEmailConfig(req, res, next) {
+    try {
+      const updated = await emailSettingsRepository.updateSettings(req.body, req.user?.email || 'Admin');
+      return sendSuccess(res, {
+        settings: updated,
+        message: 'Email configuration saved and applied successfully.',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async sendTestEmail(req, res, next) {
+    try {
+      const { recipientEmail, providerOverride, tempConfig } = req.body;
+      const target = recipientEmail || req.user?.email || 'admin@apfrs.in';
+      const result = await emailService.sendTestEmail(target, providerOverride, tempConfig);
+      return sendSuccess(res, {
+        message: `Test email sent successfully to ${target}.`,
+        result,
+      });
+    } catch (error) {
+      return res.status(200).json({
+        success: false,
+        error: error.message || 'Test dispatch failed.',
+        message: error.message || 'Test dispatch failed.',
+      });
+    }
+  }
+
+  async getEmailConfigLogs(req, res, next) {
+    try {
+      const logs = await emailSettingsRepository.getLogs(50);
+      return sendSuccess(res, { logs });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const adminController = new AdminController();
 export default adminController;
+

@@ -12,10 +12,10 @@ import type { FacultyInput } from "@/lib/faculty-registry";
 export const Route = createFileRoute("/faculty/$id/edit")({
   head: () => ({
     meta: [
-      { title: "Edit Faculty — APFRS Registry" },
+      { title: "Edit Faculty — e-Office Jntugv" },
       {
         name: "description",
-        content: "Update faculty master data: CFMS ID, email, department, designation and job status.",
+        content: "Update faculty master data: CFMS ID, email, department, designation, incharge role and job status.",
       },
     ],
   }),
@@ -55,7 +55,9 @@ function EditFacultyPage() {
     designation: record.designation,
     department: record.department,
     mobile: record.mobile,
+    gender: (record.gender as FacultyInput["gender"]) || "male",
     jobStatus: record.jobStatus,
+    incharge: (record.incharge as FacultyInput["incharge"]) || "None",
     present: record.present ?? 0,
     absent: record.absent ?? 0,
     leave: record.leave ?? 0,

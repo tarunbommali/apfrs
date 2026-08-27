@@ -1,4 +1,9 @@
 // backend/src/repositories/attendance.repository.js
+//
+// All persistence is MySQL-only. In-memory Map fallbacks have been removed
+// because the server exits at startup if MySQL is unavailable — maintaining
+// two execution modes only masked bugs and added dead code.
+
 import { BaseRepository } from './base.repository.js';
 import db from '../config/database.js';
 import { AttendanceBatch } from '../models/Attendance.js';
@@ -7,157 +12,179 @@ import { v4 as uuidv4 } from 'uuid';
 class AttendanceRepository extends BaseRepository {
   constructor() {
     super('attendance_batches');
-    this.memoryBatches = new Map();
   }
+
+  // ── Create ──────────────────────────────────────────────────────────────────
 
   async createBatch(data) {
     const batch = new AttendanceBatch(data);
 
-    if (db.isConnected) {
-      const sql = `
-        INSERT INTO attendance_batches (
-          id, batch_id, status, triggered_by, sent_by, total_faculty,
-          email_template_subject, month, year, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
-      `;
-      await db.query(sql, [
-        batch.id,
+    const sql = `
+      INSERT INTO attendance_batches (
+        id, batch_id, status, triggered_by, sent_by, total_faculty,
+        email_template_subject, month, year, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+    `;
+    await db.query(sql, [
+      batch.id,
+      batch.batchId,
+      batch.status,
+      batch.triggeredBy,
+      batch.sentBy,
+      batch.totalFaculty,
+      batch.emailTemplate,
+      batch.month,
+      batch.year,
+    ]);
+
+    // Phase 5: bulk INSERT replaces the previous per-record loop.
+    if (data.facultyList && data.facultyList.length > 0) {
+      const placeholders = data.facultyList
+        .map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())')
+        .join(', ');
+
+      const values = data.facultyList.flatMap((f) => [
+        uuidv4(),
         batch.batchId,
-        batch.status,
-        batch.triggeredBy,
-        batch.sentBy,
-        batch.totalFaculty,
-        batch.emailTemplate,
+        f.id || f.employeeId,
+        f.employeeId || f.id,
+        f.employeeName || f.name,
+        f.email,
         batch.month,
         batch.year,
+        'pending',
       ]);
 
-      if (data.facultyList && data.facultyList.length > 0) {
-        const recSql = `
-          INSERT INTO attendance_records (
-            id, batch_id, faculty_id, employee_id, employee_name, email,
-            month, year, status, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), NOW())
-        `;
-        for (const faculty of data.facultyList) {
-          await db.query(recSql, [
-            uuidv4(),
-            batch.batchId,
-            faculty.id || faculty.employeeId,
-            faculty.employeeId || faculty.id,
-            faculty.employeeName || faculty.name,
-            faculty.email,
-            batch.month,
-            batch.year,
-          ]);
-        }
-      }
-      return batch;
+      await db.query(
+        `INSERT INTO attendance_records (
+           id, batch_id, faculty_id, employee_id, employee_name, email,
+           month, year, status, created_at, updated_at
+         ) VALUES ${placeholders}`,
+        values
+      );
     }
 
-    // In-memory store
-    this.memoryBatches.set(batch.batchId, batch);
     return batch;
   }
 
-  async updateBatchStatus(batchId, status, results = null) {
-    if (db.isConnected) {
-      const completedAt = ['sent', 'failed', 'completed'].includes(status) ? new Date() : null;
-      const sql = `
-        UPDATE attendance_batches 
-        SET status = ?, updated_at = NOW(), completed_at = ?
-        WHERE batch_id = ?
-      `;
-      await db.query(sql, [status, completedAt, batchId]);
+  // ── Update ──────────────────────────────────────────────────────────────────
 
-      if (results) {
-        for (const result of results) {
-          const recSql = `
-            UPDATE attendance_records 
-            SET status = ?, message_id = ?, error_message = ?, sent_at = ?, updated_at = NOW()
-            WHERE batch_id = ? AND email = ?
-          `;
-          await db.query(recSql, [
+  async updateBatchStatus(batchId, status, results = null) {
+    if (results && results.length > 0) {
+      // Update individual attendance records first so the subqueries below are accurate
+      for (const result of results) {
+        await db.query(
+          `UPDATE attendance_records
+           SET status = ?, message_id = ?, error_message = ?, sent_at = ?, updated_at = NOW()
+           WHERE batch_id = ? AND email = ?`,
+          [
             result.success ? 'sent' : 'failed',
             result.messageId || null,
             result.error || null,
             result.success ? new Date() : null,
             batchId,
             result.recipient || result.email,
-          ]);
-        }
+          ]
+        );
       }
-      return this.findBatchById(batchId);
     }
 
-    const batch = this.memoryBatches.get(batchId);
-    if (!batch) return null;
+    // Phase 4: derive sent_count/failed_count from attendance_records so the
+    // batch counters always match the actual per-record states.
+    const completedAt = ['sent', 'failed', 'completed'].includes(status) ? new Date() : null;
+    await db.query(
+      `UPDATE attendance_batches
+       SET status       = ?,
+           updated_at   = NOW(),
+           completed_at = ?,
+           sent_count   = (SELECT COUNT(*) FROM attendance_records WHERE batch_id = ? AND status = 'sent'),
+           failed_count = (SELECT COUNT(*) FROM attendance_records WHERE batch_id = ? AND status = 'failed')
+       WHERE batch_id = ?`,
+      [status, completedAt, batchId, batchId, batchId]
+    );
 
-    if (status === 'processing') batch.markProcessing();
-    else if (status === 'sent') batch.markSent(results || []);
-    else if (status === 'failed') batch.markFailed(results || 'Failed');
-    else batch.status = status;
-
-    this.memoryBatches.set(batchId, batch);
-    return batch;
+    return this.findBatchById(batchId);
   }
 
+  // ── Read ────────────────────────────────────────────────────────────────────
+
   async findBatchById(batchId) {
-    if (db.isConnected) {
-      const sql = `SELECT * FROM attendance_batches WHERE batch_id = ?`;
-      const rows = await db.query(sql, [batchId]);
-      if (rows.length === 0) return null;
-      return new AttendanceBatch(rows[0]);
-    }
-    return this.memoryBatches.get(batchId) || null;
+    const sql = `SELECT * FROM attendance_batches WHERE batch_id = ?`;
+    const rows = await db.query(sql, [batchId]);
+    if (rows.length === 0) return null;
+    return new AttendanceBatch(rows[0]);
   }
 
   async getBatches(filters = {}) {
-    if (db.isConnected) {
-      let sql = `SELECT * FROM attendance_batches WHERE 1=1`;
-      const params = [];
-      if (filters.status) {
-        sql += ` AND status = ?`;
-        params.push(filters.status);
-      }
-      sql += ` ORDER BY created_at DESC`;
-      if (filters.limit) {
-        sql += ` LIMIT ?`;
-        params.push(parseInt(filters.limit, 10));
-      }
-      const rows = await db.query(sql, params);
-      return rows.map((r) => new AttendanceBatch(r));
+    let sql = `SELECT * FROM attendance_batches WHERE 1=1`;
+    const params = [];
+
+    if (filters.status) {
+      sql += ` AND status = ?`;
+      params.push(filters.status);
     }
 
-    let list = Array.from(this.memoryBatches.values());
-    if (filters.status) {
-      list = list.filter((b) => b.status === filters.status);
-    }
-    list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    sql += ` ORDER BY created_at DESC`;
+
     if (filters.limit) {
-      list = list.slice(0, parseInt(filters.limit, 10));
+      sql += ` LIMIT ?`;
+      params.push(parseInt(filters.limit, 10));
+
+      if (filters.offset) {
+        sql += ` OFFSET ?`;
+        params.push(parseInt(filters.offset, 10));
+      }
     }
-    return list;
+
+    const rows = await db.query(sql, params);
+    return rows.map((r) => new AttendanceBatch(r));
   }
 
+  // Phase 3 fix: was returning all-batch count regardless of facultyId.
+  // Now queries attendance_records filtered by faculty_id.
   async getFacultyAttendance(facultyId) {
-    const batches = await this.getBatches();
+    const sql = `
+      SELECT
+        COUNT(*)               AS totalRecords,
+        SUM(status = 'sent')   AS sentCount,
+        SUM(status = 'failed') AS failedCount,
+        MAX(sent_at)           AS lastSentAt
+      FROM attendance_records
+      WHERE faculty_id = ?
+    `;
+    const rows = await db.query(sql, [facultyId]);
     return {
       facultyId,
-      totalBatches: batches.length,
-      lastUpdated: new Date().toISOString(),
+      totalRecords: Number(rows[0]?.totalRecords || 0),
+      sentCount:    Number(rows[0]?.sentCount    || 0),
+      failedCount:  Number(rows[0]?.failedCount  || 0),
+      lastSentAt:   rows[0]?.lastSentAt || null,
+      lastUpdated:  new Date().toISOString(),
     };
   }
 
+  // Phase 3 fix: was loading every batch row into JS then counting.
+  // Now uses a single SQL aggregation.
   async getStats() {
-    const batches = await this.getBatches();
+    const sql = `
+      SELECT
+        COUNT(*)                                AS totalBatches,
+        COALESCE(SUM(status = 'sent'), 0)       AS sentBatches,
+        COALESCE(SUM(status IN ('pending','processing')), 0) AS pendingBatches,
+        COALESCE(SUM(status = 'failed'), 0)     AS failedBatches,
+        COALESCE(SUM(sent_count), 0)            AS totalFacultySent,
+        MAX(created_at)                         AS lastBatchAt
+      FROM attendance_batches
+    `;
+    const rows = await db.query(sql);
+    const r = rows[0];
     return {
-      totalBatches: batches.length,
-      sentBatches: batches.filter((b) => b.status === 'sent').length,
-      pendingBatches: batches.filter((b) => b.status === 'pending' || b.status === 'processing').length,
-      failedBatches: batches.filter((b) => b.status === 'failed').length,
-      totalFacultySent: batches.reduce((acc, b) => acc + (b.sentCount || 0), 0),
-      lastBatchAt: batches[0]?.createdAt || null,
+      totalBatches:     Number(r?.totalBatches    || 0),
+      sentBatches:      Number(r?.sentBatches      || 0),
+      pendingBatches:   Number(r?.pendingBatches   || 0),
+      failedBatches:    Number(r?.failedBatches    || 0),
+      totalFacultySent: Number(r?.totalFacultySent || 0),
+      lastBatchAt:      r?.lastBatchAt || null,
     };
   }
 }

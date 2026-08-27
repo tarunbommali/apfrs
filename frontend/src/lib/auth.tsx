@@ -72,6 +72,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const data = (await res.json()) as {
           success: boolean;
           data?: { user: SessionUser; token: string };
+          user?: SessionUser;
+          token?: string;
           error?: string;
           message?: string;
         };
@@ -80,7 +82,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return { ok: false, error: data.error ?? data.message ?? "Login failed." };
         }
 
-        const { user: apiUser, token: apiToken } = data.data!;
+        const apiUser = data.data?.user ?? data.user;
+        const apiToken = data.data?.token ?? data.token;
+
+        if (!apiUser || !apiToken) {
+          return { ok: false, error: "Invalid response received from authentication server." };
+        }
+
         const next: SessionUser = {
           id: apiUser.id,
           name: apiUser.name,

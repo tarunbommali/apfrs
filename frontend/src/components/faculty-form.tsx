@@ -21,7 +21,9 @@ export const emptyFaculty: FacultyInput = {
   designation: "Assistant Professor",
   department: "IT",
   mobile: "",
+  gender: "male",
   jobStatus: "Regular",
+  incharge: "None",
   present: 0,
   absent: 0,
   leave: 0,
@@ -120,11 +122,28 @@ export function FacultyForm({
             />
             {field("mobile")}
           </div>
+          <div className="space-y-2">
+            <Label>Gender</Label>
+            <Select
+              value={values.gender || "male"}
+              onValueChange={(v) => set("gender", v as FacultyInput["gender"])}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="male">Male</SelectItem>
+                <SelectItem value="female">Female</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+            {field("gender")}
+          </div>
         </div>
       </section>
 
       <section className="surface-panel p-6">
-        <h2 className="text-base font-semibold">Posting</h2>
+        <h2 className="text-base font-semibold">Posting & Leadership</h2>
         <div className="mt-5 grid gap-5 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="department">Department</Label>
@@ -171,31 +190,26 @@ export function FacultyForm({
             </Select>
             {field("jobStatus")}
           </div>
-        </div>
-      </section>
-
-      <section className="surface-panel p-6">
-        <h2 className="text-base font-semibold">Current cycle attendance</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Overwritten on the next biometric import; used for the report preview meanwhile.
-        </p>
-        <div className="mt-5 grid gap-5 sm:grid-cols-4">
-          {(["present", "absent", "leave", "workingDays"] as const).map((key) => (
-            <div key={key} className="space-y-2">
-              <Label htmlFor={key} className="capitalize">
-                {key === "workingDays" ? "Working days" : key}
-              </Label>
-              <Input
-                id={key}
-                type="number"
-                min={0}
-                max={31}
-                value={values[key]}
-                onChange={(e) => set(key, Number(e.target.value) as FacultyInput[typeof key])}
-              />
-              {field(key)}
-            </div>
-          ))}
+          <div className="space-y-2">
+            <Label>Incharge Role</Label>
+            <Select
+              value={values.incharge || "None"}
+              onValueChange={(v) => set("incharge", v as FacultyInput["incharge"])}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="None">None</SelectItem>
+                <SelectItem value="HOD">HOD (Head of Department)</SelectItem>
+                <SelectItem value="Principal">Principal</SelectItem>
+                <SelectItem value="Vice Principal">Vice Principal</SelectItem>
+                <SelectItem value="Vice Chancellor (VC)">Vice Chancellor (VC)</SelectItem>
+                <SelectItem value="Registrar">Registrar</SelectItem>
+              </SelectContent>
+            </Select>
+            {field("incharge")}
+          </div>
         </div>
       </section>
 

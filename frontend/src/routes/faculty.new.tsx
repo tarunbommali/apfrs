@@ -8,7 +8,7 @@ import type { FacultyInput } from "@/lib/faculty-registry";
 export const Route = createFileRoute("/faculty/new")({
   head: () => ({
     meta: [
-      { title: "Add Faculty — APFRS Registry" },
+      { title: "Add Faculty — e-Office Jntugv" },
       {
         name: "description",
         content:

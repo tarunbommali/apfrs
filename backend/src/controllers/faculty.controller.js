@@ -15,8 +15,10 @@ export class FacultyController {
 
   async getAttendance(req, res, next) {
     try {
+      const { month, year } = req.query;
+      const monthlyRecords = await attendanceService.getMyAttendance(req.user, month, year);
       const attendance = await attendanceService.getFacultyAttendance(req.user.id);
-      return sendSuccess(res, { attendance });
+      return sendSuccess(res, { attendance, monthlyRecords });
     } catch (error) {
       next(error);
     }
@@ -39,6 +41,16 @@ export class FacultyController {
         totalFaculty: result.total,
         colleagues: result.colleagues,
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async changePassword(req, res, next) {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      const result = await userService.changePassword(req.user.id, currentPassword, newPassword);
+      return sendSuccess(res, result);
     } catch (error) {
       next(error);
     }

@@ -4,7 +4,8 @@ import { HTTP_STATUS } from '../config/constants.js';
 export const sendSuccess = (res, data, statusCode = HTTP_STATUS.OK) => {
   return res.status(statusCode).json({
     success: true,
-    ...data,
+    data: data,
+    ...(typeof data === 'object' && data !== null ? data : {}),
     timestamp: new Date().toISOString(),
   });
 };

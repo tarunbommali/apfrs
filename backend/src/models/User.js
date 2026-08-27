@@ -7,18 +7,38 @@ const SALT_ROUNDS = 10;
 export class User {
   constructor(data = {}) {
     this.id = data.id || `f-${uuidv4().split('-')[0]}`;
-    this.cfms_id = data.cfms_id || null;
+    
+    // Normalize cfms_id (empty strings -> null)
+    const rawCfms = data.cfms_id !== undefined ? data.cfms_id : data.cfmsId;
+    this.cfms_id = (rawCfms && String(rawCfms).trim().length > 0) ? String(rawCfms).trim() : null;
+
     this.email = data.email?.toLowerCase().trim() || '';
     this.name = data.name?.trim() || '';
-    this.designation = data.designation || 'Assistant Professor';
-    this.department = data.department?.trim() || '';
-    this.mobile = data.mobile || '';
-    this.job_status = data.job_status || 'Regular';
+    this.designation = data.designation?.trim() || 'Assistant Professor';
+    this.department = data.department?.trim() || 'General';
+    this.mobile = data.mobile?.trim() || '';
+    this.gender = (data.gender || 'male').toLowerCase().trim();
+
+    // Normalize job_status: strictly 'Regular' or 'contract'
+    const rawJob = String(data.job_status || data.jobStatus || 'Regular').trim().toLowerCase();
+    this.job_status = rawJob === 'regular' ? 'Regular' : 'contract';
+
+    this.incharge = String(data.incharge || 'None').trim();
+
     this.role = data.role || 'faculty';
-    this.isActive = data.isActive !== undefined ? data.isActive : true;
-    this.passwordHash = data.passwordHash || null;
-    this.createdAt = data.createdAt || new Date().toISOString();
-    this.updatedAt = data.updatedAt || new Date().toISOString();
+    this.isActive = data.isActive !== undefined
+      ? Boolean(data.isActive)
+      : (data.is_active !== undefined ? Boolean(data.is_active) : true);
+
+    this.passwordHash = data.passwordHash || data.password_hash || null;
+    this.activationTokenHash = data.activationTokenHash || data.activation_token_hash || null;
+    this.activationExpiresAt = data.activationExpiresAt || data.activation_expires_at || null;
+    this.mustChangePassword = data.mustChangePassword !== undefined
+      ? Boolean(data.mustChangePassword)
+      : (data.must_change_password !== undefined ? Boolean(data.must_change_password) : false);
+
+    this.createdAt = data.createdAt || data.created_at || new Date().toISOString();
+    this.updatedAt = data.updatedAt || data.updated_at || new Date().toISOString();
   }
 
   async setPassword(password) {
@@ -33,9 +53,19 @@ export class User {
 
   toProfile() {
     // Return safe user profile object without passwordHash
-    const { passwordHash, ...safe } = this;
+    const { passwordHash, activationTokenHash, ...safe } = this;
     return {
       ...safe,
+      cfmsId: this.cfms_id || '',
+      cfms_id: this.cfms_id || '',
+      jobStatus: this.job_status,
+      job_status: this.job_status,
+      gender: this.gender,
+      incharge: this.incharge,
+      createdAt: this.createdAt,
+      created_at: this.createdAt,
+      dateOfJoining: this.createdAt,
+      date_of_joining: this.createdAt,
       fullName: this.name,
       displayName: `${this.designation} ${this.name}`,
     };

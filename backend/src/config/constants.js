@@ -7,8 +7,6 @@ export const ROLES = {
 export const JOB_STATUS = {
   REGULAR: 'Regular',
   CONTRACT: 'contract',
-  AEE: 'AEE',
-  NA: 'N/A',
 };
 
 export const ATTENDANCE_STATUS = {

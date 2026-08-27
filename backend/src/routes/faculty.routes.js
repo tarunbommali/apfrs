@@ -10,6 +10,7 @@ const router = Router();
 router.use(verifyToken, requireRole('faculty', 'admin'));
 
 router.get('/profile', (req, res, next) => facultyController.getProfile(req, res, next));
+router.post('/change-password', (req, res, next) => facultyController.changePassword(req, res, next));
 router.get('/attendance', (req, res, next) => facultyController.getAttendance(req, res, next));
 router.get('/colleagues', (req, res, next) => facultyController.getColleagues(req, res, next));
 router.get('/department', (req, res, next) => facultyController.getDepartmentStats(req, res, next));

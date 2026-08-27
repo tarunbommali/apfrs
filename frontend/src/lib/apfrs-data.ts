@@ -9,6 +9,17 @@
 
 export type JobStatus = "Regular" | "contract";
 
+export type InchargeRole = "None" | "HOD" | "Principal" | "Vice Principal" | "Vice Chancellor (VC)" | "Registrar";
+
+export const inchargeRoles: InchargeRole[] = [
+  "None",
+  "HOD",
+  "Principal",
+  "Vice Principal",
+  "Vice Chancellor (VC)",
+  "Registrar",
+];
+
 export type Faculty = {
   id: string;
   cfmsId: string;
@@ -17,7 +28,9 @@ export type Faculty = {
   designation: string;
   department: string;
   mobile: string;
+  gender?: "male" | "female" | "other";
   jobStatus: JobStatus;
+  incharge?: InchargeRole | string;
   present: number;
   absent: number;
   leave: number;
@@ -31,15 +44,19 @@ export const departments = [
   "CSE",
   "ECE",
   "EEE",
+  "ME",
   "MECH",
   "CIVIL",
+  "CE",
+  "MET",
   "Math",
+  "Maths",
   "Physics",
   "Chemistry",
-  "H&BS",
+  "BS&HSS",
+  "Commerce",
   "Administration",
 ];
 
 export const attendancePct = (f: Faculty) =>
   f.workingDays > 0 ? Math.round((f.present / f.workingDays) * 100) : 0;
-

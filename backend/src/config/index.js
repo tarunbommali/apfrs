@@ -72,3 +72,46 @@ export const config = {
 };
 
 export default config;
+
+/**
+ * Must be called at server startup before DB connects.
+ * Throws with a descriptive list of problems so insecure defaults
+ * are never silently used in production.
+ */
+export function validateConfig() {
+  if (config.nodeEnv !== 'production') return; // dev/test: warnings only
+
+  const errors = [];
+
+  if (!process.env.JWT_SECRET) {
+    errors.push('JWT_SECRET environment variable is required in production');
+  } else if (config.jwt.secret === 'apfrs_super_secret_jwt_key_change_in_production_2024') {
+    errors.push('JWT_SECRET must be changed from its hard-coded default in production');
+  }
+
+  if (!process.env.ADMIN_PASSWORD) {
+    errors.push('ADMIN_PASSWORD environment variable is required in production');
+  } else if (config.admin.password === 'admin@123') {
+    errors.push('ADMIN_PASSWORD must be changed from its default value in production');
+  }
+
+  if (!process.env.DB_PASSWORD) {
+    errors.push('DB_PASSWORD environment variable is required in production');
+  }
+
+  if (!process.env.SMTP_EMAIL && !process.env.SMTP_USER) {
+    errors.push('SMTP_EMAIL or SMTP_USER environment variable is required in production');
+  }
+
+  if (!process.env.SMTP_PASSWORD && !process.env.SMTP_PASS) {
+    errors.push('SMTP_PASSWORD environment variable is required in production');
+  }
+
+  if (errors.length > 0) {
+    throw new Error(
+      `\n\n❌ APFRS startup blocked — insecure configuration detected:\n` +
+      errors.map((e) => `  • ${e}`).join('\n') +
+      `\n\nSet the required environment variables in backend/.env and restart.\n`
+    );
+  }
+}

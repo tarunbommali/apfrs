@@ -28,11 +28,11 @@ import { useAttendance } from "@/lib/attendance-context";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "APFRS Overview — Faculty Attendance & Payroll Reporting" },
+      { title: "e-Office Jntugv — Faculty Attendance & Reporting Overview" },
       {
         name: "description",
         content:
-          "Monitor faculty attendance, department performance and monthly payroll report dispatch from a single APFRS console.",
+          "Monitor faculty attendance, department performance and monthly report dispatch from the e-Office Jntugv console.",
       },
     ],
   }),

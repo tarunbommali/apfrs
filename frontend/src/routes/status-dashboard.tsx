@@ -9,7 +9,7 @@ import { batchesQuery, type EmailBatch } from "@/lib/queries";
 export const Route = createFileRoute("/status-dashboard")({
   head: () => ({
     meta: [
-      { title: "Email Delivery Status — APFRS" },
+      { title: "Email Delivery Status — e-Office Jntugv" },
       {
         name: "description",
         content: "Live delivery board for attendance report emails with retry controls and batch history.",

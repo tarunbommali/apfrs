@@ -151,21 +151,25 @@ VALUES (
 ) ON DUPLICATE KEY UPDATE email = email;
 
 -- ============================================
--- INSERT DEFAULT FACULTY
+-- INSERT DEFAULT FACULTY (SYNTHETIC FIXTURES)
+-- Real faculty data must NEVER be committed to source control.
+-- Use backend/database/seed.js or an admin import to load real records.
+-- All values below are intentionally fictional.
 -- ============================================
 INSERT INTO users (id, cfms_id, email, password_hash, name, designation, department, mobile, job_status, role) VALUES
-('f-1', '14406143', 'aee@gmail.com', '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'Sri.L.Hari Prakash', 'Assistant Engineer', 'CIVIL', '8008484236', 'AEE', 'faculty'),
-('f-2', '1009385182', 'vkaneela.maths@gmail.com', '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'Vemuri KrishnaAnila', 'Assistant Professor', 'Math', '9704117814', 'contract', 'faculty'),
-('f-4', '1000218038', 'btirimula.it@jntugvcev.edu.in', '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'B.Tirumula Rao', 'Assistant Professor', 'IT', '8374033622', 'Regular', 'faculty'),
-('f-5', '15166317', 'gjsuma.it@jntugvcev.edu.in', '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'G. Jaya Suma', 'Professor', 'IT', '8897344078', 'Regular', 'faculty'),
-('f-6', '1000218016', 'chbmadhuri.it@jntugvcev.edu.in', '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'Ch. Bindu Madhuri', 'Assistant Professor', 'IT', '9704955762', 'Regular', 'faculty'),
-('f-7', '1000218088', 'anilwurity.it@jntugvcev.edu.in', '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'Anil Wurity', 'Assistant Professor', 'IT', '8500669667', 'Regular', 'faculty'),
-('f-8', '1000218041', 'vnaresh.it@jntugvcev.edu.in', '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'V.Naresh Kumar', 'Assistant Professor', 'IT', '9494545673', 'Regular', 'faculty'),
-('f-9', '1000218055', 'mphani.it@jntugvcev.edu.in', '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'M.Phani Kumar', 'Assistant Professor', 'IT', '9440244793', 'Regular', 'faculty'),
-('f-10', '15050742', 'kkalyan.it@jntugvcev.edu.in', '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'K.Kalyan Kumar', 'Assistant Professor', 'IT', '9000464942', 'Regular', 'faculty'),
-('f-11', '1000218048', 'ssuresh.it@jntugvcev.edu.in', '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'S.Suresh', 'Assistant Professor', 'IT', '9866219492', 'Regular', 'faculty'),
-('f-12', '1000218045', 'dvrao.it@jntugvcev.edu.in', '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'D.Venkata Rao', 'Assistant Professor', 'IT', '7893042093', 'Regular', 'faculty'),
-('f-13', '1000218066', 'umarani.it@jntugvcev.edu.in', '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'Uma Rani K', 'Assistant Professor', 'IT', '9701153741', 'Regular', 'faculty'),
-('f-14', '1000218071', 'rramesh.cse@jntugvcev.edu.in', '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'R.Ramesh', 'Assistant Professor', 'CSE', '9989453455', 'Regular', 'faculty'),
-('f-15', '1000218072', 'nchand.cse@jntugvcev.edu.in', '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'N.Chandra Sekhar', 'Assistant Professor', 'CSE', '9949464745', 'Regular', 'faculty')
+  ('f-1',  'CFMS-SYN-001', 'faculty.civil.001@example.com',    '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'Faculty Civil 001',   'Assistant Engineer',   'CIVIL', '0000000000', 'AEE',      'faculty'),
+  ('f-2',  'CFMS-SYN-002', 'faculty.maths.001@example.com',    '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'Faculty Maths 001',   'Assistant Professor',  'Math', '0000000000', 'contract', 'faculty'),
+  ('f-4',  'CFMS-SYN-004', 'faculty.it.001@example.com',       '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'Faculty IT 001',      'Assistant Professor',  'IT',   '0000000000', 'Regular',  'faculty'),
+  ('f-5',  'CFMS-SYN-005', 'faculty.it.002@example.com',       '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'Faculty IT 002',      'Professor',            'IT',   '0000000000', 'Regular',  'faculty'),
+  ('f-6',  'CFMS-SYN-006', 'faculty.it.003@example.com',       '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'Faculty IT 003',      'Assistant Professor',  'IT',   '0000000000', 'Regular',  'faculty'),
+  ('f-7',  'CFMS-SYN-007', 'faculty.it.004@example.com',       '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'Faculty IT 004',      'Assistant Professor',  'IT',   '0000000000', 'Regular',  'faculty'),
+  ('f-8',  'CFMS-SYN-008', 'faculty.it.005@example.com',       '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'Faculty IT 005',      'Assistant Professor',  'IT',   '0000000000', 'Regular',  'faculty'),
+  ('f-9',  'CFMS-SYN-009', 'faculty.it.006@example.com',       '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'Faculty IT 006',      'Assistant Professor',  'IT',   '0000000000', 'Regular',  'faculty'),
+  ('f-10', 'CFMS-SYN-010', 'faculty.it.007@example.com',       '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'Faculty IT 007',      'Assistant Professor',  'IT',   '0000000000', 'Regular',  'faculty'),
+  ('f-11', 'CFMS-SYN-011', 'faculty.it.008@example.com',       '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'Faculty IT 008',      'Assistant Professor',  'IT',   '0000000000', 'Regular',  'faculty'),
+  ('f-12', 'CFMS-SYN-012', 'faculty.it.009@example.com',       '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'Faculty IT 009',      'Assistant Professor',  'IT',   '0000000000', 'Regular',  'faculty'),
+  ('f-13', 'CFMS-SYN-013', 'faculty.it.010@example.com',       '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'Faculty IT 010',      'Assistant Professor',  'IT',   '0000000000', 'Regular',  'faculty'),
+  ('f-14', 'CFMS-SYN-014', 'faculty.cse.001@example.com',      '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'Faculty CSE 001',     'Assistant Professor',  'CSE',  '0000000000', 'Regular',  'faculty'),
+  ('f-15', 'CFMS-SYN-015', 'faculty.cse.002@example.com',      '$2a$10$Q7eY4t8c7/GfH3lq21wW5uLz1fEeqiKspvC0K.F1oK76m2tQe/7zK', 'Faculty CSE 002',     'Assistant Professor',  'CSE',  '0000000000', 'Regular',  'faculty')
 ON DUPLICATE KEY UPDATE email = VALUES(email);
+

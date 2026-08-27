@@ -201,3 +201,154 @@ export function useSendEmail() {
     }) => apiFetch("/api/send-email", { method: "POST", body: payload }),
   });
 }
+
+// ─── Monthly Attendance (Database-Backed) ───────────────────────────────────
+
+export type MonthlyAttendanceResponse = {
+  month: number;
+  year: number;
+  fileName: string;
+  totalFaculty: number;
+  records: any[];
+  sheet?: {
+    id: string;
+    month: number;
+    year: number;
+    fileName: string;
+    totalFaculty: number;
+    uploadedBy: string;
+    createdAt: string;
+  };
+};
+
+export const monthlyAttendanceQuery = (month?: number, year?: number) => {
+  const qs = new URLSearchParams();
+  if (month) qs.set("month", String(month));
+  if (year) qs.set("year", String(year));
+  const queryStr = qs.toString();
+
+  return queryOptions({
+    queryKey: ["attendance", "monthly", month, year],
+    queryFn: () =>
+      apiFetch<MonthlyAttendanceResponse>(`/api/admin/attendance/records${queryStr ? `?${queryStr}` : ""}`),
+  });
+};
+
+export const attendanceMonthsQuery = () =>
+  queryOptions({
+    queryKey: ["attendance", "months"],
+    queryFn: () =>
+      apiFetch<{ months: Array<{ id: string; month: number; year: number; fileName: string; totalFaculty: number }> }>("/api/admin/attendance/months"),
+  });
+
+export type CalendarHoliday = {
+  id: string;
+  date: string;
+  name: string;
+  type?: string;
+  description?: string;
+};
+
+export const calendarQuery = () =>
+  queryOptions({
+    queryKey: ["academic-calendar", "holidays"],
+    queryFn: () =>
+      apiFetch<{ holidays: CalendarHoliday[] }>("/api/admin/calendar"),
+  });
+
+export function useImportAttendance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { records: any[]; month: number; year: number; fileName: string }) =>
+      apiFetch<{ success: boolean; message: string; data: MonthlyAttendanceResponse }>("/api/admin/attendance/import", {
+        method: "POST",
+        body: payload,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["attendance"] });
+      qc.invalidateQueries({ queryKey: ["faculty"] });
+      qc.invalidateQueries({ queryKey: ["stats"] });
+    },
+  });
+}
+
+// ─── Email Configuration & Multi-Provider Settings ─────────────────────────
+
+export type EmailConfigSettings = {
+  id: string;
+  active_provider: "smtp" | "resend";
+  fallback_enabled: boolean | number;
+  fallback_order: "smtp_first" | "resend_first";
+  smtp_host: string;
+  smtp_port: number;
+  smtp_encryption: "none" | "tls" | "ssl";
+  smtp_username: string;
+  smtp_password?: string;
+  smtp_pool_size: number;
+  smtp_timeout: number;
+  resend_api_key?: string;
+  resend_domain: string;
+  resend_webhook_url?: string;
+  resend_tag: string;
+  from_name: string;
+  from_email: string;
+  reply_to: string;
+  subject_template: string;
+  signature?: string;
+  retries: number;
+  batch_delay: number;
+  sandbox_mode: boolean | number;
+  hasSmtpPassword?: boolean;
+  hasResendApiKey?: boolean;
+  updated_at?: string;
+};
+
+export type EmailConfigLog = {
+  id: string;
+  updated_by: string;
+  changed_fields: Array<{ field: string; old: any; new: any }> | string;
+  summary: string;
+  created_at: string;
+};
+
+export const emailConfigQuery = () =>
+  queryOptions({
+    queryKey: ["email-config", "settings"],
+    queryFn: () =>
+      apiFetch<{ settings: EmailConfigSettings; logs: EmailConfigLog[] }>("/api/admin/email-config"),
+  });
+
+export const emailConfigLogsQuery = () =>
+  queryOptions({
+    queryKey: ["email-config", "logs"],
+    queryFn: () =>
+      apiFetch<{ logs: EmailConfigLog[] }>("/api/admin/email-config/logs"),
+  });
+
+export function useUpdateEmailConfig() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Partial<EmailConfigSettings> & Record<string, any>) =>
+      apiFetch<{ settings: EmailConfigSettings; message: string }>("/api/admin/email-config", {
+        method: "PUT",
+        body: payload,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["email-config"] });
+    },
+  });
+}
+
+export function useSendTestEmail() {
+  return useMutation({
+    mutationFn: (payload: { recipientEmail: string; providerOverride?: string; tempConfig?: Record<string, any> }) =>
+      apiFetch<{ message: string; error?: string; result: { success: boolean; messageId: string; providerUsed: string; durationMs: number } }>(
+        "/api/admin/email-config/test",
+        {
+          method: "POST",
+          body: payload,
+        }
+      ),
+  });
+}
+

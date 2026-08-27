@@ -1,5 +1,5 @@
 // backend/src/routes/admin.routes.js
-import { Router } from 'express';
+import express, { Router } from 'express';
 import { adminController } from '../controllers/admin.controller.js';
 import { verifyToken } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
@@ -21,7 +21,32 @@ router.delete('/faculty/:id', (req, res, next) => adminController.deleteFaculty(
 // Attendance management
 router.get('/attendance/batches', (req, res, next) => adminController.getAttendanceBatches(req, res, next));
 router.get('/attendance/send/:batchId', (req, res, next) => adminController.getAttendanceBatchStatus(req, res, next));
-router.post('/attendance/send', validate(attendanceSendSchema), (req, res, next) => adminController.sendAttendance(req, res, next));
+router.post(
+  '/attendance/send',
+  express.json({ limit: '50mb' }),
+  validate(attendanceSendSchema),
+  (req, res, next) => adminController.sendAttendance(req, res, next)
+);
+
+// Monthly Attendance & Excel Import (Database-backed)
+router.post(
+  '/attendance/import',
+  express.json({ limit: '50mb' }),
+  (req, res, next) => adminController.importAttendance(req, res, next)
+);
+router.get('/attendance/records', (req, res, next) => adminController.getAttendanceRecords(req, res, next));
+router.get('/attendance/months', (req, res, next) => adminController.getAttendanceMonths(req, res, next));
+router.get('/attendance/analytics', (req, res, next) => adminController.getAttendanceAnalytics(req, res, next));
+
+// Academic Calendar Management
+router.get('/calendar', (req, res, next) => adminController.getCalendar(req, res, next));
+router.post('/calendar', (req, res, next) => adminController.saveCalendar(req, res, next));
+
+// Email Configuration & Multi-Provider Settings
+router.get('/email-config', (req, res, next) => adminController.getEmailConfig(req, res, next));
+router.put('/email-config', (req, res, next) => adminController.updateEmailConfig(req, res, next));
+router.post('/email-config/test', (req, res, next) => adminController.sendTestEmail(req, res, next));
+router.get('/email-config/logs', (req, res, next) => adminController.getEmailConfigLogs(req, res, next));
 
 // Stats
 router.get('/stats', (req, res, next) => adminController.getStats(req, res, next));

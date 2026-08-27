@@ -4,13 +4,16 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { v4 as uuidv4 } from 'uuid';
 
-import { config } from './config/index.js';
+import { config, validateConfig } from './config/index.js';
 import { logger } from './utils/logger.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { generalLimiter } from './middleware/rateLimiter.js';
 import routes from './routes/index.js';
 import db from './config/database.js';
+import { jobQueueService } from './services/job-queue.service.js';
+import { AttendanceService } from './services/attendance.service.js';
+import { authService } from './services/auth.service.js';
 
 const app = express();
 const server = createServer(app);
@@ -25,9 +28,10 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
 }));
 
-// Body parsing
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// Body parsing — Phase 9: global limit reduced to 1 MB.
+// The /api/admin/attendance/send route applies its own 50 MB override for large payloads.
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Request ID
 app.use((req, res, next) => {
@@ -85,7 +89,8 @@ app.use(errorHandler);
 
 async function startServer() {
     try {
-        // Connect to database - throws error if fails
+        // Validate configuration first — throws immediately if secrets are missing/insecure in production
+        validateConfig();
         await db.connect();
         logger.info('✅ Database connected successfully');
 
@@ -95,6 +100,16 @@ async function startServer() {
             throw new Error('Database test query failed');
         }
         logger.info('✅ Database test passed');
+
+        // Ensure default administrator account is available
+        await authService.ensureDefaultAdmin();
+
+        // Register job handlers and start the durable queue worker.
+        // Handlers must be registered before start() so any jobs that
+        // survived a crash are processed immediately on restart.
+        AttendanceService.registerHandlers();
+        jobQueueService.start();
+        logger.info('✅ Job queue worker started');
 
         // Start server
         server.listen(config.port, '0.0.0.0', () => {
@@ -108,6 +123,10 @@ async function startServer() {
         // Graceful shutdown
         const shutdown = async (signal) => {
             logger.info(`Received ${signal}, shutting down gracefully...`);
+
+            // Stop the job queue worker first
+            jobQueueService.stop();
+            logger.info('Job queue worker stopped');
             
             // Close database connection
             await db.close();

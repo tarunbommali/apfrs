@@ -34,6 +34,39 @@ class UserRepository extends BaseRepository {
     return new User(rows[0]);
   }
 
+  /**
+   * Phase 5: Bulk lookup replacing N sequential findByEmail/findByCfmsId calls.
+   * Returns a Map keyed by both email and cfms_id for O(1) access.
+   */
+  async findByEmailsOrCfmsIds(emails = [], cfmsIds = []) {
+    const cleanEmails  = emails.filter(Boolean).map((e) => e.toLowerCase().trim());
+    const cleanCfmsIds = cfmsIds.filter(Boolean);
+
+    if (cleanEmails.length === 0 && cleanCfmsIds.length === 0) return new Map();
+
+    const conditions = [];
+    const params = [];
+
+    if (cleanEmails.length > 0) {
+      conditions.push(`email IN (${cleanEmails.map(() => '?').join(', ')})`);
+      params.push(...cleanEmails);
+    }
+    if (cleanCfmsIds.length > 0) {
+      conditions.push(`cfms_id IN (${cleanCfmsIds.map(() => '?').join(', ')})`);
+      params.push(...cleanCfmsIds);
+    }
+
+    const sql = `SELECT * FROM users WHERE is_active = TRUE AND (${conditions.join(' OR ')}) `;
+    const rows = await db.query(sql, params);
+
+    const map = new Map();
+    for (const user of rows.map((r) => new User(r))) {
+      if (user.email)   map.set(user.email.toLowerCase(), user);
+      if (user.cfms_id) map.set(user.cfms_id, user);
+    }
+    return map;
+  }
+
   async findAllFaculty(filters = {}) {
     let sql = `SELECT * FROM users WHERE role = 'faculty' AND is_active = TRUE`;
     const params = [];
@@ -126,8 +159,12 @@ class UserRepository extends BaseRepository {
 
   async create(user) {
     const sql = `
-      INSERT INTO users (id, cfms_id, name, email, password_hash, role, department, designation, mobile, job_status, is_active, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+      INSERT INTO users (
+        id, cfms_id, name, email, password_hash, role, department,
+        designation, mobile, gender, job_status, incharge, is_active,
+        activation_token_hash, activation_expires_at, must_change_password,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
     `;
     await db.query(sql, [
       user.id,
@@ -139,17 +176,42 @@ class UserRepository extends BaseRepository {
       user.department,
       user.designation,
       user.mobile,
+      user.gender || 'male',
       user.job_status,
+      user.incharge || 'None',
       user.isActive ? 1 : 0,
+      user.activationTokenHash  || null,
+      user.activationExpiresAt  || null,
+      user.mustChangePassword   ? 1 : 0,
     ]);
     return this.findById(user.id);
+  }
+
+  /**
+   * Look up a user by their activation token hash.
+   * Used by the /api/auth/activate endpoint.
+   */
+  async findByActivationTokenHash(tokenHash) {
+    const sql = `
+      SELECT * FROM users
+      WHERE activation_token_hash = ? AND is_active = TRUE
+      LIMIT 1
+    `;
+    const rows = await db.query(sql, [tokenHash]);
+    if (rows.length === 0) return null;
+    return new User(rows[0]);
   }
 
   async update(id, updates) {
     const fields = [];
     const params = [];
 
-    const allowed = ['name', 'email', 'designation', 'department', 'mobile', 'job_status', 'is_active', 'password_hash'];
+    const allowed = [
+      'name', 'email', 'designation', 'department', 'mobile', 'gender',
+      'job_status', 'incharge', 'is_active', 'password_hash',
+      // Activation fields (cleared by the activate endpoint)
+      'activation_token_hash', 'activation_expires_at', 'must_change_password',
+    ];
     for (const key of allowed) {
       if (updates[key] !== undefined) {
         fields.push(`${key} = ?`);

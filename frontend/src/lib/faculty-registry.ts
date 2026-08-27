@@ -4,11 +4,11 @@
  * The Zod schema is kept for form validation in the add/edit forms.
  */
 import { z } from "zod";
-import type { JobStatus } from "@/lib/apfrs-data";
+import type { JobStatus, InchargeRole } from "@/lib/apfrs-data";
 
-export { type Faculty } from "@/lib/apfrs-data";
+export { type Faculty, type InchargeRole, inchargeRoles } from "@/lib/apfrs-data";
 
-export const jobStatuses: JobStatus[] = ["Regular", "contract", "AEE", "N/A"];
+export const jobStatuses: JobStatus[] = ["Regular", "contract"];
 
 export const facultySchema = z.object({
   cfmsId: z
@@ -22,7 +22,9 @@ export const facultySchema = z.object({
   designation: z.string().trim().min(2, "Designation is required").max(80, "Designation is too long"),
   department: z.string().trim().min(1, "Department is required").max(40, "Department is too long"),
   mobile: z.string().trim().regex(/^[0-9]{10}$/, "Mobile must be exactly 10 digits"),
-  jobStatus: z.enum(["Regular", "contract", "AEE", "N/A"]),
+  gender: z.enum(["male", "female", "other"]).default("male"),
+  jobStatus: z.enum(["Regular", "contract"]),
+  incharge: z.enum(["None", "HOD", "Principal", "Vice Principal", "Vice Chancellor (VC)", "Registrar"]).default("None"),
   present: z.coerce.number().int().min(0).max(31).default(0),
   absent: z.coerce.number().int().min(0).max(31).default(0),
   leave: z.coerce.number().int().min(0).max(31).default(0),

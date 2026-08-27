@@ -52,6 +52,20 @@ export class AuthController {
       next(error);
     }
   }
+
+  /**
+   * Phase 8: One-time account activation endpoint.
+   * Accepts the raw token from the activation email and a new password.
+   */
+  async activate(req, res, next) {
+    try {
+      const { token, newPassword } = req.body;
+      const result = await authService.activateAccount(token, newPassword);
+      return sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const authController = new AuthController();
