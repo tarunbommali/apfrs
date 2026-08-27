@@ -2,6 +2,7 @@
 import { userService } from '../services/user.service.js';
 import { attendanceService } from '../services/attendance.service.js';
 import { emailService } from '../services/email.service.js';
+import { calendarService } from '../services/calendar.service.js';
 import { calendarRepository } from '../repositories/calendar.repository.js';
 import { emailSettingsRepository } from '../repositories/email-settings.repository.js';
 import { sendSuccess, sendCreated } from '../utils/response.js';
@@ -150,8 +151,44 @@ export class AdminController {
 
   async getCalendar(req, res, next) {
     try {
-      const holidays = await calendarRepository.getHolidays();
+      const { month, year } = req.query;
+      if (month && year) {
+        const data = await calendarService.getCalendar(month, year);
+        return sendSuccess(res, data);
+      }
+      const holidays = await calendarService.getAllHolidays();
       return sendSuccess(res, { holidays });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async createHoliday(req, res, next) {
+    try {
+      const { date, name, label, type } = req.body;
+      const holiday = await calendarService.createHoliday({ date, name, label, type });
+      return sendCreated(res, { holiday, message: 'Holiday added successfully.' });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateHoliday(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { date, name, label, type } = req.body;
+      const holiday = await calendarService.updateHoliday(id, { date, name, label, type });
+      return sendSuccess(res, { holiday, message: 'Holiday updated successfully.' });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async deleteHoliday(req, res, next) {
+    try {
+      const { id } = req.params;
+      const result = await calendarService.deleteHoliday(id);
+      return sendSuccess(res, result);
     } catch (error) {
       next(error);
     }
@@ -160,8 +197,8 @@ export class AdminController {
   async saveCalendar(req, res, next) {
     try {
       const { holidays } = req.body;
-      const saved = await calendarRepository.saveHolidays(holidays || []);
-      return sendSuccess(res, { holidays: saved, message: 'Academic calendar updated successfully.' });
+      const result = await calendarService.syncCalendar(holidays || []);
+      return sendSuccess(res, result);
     } catch (error) {
       next(error);
     }

@@ -41,6 +41,9 @@ router.get('/attendance/analytics', (req, res, next) => adminController.getAtten
 // Academic Calendar Management
 router.get('/calendar', (req, res, next) => adminController.getCalendar(req, res, next));
 router.post('/calendar', (req, res, next) => adminController.saveCalendar(req, res, next));
+router.post('/calendar/holidays', (req, res, next) => adminController.createHoliday(req, res, next));
+router.put('/calendar/holidays/:id', (req, res, next) => adminController.updateHoliday(req, res, next));
+router.delete('/calendar/holidays/:id', (req, res, next) => adminController.deleteHoliday(req, res, next));
 
 // Email Configuration & Multi-Provider Settings
 router.get('/email-config', (req, res, next) => adminController.getEmailConfig(req, res, next));

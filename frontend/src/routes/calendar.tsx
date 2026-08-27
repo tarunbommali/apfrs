@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   CalendarDays,
   ChevronLeft,
@@ -8,7 +9,12 @@ import {
   Plus,
   Trash2,
   Briefcase,
-  Layers,
+  Calendar,
+  CheckCircle2,
+  Loader2,
+  Search,
+  Users,
+  AlertCircle,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -30,7 +36,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth";
-import { apiFetch } from "@/lib/api";
+import {
+  calendarQuery,
+  useAddHoliday,
+  useUpdateHoliday,
+  useDeleteHoliday,
+  facultyListQuery,
+  type CalendarHoliday,
+} from "@/lib/queries";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/calendar")({
@@ -40,522 +53,617 @@ export const Route = createFileRoute("/calendar")({
       {
         name: "description",
         content:
-          "View and interact with the academic calendar: college holidays, working days and examination periods.",
-      },
-      { property: "og:title", content: "Academic Calendar — e-Office Jntugv" },
-      {
-        property: "og:description",
-        content: "Working days and holiday configuration for attendance cycles.",
+          "Manage academic calendar, official college holidays, and synchronized working days for faculty attendance.",
       },
     ],
   }),
-  component: AcademicCalendar,
+  component: AcademicCalendarPage,
 });
-
-export type HolidayType = "Public holiday" | "Institutional" | "Academic" | "Vacation";
-
-export type Holiday = {
-  id?: string;
-  date: string; // yyyy-mm-dd
-  label: string;
-  type: HolidayType;
-};
-
-export const HOLIDAY_TYPES: HolidayType[] = ["Public holiday", "Institutional", "Academic", "Vacation"];
-
-const typeStyles: Record<HolidayType, string> = {
-  "Public holiday": "border-destructive/40 bg-destructive/10 text-destructive",
-  Institutional: "border-accent/50 bg-accent/15 text-accent-foreground",
-  Academic: "border-primary/40 bg-primary/10 text-primary",
-  Vacation: "border-border bg-muted text-muted-foreground",
-};
-
-const STORAGE_KEY = "apfrs.academic-calendar.v1";
-
-type HolidayTemplate = {
-  monthDay: string; // "MM-DD"
-  label: string;
-  type: HolidayType;
-  wrapsToNextYear?: boolean;
-};
-
-const defaultHolidayTemplates: HolidayTemplate[] = [
-  { monthDay: "08-15", label: "Independence Day", type: "Public holiday" },
-  { monthDay: "08-22", label: "Vinayaka Chavithi", type: "Public holiday" },
-  { monthDay: "09-02", label: "Mid-term examinations begin", type: "Academic" },
-  { monthDay: "09-05", label: "Teachers' Day", type: "Institutional" },
-  { monthDay: "10-02", label: "Mahatma Gandhi Jayanti", type: "Public holiday" },
-  { monthDay: "10-20", label: "Vijaya Dasami / Dussehra", type: "Public holiday" },
-  { monthDay: "11-08", label: "Diwali", type: "Public holiday" },
-  { monthDay: "12-25", label: "Christmas", type: "Public holiday" },
-  { monthDay: "01-14", label: "Makara Sankranti / Pongal", type: "Public holiday", wrapsToNextYear: true },
-  { monthDay: "01-26", label: "Republic Day", type: "Public holiday", wrapsToNextYear: true },
-];
-
-export function buildDefaultHolidays(baseAcademicYear: number): Holiday[] {
-  return defaultHolidayTemplates.map((t) => {
-    const y = t.wrapsToNextYear ? baseAcademicYear + 1 : baseAcademicYear;
-    return {
-      date: `${y}-${t.monthDay}`,
-      label: t.label,
-      type: t.type,
-    };
-  });
-}
-
-const YEAR_RANGE = { past: 5, future: 10 };
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
 
-const iso = (y: number, m: number, d: number) =>
-  `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+const MONTH_SHORT = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
 
-const monthLabel = (y: number, m: number) =>
-  new Date(y, m, 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+const YEARS = ["2024", "2025", "2026", "2027", "2028"];
 
-const prettyDate = (value: string) => {
-  const [y, m, d] = value.split("-").map(Number);
-  return new Date(y!, (m ?? 1) - 1, d!).toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+const HOLIDAY_TYPES = [
+  "Public holiday",
+  "Institutional",
+  "Academic",
+  "Vacation",
+] as const;
+
+type HolidayType = (typeof HOLIDAY_TYPES)[number];
+
+const typeBadgeStyles: Record<string, string> = {
+  "Public holiday": "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20",
+  Institutional: "bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/20",
+  Academic: "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20",
+  Vacation: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20",
 };
 
-/** Monday-first grid cells for a month; null = padding. */
-function buildGrid(year: number, month: number) {
-  const first = new Date(year, month, 1);
-  const lead = (first.getDay() + 6) % 7;
-  const days = new Date(year, month + 1, 0).getDate();
-  const cells: (number | null)[] = Array.from({ length: lead }, () => null);
-  for (let d = 1; d <= days; d += 1) cells.push(d);
-  while (cells.length % 7 !== 0) cells.push(null);
-  return cells;
+/** Builds the 7-column calendar day grid (Monday-Sunday aligned) */
+function buildCalendarGrid(year: number, month: number) {
+  // Day of week for 1st of month: 0=Sun, 1=Mon, ..., 6=Sat
+  // Offset to start on Monday: Mon=0, Tue=1, ..., Sun=6
+  const firstDay = new Date(year, month - 1, 1);
+  const startDayOffset = (firstDay.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month, 0).getDate();
+
+  const cells: (number | null)[] = Array.from({ length: startDayOffset }, () => null);
+  for (let d = 1; d <= daysInMonth; d++) {
+    cells.push(d);
+  }
+  while (cells.length % 7 !== 0) {
+    cells.push(null);
+  }
+  return { cells, daysInMonth };
 }
 
-function AcademicCalendar() {
+function AcademicCalendarPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
 
   const now = new Date();
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth());
-  const initialAcademicYear = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
-  const [holidays, setHolidays] = useState<Holiday[]>(() => buildDefaultHolidays(initialAcademicYear));
-  const [draft, setDraft] = useState<Holiday | null>(null);
-  const [isNew, setIsNew] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
 
-  // Fetch holidays from database / fallback local storage
-  useEffect(() => {
-    async function loadCalendar() {
-      try {
-        const res = await apiFetch<{ holidays: Holiday[] }>("/api/admin/calendar");
-        if (res && Array.isArray(res.holidays) && res.holidays.length > 0) {
-          setHolidays(res.holidays);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(res.holidays));
-          return;
-        }
-      } catch {
-        // Fallback to local storage
-      }
+  // ── Database Query for Calendar Data ──
+  const {
+    data: calendarData,
+    isLoading: isCalendarLoading,
+  } = useQuery(calendarQuery(selectedMonth, selectedYear));
 
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) setHolidays(JSON.parse(raw) as Holiday[]);
-      } catch {
-        /* ignore corrupt storage */
-      }
-    }
+  const holidays = calendarData?.holidays || [];
+  const monthName = MONTH_NAMES[selectedMonth - 1];
 
-    void loadCalendar();
-  }, []);
+  // ── Compute Calendar Metrics & Grid ──
+  const { cells, daysInMonth } = useMemo(
+    () => buildCalendarGrid(selectedYear, selectedMonth),
+    [selectedYear, selectedMonth]
+  );
 
-  const persist = async (next: Holiday[]) => {
-    const sorted = [...next].sort((a, b) => a.date.localeCompare(b.date));
-    setHolidays(sorted);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(sorted));
-    } catch {
-      /* storage unavailable */
-    }
-
-    if (isAdmin) {
-      try {
-        await apiFetch<{ holidays: Holiday[] }>("/api/admin/calendar", {
-          method: "POST",
-          body: { holidays: sorted },
-        });
-      } catch (err) {
-        console.warn("Could not sync calendar to backend:", err);
-      }
-    }
-  };
-
-  const byDate = useMemo(() => {
-    const map = new Map<string, Holiday>();
-    holidays.forEach((h) => map.set(h.date, h));
-    return map;
-  }, [holidays]);
-
-  // Academic year coverage tracking
-  const yearCoverage = useMemo(() => {
-    const map = new Map<number, number>();
+  const holidayByDate = useMemo(() => {
+    const map = new Map<string, CalendarHoliday>();
     holidays.forEach((h) => {
-      const parts = h.date.split("-").map(Number);
-      if (parts.length >= 2) {
-        const y = parts[0];
-        const m = parts[1];
-        if (y !== undefined && m !== undefined) {
-          const academicYear = m >= 8 ? y : y - 1;
-          map.set(academicYear, (map.get(academicYear) ?? 0) + 1);
-        }
-      }
+      if (h.date) map.set(h.date, h);
     });
     return map;
   }, [holidays]);
 
-  const yearOptions = useMemo(() => {
-    const current = new Date().getFullYear();
-    const minYear = Math.min(year, current - YEAR_RANGE.past);
-    const maxYear = Math.max(year, current + YEAR_RANGE.future);
-    const years: number[] = [];
-    for (let y = minYear; y <= maxYear; y++) {
-      years.push(y);
+  // Working days count calculation
+  const calculatedWorkingDays = useMemo(() => {
+    let sundays = 0;
+    let holidaysCount = 0;
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dPad = String(d).padStart(2, "0");
+      const dateStr = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${dPad}`;
+      const dayOfWeek = new Date(selectedYear, selectedMonth - 1, d).getDay();
+      const isSunday = dayOfWeek === 0;
+      const isHoliday = holidayByDate.has(dateStr);
+
+      if (isSunday) {
+        sundays++;
+      } else if (isHoliday) {
+        holidaysCount++;
+      }
     }
-    return years;
-  }, [year]);
+    return Math.max(0, daysInMonth - sundays - holidaysCount);
+  }, [selectedYear, selectedMonth, daysInMonth, holidayByDate]);
 
-  const cells = useMemo(() => buildGrid(year, month), [year, month]);
+  const workingDays = calendarData?.workingDays ?? calculatedWorkingDays;
+  const totalDays = calendarData?.totalDays ?? daysInMonth;
 
-  const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
-  const monthHolidays = useMemo(
-    () => holidays.filter((h) => h.date.startsWith(monthPrefix)),
-    [holidays, monthPrefix],
-  );
+  // ── Month & Year Navigation ──
+  const handlePrevMonth = () => {
+    if (selectedMonth === 1) {
+      setSelectedMonth(12);
+      setSelectedYear((prev) => prev - 1);
+    } else {
+      setSelectedMonth((prev) => prev - 1);
+    }
+  };
 
-  // ── Metrics Calculation (Dynamic & Synchronized) ───────────────────────────
-  const totalDays = new Date(year, month + 1, 0).getDate();
+  const handleNextMonth = () => {
+    if (selectedMonth === 12) {
+      setSelectedMonth(1);
+      setSelectedYear((prev) => prev + 1);
+    } else {
+      setSelectedMonth((prev) => prev + 1);
+    }
+  };
 
-  // All Sundays in this month
-  const sundaysCount = cells.filter((d) => {
-    if (d === null) return false;
-    const wd = new Date(year, month, d).getDay();
-    return wd === 0;
-  }).length;
+  // ── Top Faculty Search (Debounced) ──
+  const [facultySearch, setFacultySearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  // Non-working holidays that fall on Mon–Sat
-  const nonWorkingWeekdayHolidays = monthHolidays.filter((h) => {
-    const dayNum = Number(h.date.slice(8, 10));
-    const isSunday = new Date(year, month, dayNum).getDay() === 0;
-    return !isSunday;
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(facultySearch.trim()), 300);
+    return () => clearTimeout(t);
+  }, [facultySearch]);
+
+  const { data: searchResultsData, isLoading: isSearching } = useQuery({
+    ...facultyListQuery({ search: debouncedSearch, limit: 5 }),
+    enabled: debouncedSearch.length > 1,
   });
+  const searchResults = searchResultsData?.faculty || [];
 
-  const holidayOnWorkday = nonWorkingWeekdayHolidays.length;
+  // ── Modal State: Add / Edit Holiday ──
+  const [holidayModalOpen, setHolidayModalOpen] = useState(false);
+  const [editingHoliday, setEditingHoliday] = useState<CalendarHoliday | null>(null);
 
-  // Final Total Working Days
-  const workingDays = Math.max(0, totalDays - sundaysCount - holidayOnWorkday);
+  const [formDate, setFormDate] = useState("");
+  const [formName, setFormName] = useState("");
+  const [formType, setFormType] = useState<string>("Public holiday");
 
-  const selectedAcademicYear = month >= 7 ? year : year - 1;
-  const currentAcademicCoverage = yearCoverage.get(selectedAcademicYear) ?? 0;
+  const addHolidayMutation = useAddHoliday();
+  const updateHolidayMutation = useUpdateHoliday();
+  const deleteHolidayMutation = useDeleteHoliday();
 
-  const shiftMonth = (delta: number) => {
-    const next = new Date(year, month + delta, 1);
-    setYear(next.getFullYear());
-    setMonth(next.getMonth());
+  const handleOpenAddHoliday = (defaultDay?: number) => {
+    const dayPad = defaultDay ? String(defaultDay).padStart(2, "0") : "01";
+    const mPad = String(selectedMonth).padStart(2, "0");
+    setEditingHoliday(null);
+    setFormDate(`${selectedYear}-${mPad}-${dayPad}`);
+    setFormName("");
+    setFormType("Public holiday");
+    setHolidayModalOpen(true);
   };
 
-  const openDay = (day: number) => {
-    if (!isAdmin) return;
-    const date = iso(year, month, day);
-    const existing = byDate.get(date);
-    setIsNew(!existing);
-    setDraft(existing ?? { date, label: "", type: "Public holiday" });
+  const handleOpenEditHoliday = (holiday: CalendarHoliday) => {
+    setEditingHoliday(holiday);
+    setFormDate(holiday.date);
+    setFormName(holiday.name || holiday.label || "");
+    setFormType(holiday.type || "Public holiday");
+    setHolidayModalOpen(true);
   };
 
-  const saveDraft = () => {
-    if (!draft || draft.label.trim() === "") return;
-    void persist([...holidays.filter((h) => h.date !== draft.date), { ...draft, label: draft.label.trim() }]);
-    toast.success(`Holiday saved for ${prettyDate(draft.date)}`);
-    setDraft(null);
+  const handleSaveHoliday = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formDate || !formName.trim()) {
+      toast.error("Please enter a valid date and holiday name.");
+      return;
+    }
+
+    try {
+      if (editingHoliday?.id) {
+        await updateHolidayMutation.mutateAsync({
+          id: editingHoliday.id,
+          date: formDate,
+          name: formName.trim(),
+          type: formType,
+        });
+        toast.success(`Holiday "${formName.trim()}" updated successfully.`);
+      } else {
+        await addHolidayMutation.mutateAsync({
+          date: formDate,
+          name: formName.trim(),
+          type: formType,
+        });
+        toast.success(`Holiday "${formName.trim()}" added to academic calendar.`);
+      }
+      setHolidayModalOpen(false);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save holiday.");
+    }
   };
 
-  const removeDate = (date: string) => {
-    void persist(holidays.filter((h) => h.date !== date));
-    toast.info(`Holiday removed for ${prettyDate(date)}`);
-    setDraft(null);
+  // ── Modal State: Delete Confirmation ──
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deletingHoliday, setDeletingHoliday] = useState<CalendarHoliday | null>(null);
+
+  const handleOpenDelete = (holiday: CalendarHoliday) => {
+    setDeletingHoliday(holiday);
+    setDeleteModalOpen(true);
   };
 
-  const calendarSection = (
-    <section className="surface-panel p-6">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <Button variant="ghost" size="icon" onClick={() => shiftMonth(-1)} aria-label="Previous month">
-          <ChevronLeft className="size-4" />
-        </Button>
-        <div className="flex items-center gap-2">
-          <Select value={String(month)} onValueChange={(v) => setMonth(parseInt(v, 10))}>
-            <SelectTrigger className="h-8 w-32 font-semibold">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {MONTH_NAMES.map((m, i) => (
-                <SelectItem key={m} value={String(i)}>
-                  {m}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={String(year)} onValueChange={(v) => setYear(parseInt(v, 10))}>
-            <SelectTrigger className="h-8 w-28 font-mono font-semibold">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {yearOptions.map((y) => {
-                const count = yearCoverage.get(y) ?? 0;
-                const isVerified = count >= 6;
-                return (
-                  <SelectItem key={y} value={String(y)}>
-                    <div className="flex items-center justify-between gap-2.5 w-full">
-                      <span>{y}</span>
-                      {isVerified ? (
-                        <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                          Verified
-                        </span>
-                      ) : null}
-                    </div>
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-        </div>
-        <Button variant="ghost" size="icon" onClick={() => shiftMonth(1)} aria-label="Next month">
-          <ChevronRight className="size-4" />
-        </Button>
-      </div>
-
-      <div className="grid grid-cols-7 gap-1 text-center">
-        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-          <div key={d} className="label-caps py-2">
-            {d}
-          </div>
-        ))}
-        {cells.map((d, i) => {
-          if (d === null) return <div key={`pad-${i}`} className="aspect-square" />;
-          const date = iso(year, month, d);
-          const holiday = byDate.get(date);
-          const sunday = new Date(year, month, d).getDay() === 0;
-          return (
-            <button
-              key={date}
-              type="button"
-              onClick={() => openDay(d)}
-              disabled={!isAdmin}
-              title={holiday ? `${holiday.label} (${holiday.type})` : sunday ? "Sunday (Non-working)" : "Working day"}
-              className={`aspect-square rounded-md border p-2 text-left font-mono text-sm transition-colors ${
-                holiday
-                  ? typeStyles[holiday.type]
-                  : sunday
-                    ? "border-border bg-muted/70 text-muted-foreground"
-                    : "border-border bg-card"
-              } ${isAdmin ? "cursor-pointer hover:ring-2 hover:ring-primary/40" : ""}`}
-            >
-              {d}
-              {holiday ? (
-                <span className="mt-1 block truncate text-[9px] font-sans font-medium leading-tight">
-                  {holiday.label}
-                </span>
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-        {HOLIDAY_TYPES.map((t) => (
-          <span key={t} className="inline-flex items-center gap-1.5">
-            <span className={`size-3 rounded-sm border ${typeStyles[t]}`} />
-            {t}
-          </span>
-        ))}
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-3 rounded-sm border border-border bg-muted/70" />
-          Sunday
-        </span>
-      </div>
-    </section>
-  );
-
-  const holidayListSection = (
-    <section className="surface-panel overflow-hidden">
-      <div className="flex items-center justify-between border-b border-border px-5 py-4">
-        <div>
-          <h2 className="text-base font-semibold">Holidays</h2>
-          <p className="text-xs text-muted-foreground">For {monthLabel(year, month)}</p>
-        </div>
-        <span className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-semibold text-secondary-foreground">
-          {monthHolidays.length} holidays
-        </span>
-      </div>
-      <ul className="divide-y divide-border">
-        {monthHolidays.map((h) => (
-          <li key={h.date} className="flex items-start gap-3 px-5 py-4">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-xs font-semibold text-foreground">{prettyDate(h.date)}</span>
-                <span className={`rounded-sm border px-1.5 py-0.5 text-[10px] font-medium ${typeStyles[h.type]}`}>
-                  {h.type}
-                </span>
-              </div>
-              <p className="mt-1 text-sm font-medium">{h.label}</p>
-            </div>
-            {isAdmin ? (
-              <div className="flex shrink-0 gap-1">
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  aria-label={`Edit ${h.label}`}
-                  onClick={() => {
-                    setIsNew(false);
-                    setDraft(h);
-                  }}
-                >
-                  <Pencil className="size-4" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  aria-label={`Remove ${h.label}`}
-                  onClick={() => removeDate(h.date)}
-                >
-                  <Trash2 className="size-4 text-destructive" />
-                </Button>
-              </div>
-            ) : null}
-          </li>
-        ))}
-        {monthHolidays.length === 0 ? (
-          <li className="px-5 py-12 text-center text-sm text-muted-foreground">
-            <CalendarDays className="mx-auto mb-2 size-5" />
-            No holidays mapped for {monthLabel(year, month)}.
-          </li>
-        ) : null}
-      </ul>
-    </section>
-  );
+  const handleConfirmDelete = async () => {
+    if (!deletingHoliday?.id) return;
+    try {
+      await deleteHolidayMutation.mutateAsync(deletingHoliday.id);
+      toast.success(`Holiday "${deletingHoliday.name || deletingHoliday.label}" removed.`);
+      setDeleteModalOpen(false);
+      setDeletingHoliday(null);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete holiday.");
+    }
+  };
 
   return (
     <AppShell
-      roles={["admin", "faculty"]}
       title="Academic Calendar"
-      subtitle={`${monthLabel(year, month)} · Working days and holidays synchronization`}
+      subtitle={`${monthName} ${selectedYear} · Working days and holidays synchronization`}
       actions={
-        isAdmin ? (
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsNew(true);
-                setDraft({ date: iso(year, month, 1), label: "", type: "Public holiday" });
-              }}
-            >
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Top Search Bar */}
+          <div className="relative">
+            <div className="flex items-center rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs shadow-sm">
+              <Search className="size-3.5 text-muted-foreground mr-2 shrink-0" />
+              <input
+                type="text"
+                placeholder="Search faculty, email, CFMS..."
+                value={facultySearch}
+                onChange={(e) => setFacultySearch(e.target.value)}
+                className="w-44 bg-transparent outline-none placeholder:text-muted-foreground text-xs"
+              />
+              {facultySearch && (
+                <button
+                  type="button"
+                  onClick={() => setFacultySearch("")}
+                  className="text-muted-foreground hover:text-foreground text-xs"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Quick Search Dropdown Preview */}
+            {debouncedSearch.length > 1 && (
+              <div className="absolute right-0 top-full mt-1.5 w-72 rounded-lg border border-border bg-popover p-2 shadow-xl z-50 text-xs">
+                {isSearching ? (
+                  <div className="flex items-center gap-2 py-2 px-3 text-muted-foreground">
+                    <Loader2 className="size-3.5 animate-spin" /> Searching faculty registry…
+                  </div>
+                ) : searchResults.length > 0 ? (
+                  <div className="space-y-1">
+                    <p className="px-2 py-1 font-semibold text-muted-foreground text-[10px] uppercase tracking-wider">
+                      Matching Faculty
+                    </p>
+                    {searchResults.map((f: any) => (
+                      <Link
+                        key={f.id}
+                        to="/faculty"
+                        className="flex flex-col rounded p-1.5 hover:bg-muted transition-colors"
+                      >
+                        <span className="font-semibold text-foreground">{f.name}</span>
+                        <span className="text-muted-foreground text-[10px]">
+                          {f.department} · {f.cfms_id || f.email}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="py-2 px-3 text-muted-foreground text-center">No faculty records found.</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Add Holiday Button */}
+          {isAdmin && (
+            <Button size="sm" onClick={() => handleOpenAddHoliday()} className="gap-1.5">
               <Plus className="size-4" /> Add holiday
             </Button>
-            <Button asChild>
+          )}
+
+          {/* Edit Calendar (Link to Bulk Edit) */}
+          {isAdmin && (
+            <Button asChild size="sm" variant="outline">
               <Link to="/edit/calendar">
-                <Pencil className="size-4" /> Edit Calendar
+                <Pencil className="mr-1.5 size-3.5" /> Edit Calendar
               </Link>
             </Button>
-          </div>
-        ) : null
+          )}
+        </div>
       }
     >
-      {/* ── Academic Year Coverage Notice ── */}
-      {currentAcademicCoverage === 0 ? (
-        <div className="mb-6 flex items-center justify-between rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-600 dark:text-amber-400">
-          <div className="flex items-center gap-2">
-            <Layers className="size-4 shrink-0" />
-            <span>
-              Academic Year <strong className="font-semibold">{selectedAcademicYear}–{selectedAcademicYear + 1}</strong> currently has{" "}
-              <strong>0 holidays mapped</strong>. Go to Edit Calendar to configure.
-            </span>
-          </div>
-          {isAdmin ? (
-            <Button size="sm" variant="outline" className="h-7 text-xs border-amber-500/40 hover:bg-amber-500/20" asChild>
-              <Link to="/edit/calendar">Edit Calendar</Link>
-            </Button>
-          ) : null}
+      <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
+        {/* ── Left Column: Calendar Navigation & Month Grid ── */}
+        <div className="space-y-4">
+          <section className="surface-panel p-5">
+            {/* Top Month / Year Selector Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="size-8"
+                  onClick={handlePrevMonth}
+                  title="Previous month"
+                >
+                  <ChevronLeft className="size-4" />
+                </Button>
+
+                {/* Month Dropdown */}
+                <Select
+                  value={String(selectedMonth)}
+                  onValueChange={(val) => setSelectedMonth(parseInt(val, 10))}
+                >
+                  <SelectTrigger className="h-8 w-36 font-semibold">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MONTH_NAMES.map((m, idx) => (
+                      <SelectItem key={m} value={String(idx + 1)}>
+                        {m}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Year Dropdown */}
+                <Select
+                  value={String(selectedYear)}
+                  onValueChange={(val) => setSelectedYear(parseInt(val, 10))}
+                >
+                  <SelectTrigger className="h-8 w-24 font-mono font-semibold">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {YEARS.map((y) => (
+                      <SelectItem key={y} value={y}>
+                        {y}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="size-8"
+                  onClick={handleNextMonth}
+                  title="Next month"
+                >
+                  <ChevronRight className="size-4" />
+                </Button>
+              </div>
+
+              {/* Sync / Verification Status Badge */}
+              <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                <CheckCircle2 className="size-3.5" />
+                <span>Verified ✓</span>
+              </div>
+            </div>
+
+            {/* Calendar Day Grid (MON - SUN) */}
+            <div className="mt-4">
+              <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-muted-foreground mb-2">
+                {["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"].map((d, i) => (
+                  <div
+                    key={d}
+                    className={`py-1.5 ${i === 6 ? "text-rose-500/80 font-bold" : ""}`}
+                  >
+                    {d}
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-1.5">
+                {cells.map((dayNum, idx) => {
+                  if (dayNum === null) {
+                    return (
+                      <div
+                        key={`empty-${idx}`}
+                        className="h-20 rounded-lg border border-transparent bg-muted/10 opacity-40"
+                      />
+                    );
+                  }
+
+                  const dayPad = String(dayNum).padStart(2, "0");
+                  const mPad = String(selectedMonth).padStart(2, "0");
+                  const dateStr = `${selectedYear}-${mPad}-${dayPad}`;
+
+                  const dayOfWeek = (idx % 7); // 0=Mon, 5=Sat, 6=Sun
+                  const isSunday = dayOfWeek === 6;
+                  const isSaturday = dayOfWeek === 5;
+                  const holiday = holidayByDate.get(dateStr);
+
+                  return (
+                    <div
+                      key={dateStr}
+                      onClick={() => {
+                        if (isAdmin) {
+                          if (holiday) handleOpenEditHoliday(holiday);
+                          else handleOpenAddHoliday(dayNum);
+                        }
+                      }}
+                      className={`group relative flex flex-col justify-between rounded-lg border p-2 h-20 text-xs transition-all ${
+                        holiday
+                          ? "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300 font-semibold cursor-pointer hover:border-rose-500"
+                          : isSunday
+                          ? "border-border/60 bg-muted/40 text-muted-foreground/70"
+                          : isSaturday
+                          ? "border-border bg-card/60 hover:border-primary/40 cursor-pointer"
+                          : "border-border bg-card hover:border-primary/50 cursor-pointer"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className={`font-mono text-xs ${holiday ? "font-bold text-rose-600 dark:text-rose-400" : isSunday ? "text-muted-foreground" : "font-medium text-foreground"}`}>
+                          {dayNum}
+                        </span>
+
+                        {isSunday && (
+                          <span className="text-[9px] font-mono text-muted-foreground/60">Sun</span>
+                        )}
+
+                        {isAdmin && (
+                          <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-primary">
+                            {holiday ? "Edit" : "+"}
+                          </span>
+                        )}
+                      </div>
+
+                      {holiday && (
+                        <div className="mt-1 truncate rounded bg-rose-500/20 px-1 py-0.5 text-[10px] font-semibold leading-tight text-rose-700 dark:text-rose-300">
+                          {holiday.name || holiday.label}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
         </div>
-      ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
-        {/* Container 1: Calendar Grid */}
-        {calendarSection}
-
-        {/* Container 2: Top Stat Cards and Bottom Holidays List */}
-        <div className="flex flex-col gap-6">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="surface-panel p-5">
-              <div className="flex items-center justify-between">
-                <p className="label-caps">Working Days</p>
-                <Briefcase className="size-4 text-accent" />
+        {/* ── Right Column: Metrics & Holiday List ── */}
+        <div className="space-y-6">
+          {/* Summary Stat Cards */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="surface-panel p-4 flex flex-col justify-between">
+              <div className="flex items-center justify-between text-muted-foreground">
+                <span className="text-xs font-semibold uppercase tracking-wider">Working Days</span>
+                <Briefcase className="size-4 text-amber-500" />
               </div>
-              <p className="mt-2 font-mono text-3xl font-bold text-accent">{workingDays}</p>
-              <p className="mt-1 text-xs text-muted-foreground">Active attendance days</p>
+              <div className="mt-3">
+                <span className="text-3xl font-bold font-mono text-foreground">{workingDays}</span>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Active attendance days</p>
+              </div>
             </div>
 
-            <div className="surface-panel p-5">
-              <div className="flex items-center justify-between">
-                <p className="label-caps">Total Days</p>
-                <CalendarDays className="size-4 text-muted-foreground" />
+            <div className="surface-panel p-4 flex flex-col justify-between">
+              <div className="flex items-center justify-between text-muted-foreground">
+                <span className="text-xs font-semibold uppercase tracking-wider">Total Days</span>
+                <Calendar className="size-4 text-primary" />
               </div>
-              <p className="mt-2 font-mono text-3xl font-bold">{totalDays}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{monthLabel(year, month)}</p>
+              <div className="mt-3">
+                <span className="text-3xl font-bold font-mono text-foreground">{totalDays}</span>
+                <p className="text-[11px] text-muted-foreground mt-0.5">{monthName} {selectedYear}</p>
+              </div>
             </div>
           </div>
 
-          {holidayListSection}
+          {/* Holiday List for Selected Month */}
+          <section className="surface-panel p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div>
+                <h2 className="text-base font-semibold text-foreground">Holidays</h2>
+                <p className="text-xs text-muted-foreground">
+                  For {monthName} {selectedYear}
+                </p>
+              </div>
+              <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-mono font-medium text-foreground">
+                {holidays.length} {holidays.length === 1 ? "holiday" : "holidays"}
+              </span>
+            </div>
+
+            {isCalendarLoading ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground text-xs gap-2">
+                <Loader2 className="size-4 animate-spin text-primary" /> Loading holidays…
+              </div>
+            ) : holidays.length > 0 ? (
+              <ul className="divide-y divide-border">
+                {holidays.map((h) => {
+                  const parts = h.date.split("-");
+                  const day = parts[2] ? parseInt(parts[2], 10) : "";
+                  const mIdx = parts[1] ? parseInt(parts[1], 10) - 1 : 0;
+                  const dateFormatted = `${day} ${MONTH_SHORT[mIdx] || ""} ${parts[0] || ""}`;
+
+                  return (
+                    <li key={h.id || h.date} className="py-3 flex items-center justify-between gap-3 group">
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-bold text-foreground">
+                            {dateFormatted}
+                          </span>
+                          <span
+                            className={`rounded px-1.5 py-0.2 text-[10px] font-medium ${
+                              typeBadgeStyles[h.type || "Public holiday"] || "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {h.type || "Public holiday"}
+                          </span>
+                        </div>
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {h.name || h.label}
+                        </p>
+                      </div>
+
+                      {isAdmin && (
+                        <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7 text-muted-foreground hover:text-foreground"
+                            onClick={() => handleOpenEditHoliday(h)}
+                            title="Edit holiday"
+                          >
+                            <Pencil className="size-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7 text-destructive/80 hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => handleOpenDelete(h)}
+                            title="Delete holiday"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="py-8 text-center space-y-2">
+                <CalendarDays className="mx-auto size-8 text-muted-foreground/40" />
+                <p className="text-xs text-muted-foreground">No holidays scheduled for {monthName} {selectedYear}.</p>
+                {isAdmin && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleOpenAddHoliday()}
+                    className="mt-2 text-xs"
+                  >
+                    <Plus className="mr-1 size-3" /> Add a holiday
+                  </Button>
+                )}
+              </div>
+            )}
+          </section>
         </div>
       </div>
 
-      <Dialog open={draft !== null} onOpenChange={(o) => (o ? null : setDraft(null))}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{isNew ? "Map a holiday" : "Edit holiday"}</DialogTitle>
-            <DialogDescription>
-              Mapped dates automatically update working-day counts and attendance percentages.
-            </DialogDescription>
-          </DialogHeader>
+      {/* ── Dialog: Add / Edit Holiday ── */}
+      <Dialog open={holidayModalOpen} onOpenChange={setHolidayModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <form onSubmit={handleSaveHoliday}>
+            <DialogHeader>
+              <DialogTitle>
+                {editingHoliday ? "Edit Holiday" : "Add Holiday"}
+              </DialogTitle>
+              <DialogDescription>
+                Configure official academic calendar holidays for attendance calculations.
+              </DialogDescription>
+            </DialogHeader>
 
-          {draft ? (
-            <div className="space-y-4">
+            <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="holiday-date">Date</Label>
+                <Label htmlFor="holiday-date">Holiday Date</Label>
                 <Input
                   id="holiday-date"
                   type="date"
-                  value={draft.date}
-                  onChange={(e) => setDraft({ ...draft, date: e.target.value })}
+                  required
+                  value={formDate}
+                  onChange={(e) => setFormDate(e.target.value)}
                 />
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="holiday-label">Occasion / Event Title</Label>
+                <Label htmlFor="holiday-name">Holiday Name / Description</Label>
                 <Input
-                  id="holiday-label"
-                  value={draft.label}
-                  placeholder="e.g. Independence Day / Semester Exam"
-                  onChange={(e) => setDraft({ ...draft, label: e.target.value })}
+                  id="holiday-name"
+                  type="text"
+                  placeholder="e.g. Independence Day, Pongal, Mid-term exam"
+                  required
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
                 />
               </div>
+
               <div className="space-y-2">
-                <Label>Category</Label>
-                <Select
-                  value={draft.type}
-                  onValueChange={(v) => setDraft({ ...draft, type: v as HolidayType })}
-                >
-                  <SelectTrigger>
+                <Label htmlFor="holiday-type">Holiday Type</Label>
+                <Select value={formType} onValueChange={setFormType}>
+                  <SelectTrigger id="holiday-type">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -568,24 +676,71 @@ function AcademicCalendar() {
                 </Select>
               </div>
             </div>
-          ) : null}
 
-          <DialogFooter className="gap-2 sm:justify-between">
-            {draft && !isNew ? (
-              <Button variant="ghost" onClick={() => removeDate(draft.date)}>
-                <Trash2 className="size-4 text-destructive" /> Remove
-              </Button>
-            ) : (
-              <span />
-            )}
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setDraft(null)}>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setHolidayModalOpen(false)}
+              >
                 Cancel
               </Button>
-              <Button onClick={saveDraft} disabled={!draft || draft.label.trim() === ""}>
-                Save holiday
+              <Button
+                type="submit"
+                disabled={addHolidayMutation.isPending || updateHolidayMutation.isPending}
+              >
+                {addHolidayMutation.isPending || updateHolidayMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-1.5 size-4 animate-spin" /> Saving…
+                  </>
+                ) : editingHoliday ? (
+                  "Update Holiday"
+                ) : (
+                  "Add Holiday"
+                )}
               </Button>
-            </div>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dialog: Delete Confirmation ── */}
+      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="size-5" /> Delete Holiday
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove{" "}
+              <strong className="text-foreground">
+                "{deletingHoliday?.name || deletingHoliday?.label}"
+              </strong>{" "}
+              ({deletingHoliday?.date}) from the academic calendar?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDeleteModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleteHolidayMutation.isPending}
+              onClick={handleConfirmDelete}
+            >
+              {deleteHolidayMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-1.5 size-4 animate-spin" /> Deleting…
+                </>
+              ) : (
+                "Delete Holiday"
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

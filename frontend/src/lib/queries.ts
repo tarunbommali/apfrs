@@ -245,16 +245,89 @@ export type CalendarHoliday = {
   id: string;
   date: string;
   name: string;
-  type?: string;
+  label?: string;
+  type?: "Public holiday" | "Institutional" | "Academic" | "Vacation" | string;
   description?: string;
 };
 
-export const calendarQuery = () =>
-  queryOptions({
-    queryKey: ["academic-calendar", "holidays"],
+export const calendarQuery = (month?: number, year?: number) => {
+  const qs = new URLSearchParams();
+  if (month) qs.set("month", String(month));
+  if (year) qs.set("year", String(year));
+  const queryStr = qs.toString();
+
+  return queryOptions({
+    queryKey: ["academic-calendar", month ?? "all", year ?? "all"],
     queryFn: () =>
-      apiFetch<{ holidays: CalendarHoliday[] }>("/api/admin/calendar"),
+      apiFetch<{
+        holidays: CalendarHoliday[];
+        month?: number;
+        year?: number;
+        totalDays?: number;
+        workingDays?: number;
+        sundaysCount?: number;
+      }>(`/api/admin/calendar${queryStr ? `?${queryStr}` : ""}`),
   });
+};
+
+export function useAddHoliday() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { date: string; name: string; type: string }) =>
+      apiFetch<{ holiday: CalendarHoliday; message: string }>("/api/admin/calendar/holidays", {
+        method: "POST",
+        body: payload,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["academic-calendar"] });
+      qc.invalidateQueries({ queryKey: ["attendance"] });
+    },
+  });
+}
+
+export function useUpdateHoliday() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...payload }: { id: string; date: string; name: string; type: string }) =>
+      apiFetch<{ holiday: CalendarHoliday; message: string }>(`/api/admin/calendar/holidays/${id}`, {
+        method: "PUT",
+        body: payload,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["academic-calendar"] });
+      qc.invalidateQueries({ queryKey: ["attendance"] });
+    },
+  });
+}
+
+export function useDeleteHoliday() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<{ success: boolean; message: string }>(`/api/admin/calendar/holidays/${id}`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["academic-calendar"] });
+      qc.invalidateQueries({ queryKey: ["attendance"] });
+    },
+  });
+}
+
+export function useSyncCalendar() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (holidays: CalendarHoliday[]) =>
+      apiFetch<{ success: boolean; holidays: CalendarHoliday[]; message: string }>("/api/admin/calendar", {
+        method: "POST",
+        body: { holidays },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["academic-calendar"] });
+      qc.invalidateQueries({ queryKey: ["attendance"] });
+    },
+  });
+}
 
 export function useImportAttendance() {
   const qc = useQueryClient();
