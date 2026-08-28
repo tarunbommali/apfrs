@@ -22,7 +22,7 @@ class EmailSettingsRepository {
         resend_domain VARCHAR(255) DEFAULT 'notify.jntugvcev.edu.in',
         resend_webhook_url VARCHAR(255) DEFAULT '',
         resend_tag VARCHAR(128) DEFAULT 'apfrs-monthly',
-        from_name VARCHAR(255) DEFAULT 'APFRS Reporting Cell',
+        from_name VARCHAR(255) DEFAULT 'Digital Monitoring Cell',
         from_email VARCHAR(255) DEFAULT 'reports@jntugvcev.edu.in',
         reply_to VARCHAR(255) DEFAULT 'admin@apfrs.in',
         subject_template VARCHAR(500) DEFAULT 'Monthly Attendance Statement — {{month}} {{year}}',
@@ -60,7 +60,7 @@ class EmailSettingsRepository {
         ) VALUES (
           ?, 'smtp', 1, 'smtp_first',
           'smtp.gmail.com', 587, 'tls', 'reports@jntugvcev.edu.in', ?,
-          ?, 'notify.jntugvcev.edu.in', 'APFRS Reporting Cell', 'reports@jntugvcev.edu.in', 'admin@apfrs.in', 'Monthly Attendance Statement — {{month}} {{year}}'
+          ?, 'notify.jntugvcev.edu.in', 'Digital Monitoring Cell', 'reports@jntugvcev.edu.in', 'admin@apfrs.in', 'Monthly Attendance Statement — {{month}} {{year}}'
         )`,
         [defaultId, process.env.SMTP_PASSWORD || '', process.env.RESEND_API_KEY || '']
       );

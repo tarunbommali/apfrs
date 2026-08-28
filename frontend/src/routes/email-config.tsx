@@ -89,7 +89,7 @@ function EmailConfigPage() {
     resendApiKey: "",
     resendDomain: "notify.jntugvcev.edu.in",
     resendTag: "apfrs-monthly",
-    fromName: "APFRS Reporting Cell",
+    fromName: "Digital Monitoring Cell",
     fromEmail: "reports@jntugvcev.edu.in",
     replyTo: "admin@apfrs.in",
     subjectTemplate: "Monthly Attendance Statement — {{month}} {{year}}",
@@ -170,8 +170,8 @@ function EmailConfigPage() {
   // ── Provider Configured Status ──
   const isSmtpConfigured = Boolean(
     form.smtpHost &&
-      form.smtpUsername &&
-      (form.smtpPassword?.trim() || settings?.hasSmtpPassword)
+    form.smtpUsername &&
+    (form.smtpPassword?.trim() || settings?.hasSmtpPassword)
   );
 
   const isResendConfigured = Boolean(

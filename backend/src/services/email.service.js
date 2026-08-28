@@ -30,7 +30,7 @@ class EmailService {
       resend_api_key: process.env.RESEND_API_KEY || '',
       resend_domain: 'notify.jntugvcev.edu.in',
       resend_tag: 'apfrs-monthly',
-      from_name: 'APFRS Reporting Cell',
+      from_name: 'Digital Monitoring Cell',
       from_email: config.smtp?.user || 'reports@jntugvcev.edu.in',
       reply_to: 'admin@apfrs.in',
       subject_template: 'Monthly Attendance Statement — {{month}} {{year}}',

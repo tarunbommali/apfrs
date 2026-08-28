@@ -11,10 +11,41 @@ test.describe('Attendance Dispatch & Status Recalculation Tests', async () => {
   // Setup: Connect to DB
   test.before(async () => {
     await db.connect();
+    // Insert mock users to satisfy foreign key constraints
+    await db.query(`
+      INSERT INTO users (id, email, name, department, role) VALUES
+      ('f-1', 'f1@example.com', 'Faculty 1', 'CIVIL', 'faculty'),
+      ('f-2', 'f2@example.com', 'Faculty 2', 'Math', 'faculty'),
+      ('f-4', 'f4@example.com', 'Faculty 4', 'IT', 'faculty')
+      ON DUPLICATE KEY UPDATE id = id
+    `);
+
+    // Insert mock sheet and faculty monthly attendance to satisfy report/retry logic
+    await db.query(`
+      INSERT INTO monthly_attendance_sheets (id, month, year, file_name, total_faculty, working_days)
+      VALUES ('test-sheet-1', 1, 2025, 'test.xlsx', 3, 24)
+      ON DUPLICATE KEY UPDATE id = id
+    `);
+
+    await db.query(`
+      INSERT INTO faculty_monthly_attendance (
+        id, sheet_id, faculty_id, cfms_id, name, email, department, designation,
+        job_status, gender, incharge, month, year, present_days, absent_days,
+        leave_days, half_days, late_days, holiday_days, total_working_days,
+        attendance_percentage, daily_records
+      ) VALUES 
+      ('fma-1', 'test-sheet-1', 'f-1', 'CFMS1', 'Faculty 1', 'f1@example.com', 'CIVIL', 'Assistant Professor', 'Regular', 'male', 'None', 1, 2025, 22, 2, 0, 0, 0, 4, 24, 91.67, '[]'),
+      ('fma-2', 'test-sheet-1', 'f-2', 'CFMS2', 'Faculty 2', 'f2@example.com', 'Math', 'Assistant Professor', 'Regular', 'male', 'None', 1, 2025, 22, 2, 0, 0, 0, 4, 24, 91.67, '[]'),
+      ('fma-4', 'test-sheet-1', 'f-4', 'CFMS4', 'Faculty 4', 'f4@example.com', 'IT', 'Assistant Professor', 'Regular', 'male', 'None', 1, 2025, 22, 2, 0, 0, 0, 4, 24, 91.67, '[]')
+      ON DUPLICATE KEY UPDATE id = id
+    `);
   });
 
   // Teardown: Close DB Connection
   test.after(async () => {
+    await db.query(`DELETE FROM faculty_monthly_attendance WHERE sheet_id = 'test-sheet-1'`);
+    await db.query(`DELETE FROM monthly_attendance_sheets WHERE id = 'test-sheet-1'`);
+    await db.query(`DELETE FROM users WHERE id IN ('f-1', 'f-2', 'f-4')`);
     await db.close();
   });
 

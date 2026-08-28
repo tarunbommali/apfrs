@@ -33,7 +33,7 @@ export function SenderSettings({ form, onFieldChange }: SenderSettingsProps) {
           <Label htmlFor="from-name">From name</Label>
           <Input
             id="from-name"
-            placeholder="APFRS Reporting Cell"
+            placeholder="Digital Monitoring Cell"
             value={form.fromName}
             onChange={(e) => onFieldChange("fromName", e.target.value)}
           />
@@ -55,7 +55,7 @@ export function SenderSettings({ form, onFieldChange }: SenderSettingsProps) {
           <Input
             id="reply-to"
             type="email"
-            placeholder="admin@apfrs.in"
+            placeholder="dmc@jntugv.edu.in"
             value={form.replyTo}
             onChange={(e) => onFieldChange("replyTo", e.target.value)}
           />
@@ -79,7 +79,7 @@ export function SenderSettings({ form, onFieldChange }: SenderSettingsProps) {
           <Textarea
             id="signature"
             rows={3}
-            placeholder="Regards,&#10;APFRS Reporting Cell&#10;JNTU-GV College of Engineering"
+            placeholder="Regards,&#10;Digital Monitoring Cell&#10;JNTU-GV College of Engineering"
             value={form.signature}
             onChange={(e) => onFieldChange("signature", e.target.value)}
           />

@@ -55,7 +55,7 @@ async function runTests() {
 
     // 6. Restore sandbox mode to false if desired, or keep as preferred
     await emailSettingsRepository.updateSettings({
-      fromName: 'APFRS Reporting Cell',
+      fromName: 'Digital Monitoring Cell',
       fromEmail: 'reports@jntugvcev.edu.in',
       sandboxMode: false,
     }, 'TestRunner');

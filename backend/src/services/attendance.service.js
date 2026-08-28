@@ -22,7 +22,7 @@ class AttendanceService {
          WHERE month = ? AND year = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 30 SECOND)`,
         [String(month), String(year)]
       );
-      
+
       for (const b of recentBatches) {
         const records = await db.query(
           `SELECT faculty_id FROM attendance_records WHERE batch_id = ?`,
@@ -92,7 +92,7 @@ class AttendanceService {
     }
 
     // Phase 5: one bulk IN-clause query instead of N sequential findByEmail/findByCfmsId calls
-    const emails  = attendanceData.map((r) => r.email).filter(Boolean);
+    const emails = attendanceData.map((r) => r.email).filter(Boolean);
     const cfmsIds = attendanceData.map((r) => r.employeeId).filter(Boolean);
     const facultyMap = await userRepository.findByEmailsOrCfmsIds(emails, cfmsIds);
 
@@ -101,11 +101,11 @@ class AttendanceService {
         facultyMap.get(record.email?.toLowerCase()) ||
         facultyMap.get(record.employeeId);
       return {
-        id:           faculty?.id || record.employeeId,
-        employeeId:   record.employeeId,
+        id: faculty?.id || record.employeeId,
+        employeeId: record.employeeId,
         employeeName: record.employeeName,
-        email:        record.email,
-        name:         faculty?.name || record.employeeName,
+        email: record.email,
+        name: faculty?.name || record.employeeName,
       };
     });
 
@@ -237,14 +237,14 @@ class AttendanceService {
         }) : `
           <p>Dear ${name},</p>
           <p>Please find attached your Attendance Performance Report for ${periodLabel}.</p>
-          <p>Regards,<br>APFRS Reporting Cell</p>
+          <p>Regards,<br>Digital Monitoring Cell</p>
         `;
 
         const plainText = reportData ? generateFacultyAttendanceEmailPlainText({
           report: reportData,
           monthName,
           disputeDeadline,
-        }) : `Dear ${name},\n\nPlease find attached your Attendance Performance Report for ${periodLabel}.\n\nRegards,\nAPFRS Reporting Cell`;
+        }) : `Dear ${name},\n\nPlease find attached your Attendance Performance Report for ${periodLabel}.\n\nRegards,\nDigital Monitoring Cell`;
 
         const emailOptions = {
           to: record.email || (reportData && reportData.employee?.email),
@@ -465,7 +465,7 @@ class AttendanceService {
   async getMonthlyAttendanceRecords(month = null, year = null) {
     let targetMonth = month;
     let targetYear = year;
-    
+
     let data;
     if (targetMonth && targetYear) {
       data = await monthlyAttendanceRepository.getMonthlyAttendance(targetMonth, targetYear);

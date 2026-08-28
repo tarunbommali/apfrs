@@ -23,7 +23,7 @@ export const persons = [
     designation: "Assistant Professor",
     department: "Math",
     mobile: "9704117814",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "female"
   },
   {
@@ -210,7 +210,7 @@ export const persons = [
     designation: "Professor",
     department: "CSE",
     mobile: "9618016556",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -221,7 +221,7 @@ export const persons = [
     designation: "Assistant Professor",
     department: "CSE",
     mobile: "9573064031",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -254,7 +254,7 @@ export const persons = [
     designation: "Assistant Professor",
     department: "ME",
     mobile: "9849965810",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -309,7 +309,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "CE",
     mobile: "9966513883",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -320,7 +320,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "ME",
     mobile: "8919533043",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -331,7 +331,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "EEE",
     mobile: "9553653769",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "female"
   },
   {
@@ -342,7 +342,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "ME",
     mobile: "6301824958",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -353,7 +353,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "CE",
     mobile: "8688160897",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -364,7 +364,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "MET",
     mobile: "7013580721",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -375,7 +375,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "ME",
     mobile: "9989948428",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -386,7 +386,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "MET",
     mobile: "9989843218",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -397,7 +397,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "MET",
     mobile: "8374722699",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -408,7 +408,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "CE",
     mobile: "9912991008",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -419,7 +419,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "EEE",
     mobile: "7386071025",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -430,7 +430,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "EEE",
     mobile: "9032475841",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -441,7 +441,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "CE",
     mobile: "9440311324",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -452,7 +452,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "EEE",
     mobile: "9989187658",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -463,7 +463,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "EEE",
     mobile: "8985628991",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "female"
   },
   {
@@ -474,7 +474,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "CSE",
     mobile: "8978252737",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -485,7 +485,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "BS&HSS",
     mobile: "9491627084",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "female"
   },
   {
@@ -496,7 +496,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "ECE",
     mobile: "9704434150",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -507,7 +507,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "ECE",
     mobile: "9490929487",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "female"
   },
   {
@@ -518,7 +518,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "ECE",
     mobile: "9492015152",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -529,7 +529,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "IT",
     mobile: "8008328669",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "female"
   },
   {
@@ -540,7 +540,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "CSE",
     mobile: "9494464632",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -551,7 +551,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "BS&HSS",
     mobile: "9441935979",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -562,7 +562,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "BS&HSS",
     mobile: "9652138849",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "female"
   },
   {
@@ -573,7 +573,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "IT",
     mobile: "9440882643",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -584,7 +584,7 @@ export const persons = [
     designation: "Asst.Prof.",
     department: "IT",
     mobile: "8333858288",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -595,7 +595,7 @@ export const persons = [
     designation: "Asst.Prof.",
     department: "ECE",
     mobile: "9703481843",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -606,7 +606,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "BS&HSS",
     mobile: "7036670025",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -617,7 +617,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "EEE",
     mobile: "9550045200",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -628,7 +628,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "IT",
     mobile: "8341499617",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "female"
   },
   {
@@ -639,7 +639,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "BS&HSS",
     mobile: "8464833549",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -650,7 +650,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "IT",
     mobile: "8897839888",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "female"
   },
   {
@@ -661,7 +661,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "ME",
     mobile: "8341066619",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -672,7 +672,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "MET",
     mobile: "9160139607",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "female"
   },
   {
@@ -683,7 +683,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "ECE",
     mobile: "9505005996",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "female"
   },
   {
@@ -694,7 +694,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "MET",
     mobile: "7095756558",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -705,7 +705,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "CSE",
     mobile: "9032996129",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -716,7 +716,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "CSE",
     mobile: "7702461522",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -727,7 +727,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "ECE",
     mobile: "9492015152",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -738,7 +738,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "MET",
     mobile: "8886449805",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -749,7 +749,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "EEE",
     mobile: "9989187658",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "female"
   },
   {
@@ -760,7 +760,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "IT",
     mobile: "9642248001",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "female"
   },
   {
@@ -771,7 +771,7 @@ export const persons = [
     designation: "Asst.Prof. (Contract)",
     department: "ECE",
     mobile: "9959667395",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "female"
   },
   {
@@ -826,7 +826,7 @@ export const persons = [
     designation: "Asst Professor",
     department: "EEE",
     mobile: "9441567983",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -837,7 +837,7 @@ export const persons = [
     designation: "Asst.Professor",
     department: "ME",
     mobile: "9052310110",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -848,7 +848,7 @@ export const persons = [
     designation: "Asst.Professor",
     department: "EEE",
     mobile: "8801100258",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -859,7 +859,7 @@ export const persons = [
     designation: "Asst.Professor",
     department: "BS&HSS",
     mobile: "9603891774",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -870,7 +870,7 @@ export const persons = [
     designation: "Asst.Professor",
     department: "MET",
     mobile: "9603891775",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "male"
   },
   {
@@ -881,85 +881,8 @@ export const persons = [
     designation: "Asst.Professor",
     department: "Maths",
     mobile: "9704117814",
-    job_status: "contract",
+    job_status: "Contract",
     gender: "female"
   }
 ];
 
-async function seedFaculty() {
-  await db.connect();
-  logger.info('🌱 Seeding complete faculty dataset with gender into MySQL...');
-
-  const facultyHash = await bcrypt.hash('faculty@123', 10);
-  const seenEmails = new Set();
-  const seenCfms = new Set();
-
-  let inserted = 0;
-
-  for (const person of persons) {
-    let email = (person.email || '').toLowerCase().trim();
-    if (!email) {
-      email = `faculty_${person.id}@jntugvcev.edu.in`;
-    }
-
-    // Skip true duplicates
-    if (seenEmails.has(email)) continue;
-    seenEmails.add(email);
-
-    let cfms = (person.cfms_id || '').trim();
-    if (cfms && seenCfms.has(cfms)) {
-      cfms = `${cfms}_${person.id}`;
-    }
-    if (cfms) seenCfms.add(cfms);
-
-    const name = person.name.trim();
-    const designation = person.designation.trim();
-    const department = person.department.trim() || 'General';
-    const mobile = (person.mobile || '').trim();
-    const gender = (person.gender || 'male').toLowerCase().trim();
-
-    // Strict normalization: 'Regular' or 'contract'
-    const rawStatus = (person.job_status || '').toLowerCase().trim();
-    const jobStatus = rawStatus === 'regular' ? 'Regular' : 'contract';
-
-    const userId = `fac-${person.id}`;
-
-    await db.query(`
-      INSERT INTO users (id, cfms_id, email, password_hash, name, designation, department, mobile, gender, job_status, role, is_active)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'faculty', 1)
-      ON DUPLICATE KEY UPDATE
-        cfms_id = VALUES(cfms_id),
-        name = VALUES(name),
-        designation = VALUES(designation),
-        department = VALUES(department),
-        mobile = VALUES(mobile),
-        gender = VALUES(gender),
-        job_status = VALUES(job_status),
-        password_hash = VALUES(password_hash),
-        is_active = 1
-    `, [
-      userId,
-      cfms || null,
-      email,
-      facultyHash,
-      name,
-      designation,
-      department,
-      mobile,
-      gender,
-      jobStatus
-    ]);
-
-    inserted += 1;
-  }
-
-  logger.info(`✅ Successfully registered/updated ${inserted} faculty members with gender in MySQL.`);
-  await db.close();
-}
-
-if (process.argv[1] && process.argv[1].includes('seed-faculty-dataset.js')) {
-  seedFaculty().catch((err) => {
-    console.error('Faculty seed failed:', err);
-    process.exit(1);
-  });
-}
