@@ -1,50 +1,29 @@
+// frontend/src/routes/calendar.tsx
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  Pencil,
-  Plus,
-  Trash2,
-  Briefcase,
-  Calendar,
-  CheckCircle2,
-  Loader2,
-  AlertCircle,
-} from "lucide-react";
+import { Plus, Pencil } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useAuth } from "@/lib/auth";
 import {
   calendarQuery,
   useAddHoliday,
   useUpdateHoliday,
   useDeleteHoliday,
-  facultyListQuery,
   type CalendarHoliday,
 } from "@/lib/queries";
 import { toast } from "sonner";
 import { MONTH_NAMES } from "@/lib/constants";
-import { useMonthYearSelector, getYearRange } from "@/hooks/useMonthYearSelector";
+import { useMonthYearSelector } from "@/hooks/useMonthYearSelector";
+
+// Import split components
+import { CalendarNavigation } from "./-calendar/CalendarNavigation";
+import { CalendarGrid } from "./-calendar/CalendarGrid";
+import { MetricsCards } from "./-calendar/MetricsCards";
+import { HolidayList } from "./-calendar/HolidayList";
+import { HolidayFormDialog } from "./-calendar/HolidayFormDialog";
+import { DeleteConfirmationDialog } from "./-calendar/DeleteConfirmationDialog";
 
 export const Route = createFileRoute("/calendar")({
   head: () => ({
@@ -60,31 +39,8 @@ export const Route = createFileRoute("/calendar")({
   component: AcademicCalendarPage,
 });
 
-const MONTH_SHORT = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
-const HOLIDAY_TYPES = [
-  "Public holiday",
-  "Institutional",
-  "Academic",
-  "Vacation",
-] as const;
-
-type HolidayType = (typeof HOLIDAY_TYPES)[number];
-
-const typeBadgeStyles: Record<string, string> = {
-  "Public holiday": "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20",
-  Institutional: "bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/20",
-  Academic: "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20",
-  Vacation: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20",
-};
-
 /** Builds the 7-column calendar day grid (Monday-Sunday aligned) */
 function buildCalendarGrid(year: number, month: number) {
-  // Day of week for 1st of month: 0=Sun, 1=Mon, ..., 6=Sat
-  // Offset to start on Monday: Mon=0, Tue=1, ..., Sun=6
   const firstDay = new Date(year, month - 1, 1);
   const startDayOffset = (firstDay.getDay() + 6) % 7;
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -253,6 +209,15 @@ function AcademicCalendarPage() {
     }
   };
 
+  const handleDayClick = (dayNum: number, holiday: CalendarHoliday | undefined) => {
+    if (!isAdmin) return;
+    if (holiday) {
+      handleOpenEditHoliday(holiday);
+    } else {
+      handleOpenAddHoliday(dayNum);
+    }
+  };
+
   return (
     <AppShell
       roles={["admin", "faculty"]}
@@ -260,14 +225,12 @@ function AcademicCalendarPage() {
       subtitle={`${monthName} ${selectedYear} · Working days and holidays synchronization`}
       actions={
         <div className="flex flex-wrap items-center gap-2">
-          {/* Add Holiday Button */}
           {isAdmin && (
             <Button size="sm" onClick={() => handleOpenAddHoliday()} className="gap-1.5">
               <Plus className="size-4" /> Add holiday
             </Button>
           )}
 
-          {/* Edit Calendar (Link to Bulk Edit) */}
           {isAdmin && (
             <Button asChild size="sm" variant="outline">
               <Link to="/edit/calendar">
@@ -282,189 +245,36 @@ function AcademicCalendarPage() {
         {/* ── Left Column: Calendar Navigation & Month Grid ── */}
         <div className="space-y-4">
           <section className="surface-panel p-5">
-            {/* Top Month / Year Selector Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
-              <div className="flex items-center gap-1.5">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="size-8"
-                  onClick={handlePrevMonth}
-                  title="Previous month"
-                >
-                  <ChevronLeft className="size-4" />
-                </Button>
+            <CalendarNavigation
+              selectedMonth={selectedMonth}
+              selectedYear={selectedYear}
+              onPrevMonth={handlePrevMonth}
+              onNextMonth={handleNextMonth}
+              onMonthChange={setSelectedMonth}
+              onYearChange={setSelectedYear}
+              holidayCount={holidays.length}
+            />
 
-                {/* Month Dropdown */}
-                <Select
-                  value={String(selectedMonth)}
-                  onValueChange={(val) => setSelectedMonth(Number(val))}
-                >
-                  <SelectTrigger className="h-8 w-36 font-semibold">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MONTH_NAMES.map((m, idx) => (
-                      <SelectItem key={m} value={String(idx + 1)}>
-                        {m}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                {/* Year Dropdown */}
-                <Select
-                  value={String(selectedYear)}
-                  onValueChange={(val) => setSelectedYear(Number(val))}
-                >
-                  <SelectTrigger className="h-8 w-24 font-mono font-semibold">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {getYearRange(5, 2).map((y) => (
-                      <SelectItem key={String(y)} value={String(y)}>
-                        {y}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="size-8"
-                  onClick={handleNextMonth}
-                  title="Next month"
-                >
-                  <ChevronRight className="size-4" />
-                </Button>
-              </div>
-
-              {/* Sync / Verification Status Badge: only verified when holidays are mapped */}
-              {holidays.length > 0 ? (
-                <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                  <CheckCircle2 className="size-3.5" />
-                  <span>Verified ({holidays.length} {holidays.length === 1 ? "holiday" : "holidays"}) ✓</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
-                  <AlertCircle className="size-3.5" />
-                  <span>No holidays mapped</span>
-                </div>
-              )}
-            </div>
-
-            {/* Calendar Day Grid (MON - SUN) */}
-            <div className="mt-4">
-              <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-muted-foreground mb-2">
-                {["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"].map((d, i) => (
-                  <div
-                    key={d}
-                    className={`py-1.5 ${i === 6 ? "text-rose-500/80 font-bold" : ""}`}
-                  >
-                    {d}
-                  </div>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-7 gap-1.5">
-                {cells.map((dayNum, idx) => {
-                  if (dayNum === null) {
-                    return (
-                      <div
-                        key={`empty-${idx}`}
-                        className="h-20 rounded-lg border border-transparent bg-muted/10 opacity-40"
-                      />
-                    );
-                  }
-
-                  const dayPad = String(dayNum).padStart(2, "0");
-                  const mPad = String(selectedMonth).padStart(2, "0");
-                  const dateStr = `${selectedYear}-${mPad}-${dayPad}`;
-
-                  const dayOfWeek = (idx % 7); // 0=Mon, 5=Sat, 6=Sun
-                  const isSunday = dayOfWeek === 6;
-                  const isSaturday = dayOfWeek === 5;
-                  const holiday = holidayByDate.get(dateStr);
-
-                  return (
-                    <div
-                      key={dateStr}
-                      onClick={() => {
-                        if (isAdmin) {
-                          if (holiday) handleOpenEditHoliday(holiday);
-                          else handleOpenAddHoliday(dayNum);
-                        }
-                      }}
-                      className={`group relative flex flex-col justify-between rounded-lg border p-2 h-20 text-xs transition-all ${
-                        holiday
-                          ? `border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300 font-semibold ${
-                              isAdmin ? "cursor-pointer hover:border-rose-500" : ""
-                            }`
-                          : isSunday
-                          ? "border-border/60 bg-muted/40 text-muted-foreground/70"
-                          : isSaturday
-                          ? `border-border bg-card/60 ${isAdmin ? "hover:border-primary/40 cursor-pointer" : ""}`
-                          : `border-border bg-card ${isAdmin ? "hover:border-primary/50 cursor-pointer" : ""}`
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className={`font-mono text-xs ${holiday ? "font-bold text-rose-600 dark:text-rose-400" : isSunday ? "text-muted-foreground" : "font-medium text-foreground"}`}>
-                          {dayNum}
-                        </span>
-
-                        {isSunday && (
-                          <span className="text-[9px] font-mono text-muted-foreground/60">Sun</span>
-                        )}
-
-                        {isAdmin && (
-                          <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-primary">
-                            {holiday ? "Edit" : "+"}
-                          </span>
-                        )}
-                      </div>
-
-                      {holiday && (
-                        <div className="mt-1 truncate rounded bg-rose-500/20 px-1 py-0.5 text-[10px] font-semibold leading-tight text-rose-700 dark:text-rose-300">
-                          {holiday.name || holiday.label}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <CalendarGrid
+              year={selectedYear}
+              month={selectedMonth}
+              cells={cells}
+              holidayByDate={holidayByDate}
+              isAdmin={isAdmin}
+              onDayClick={handleDayClick}
+            />
           </section>
         </div>
 
         {/* ── Right Column: Metrics & Holiday List ── */}
         <div className="space-y-6">
-          {/* Summary Stat Cards */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="surface-panel p-4 flex flex-col justify-between">
-              <div className="flex items-center justify-between text-muted-foreground">
-                <span className="text-xs font-semibold uppercase tracking-wider">Working Days</span>
-                <Briefcase className="size-4 text-amber-500" />
-              </div>
-              <div className="mt-3">
-                <span className="text-3xl font-bold font-mono text-foreground">{workingDays}</span>
-                <p className="text-[11px] text-muted-foreground mt-0.5">Active attendance days</p>
-              </div>
-            </div>
+          <MetricsCards
+            workingDays={workingDays}
+            totalDays={totalDays}
+            monthName={monthName}
+            year={selectedYear}
+          />
 
-            <div className="surface-panel p-4 flex flex-col justify-between">
-              <div className="flex items-center justify-between text-muted-foreground">
-                <span className="text-xs font-semibold uppercase tracking-wider">Total Days</span>
-                <Calendar className="size-4 text-primary" />
-              </div>
-              <div className="mt-3">
-                <span className="text-3xl font-bold font-mono text-foreground">{totalDays}</span>
-                <p className="text-[11px] text-muted-foreground mt-0.5">{monthName} {selectedYear}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Holiday List for Selected Month */}
           <section className="surface-panel p-5 space-y-4">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <div>
@@ -478,205 +288,45 @@ function AcademicCalendarPage() {
               </span>
             </div>
 
-            {isCalendarLoading ? (
-              <div className="flex items-center justify-center py-8 text-muted-foreground text-xs gap-2">
-                <Loader2 className="size-4 animate-spin text-primary" /> Loading holidays…
-              </div>
-            ) : holidays.length > 0 ? (
-              <ul className="divide-y divide-border">
-                {holidays.map((h) => {
-                  const parts = h.date.split("-");
-                  const day = parts[2] ? parseInt(parts[2], 10) : "";
-                  const mIdx = parts[1] ? parseInt(parts[1], 10) - 1 : 0;
-                  const dateFormatted = `${day} ${MONTH_SHORT[mIdx] || ""} ${parts[0] || ""}`;
-
-                  return (
-                    <li key={h.id || h.date} className="py-3 flex items-center justify-between gap-3 group">
-                      <div className="min-w-0 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs font-bold text-foreground">
-                            {dateFormatted}
-                          </span>
-                          <span
-                            className={`rounded px-1.5 py-0.2 text-[10px] font-medium ${
-                              typeBadgeStyles[h.type || "Public holiday"] || "bg-muted text-muted-foreground"
-                            }`}
-                          >
-                            {h.type || "Public holiday"}
-                          </span>
-                        </div>
-                        <p className="text-sm font-medium text-foreground truncate">
-                          {h.name || h.label}
-                        </p>
-                      </div>
-
-                      {isAdmin && (
-                        <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7 text-muted-foreground hover:text-foreground"
-                            onClick={() => handleOpenEditHoliday(h)}
-                            title="Edit holiday"
-                          >
-                            <Pencil className="size-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7 text-destructive/80 hover:text-destructive hover:bg-destructive/10"
-                            onClick={() => handleOpenDelete(h)}
-                            title="Delete holiday"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <div className="py-8 text-center space-y-2">
-                <CalendarDays className="mx-auto size-8 text-muted-foreground/40" />
-                <p className="text-xs text-muted-foreground">No holidays scheduled for {monthName} {selectedYear}.</p>
-                {isAdmin && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleOpenAddHoliday()}
-                    className="mt-2 text-xs"
-                  >
-                    <Plus className="mr-1 size-3" /> Add a holiday
-                  </Button>
-                )}
-              </div>
-            )}
+            <HolidayList
+              holidays={holidays}
+              isLoading={isCalendarLoading}
+              monthName={monthName}
+              year={selectedYear}
+              isAdmin={isAdmin}
+              onEdit={handleOpenEditHoliday}
+              onDelete={handleOpenDelete}
+              onAdd={() => handleOpenAddHoliday()}
+            />
           </section>
         </div>
       </div>
 
       {/* ── Dialog: Add / Edit Holiday ── */}
-      <Dialog open={holidayModalOpen} onOpenChange={setHolidayModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <form onSubmit={handleSaveHoliday}>
-            <DialogHeader>
-              <DialogTitle>
-                {editingHoliday ? "Edit Holiday" : "Add Holiday"}
-              </DialogTitle>
-              <DialogDescription>
-                Configure official academic calendar holidays for attendance calculations.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="holiday-date">Holiday Date</Label>
-                <Input
-                  id="holiday-date"
-                  type="date"
-                  required
-                  value={formDate}
-                  onChange={(e) => setFormDate(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="holiday-name">Holiday Name / Description</Label>
-                <Input
-                  id="holiday-name"
-                  type="text"
-                  placeholder="e.g. Independence Day, Pongal, Mid-term exam"
-                  required
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="holiday-type">Holiday Type</Label>
-                <Select value={formType} onValueChange={setFormType}>
-                  <SelectTrigger id="holiday-type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {HOLIDAY_TYPES.map((t) => (
-                      <SelectItem key={t} value={t}>
-                        {t}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setHolidayModalOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={addHolidayMutation.isPending || updateHolidayMutation.isPending}
-              >
-                {addHolidayMutation.isPending || updateHolidayMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-1.5 size-4 animate-spin" /> Saving…
-                  </>
-                ) : editingHoliday ? (
-                  "Update Holiday"
-                ) : (
-                  "Add Holiday"
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <HolidayFormDialog
+        open={holidayModalOpen}
+        onOpenChange={setHolidayModalOpen}
+        editingHoliday={editingHoliday}
+        formData={{ date: formDate, name: formName, type: formType }}
+        onFormChange={(data) => {
+          if (data.date !== undefined) setFormDate(data.date);
+          if (data.name !== undefined) setFormName(data.name);
+          if (data.type !== undefined) setFormType(data.type);
+        }}
+        onSubmit={handleSaveHoliday}
+        isPending={addHolidayMutation.isPending || updateHolidayMutation.isPending}
+      />
 
       {/* ── Dialog: Delete Confirmation ── */}
-      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <AlertCircle className="size-5" /> Delete Holiday
-            </DialogTitle>
-            <DialogDescription>
-              Are you sure you want to remove{" "}
-              <strong className="text-foreground">
-                "{deletingHoliday?.name || deletingHoliday?.label}"
-              </strong>{" "}
-              ({deletingHoliday?.date}) from the academic calendar?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setDeleteModalOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={deleteHolidayMutation.isPending}
-              onClick={handleConfirmDelete}
-            >
-              {deleteHolidayMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-1.5 size-4 animate-spin" /> Deleting…
-                </>
-              ) : (
-                "Delete Holiday"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DeleteConfirmationDialog
+        open={deleteModalOpen}
+        onOpenChange={setDeleteModalOpen}
+        holiday={deletingHoliday}
+        onConfirm={handleConfirmDelete}
+        isPending={deleteHolidayMutation.isPending}
+      />
     </AppShell>
   );
 }
+
+export default AcademicCalendarPage;
