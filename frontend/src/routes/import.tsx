@@ -320,24 +320,36 @@ function ImportPage() {
 
     try {
       // 1. Seed & persist into MySQL database (auto-syncs with CFMS IDs and academic calendar)
-      await importAttendance.mutateAsync({
+      const res = await importAttendance.mutateAsync({
         records: parsedRecords,
         month: monthNum,
         year: yearNum,
         fileName: fileName || `attendance-${yearNum}-${monthNum}.xlsx`,
       });
 
-      // 2. Update client context store
+      // 2. Update client context store using the database-seeded records returned by backend
+      const savedRecords = res.data?.records || [];
       setAttendanceData(
-        parsedRecords,
+        savedRecords.map((r: any) => ({
+          ...r,
+          cfmsId: r.cfmsId || r.cfms_id || "",
+          jobStatus: r.jobStatus || r.job_status || "Regular",
+        })),
         monthNum,
         yearNum,
         fileName
       );
 
-      toast.success(
-        `Successfully synced ${parsedRecords.length} records into database for ${MONTHS[monthNum - 1]} ${yearNum}`
-      );
+      if (res.warnings && res.warnings.length > 0) {
+        toast.warning(
+          `Synced ${savedRecords.length} records. Skipped ${res.warnings.length} unregistered CFMS IDs: ${res.warnings.join(", ")}`,
+          { duration: 8000 }
+        );
+      } else {
+        toast.success(
+          `Successfully synced ${savedRecords.length} records into database for ${MONTHS[monthNum - 1]} ${yearNum}`
+        );
+      }
       void navigate({ to: "/reports" });
     } catch (err) {
       toast.error(
