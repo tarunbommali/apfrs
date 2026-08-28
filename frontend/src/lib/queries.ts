@@ -252,6 +252,17 @@ export const facultyAttendanceQuery = () =>
     queryFn: () => apiFetch<{ attendance: unknown[] }>("/api/faculty/attendance"),
   });
 
+export const facultyMonthlyAttendanceQuery = (month?: string, year?: string) => {
+  const params = new URLSearchParams();
+  if (month) params.append("month", month);
+  if (year) params.append("year", year);
+  const qStr = params.toString() ? `?${params.toString()}` : "";
+  return queryOptions({
+    queryKey: ["faculty", "attendance", "monthly", month, year],
+    queryFn: () => apiFetch<{ attendance: any[]; monthlyRecords: any }>("/api/faculty/attendance" + qStr),
+  });
+};
+
 export const facultyDepartmentQuery = () =>
   queryOptions({
     queryKey: ["faculty", "department"],

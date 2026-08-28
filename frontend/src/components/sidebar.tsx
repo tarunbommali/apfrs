@@ -61,6 +61,7 @@ const navItems: NavItem[] = [
 
   // FACULTY ROLE
   { to: "/faculty-profile", label: "My Profile", icon: User, roles: ["faculty"], section: "main" },
+  { to: "/my-attendance", label: "My Attendance", icon: BarChart3, roles: ["faculty"], section: "main" },
 ];
 
 export function Sidebar() {
@@ -383,11 +384,18 @@ export function Sidebar() {
               <DropdownMenuSeparator className="bg-sidebar-border" />
 
               {role === "faculty" && (
-                <DropdownMenuItem asChild className="hover:bg-sidebar-accent text-xs cursor-pointer">
-                  <Link to="/faculty-profile" className="flex items-center gap-2">
-                    <User className="size-3.5" /> My Profile
-                  </Link>
-                </DropdownMenuItem>
+                <>
+                  <DropdownMenuItem asChild className="hover:bg-sidebar-accent text-xs cursor-pointer">
+                    <Link to="/faculty-profile" className="flex items-center gap-2">
+                      <User className="size-3.5" /> My Profile
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild className="hover:bg-sidebar-accent text-xs cursor-pointer">
+                    <Link to="/my-attendance" className="flex items-center gap-2">
+                      <BarChart3 className="size-3.5" /> My Attendance
+                    </Link>
+                  </DropdownMenuItem>
+                </>
               )}
 
               <DropdownMenuItem asChild className="hover:bg-sidebar-accent text-xs cursor-pointer">

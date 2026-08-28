@@ -19,6 +19,7 @@ import { Route as EmailConfigRouteImport } from './routes/email-config'
 import { Route as FacultyProfileRouteImport } from './routes/faculty-profile'
 import { Route as ImportRouteImport } from './routes/import'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as MyAttendanceRouteImport } from './routes/my-attendance'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as StatusDashboardRouteImport } from './routes/status-dashboard'
 import { Route as EditCalendarRouteImport } from './routes/edit.calendar'
@@ -76,6 +77,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MyAttendanceRoute = MyAttendanceRouteImport.update({
+  id: '/my-attendance',
+  path: '/my-attendance',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ReportsRoute = ReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
@@ -118,6 +124,7 @@ export interface FileRoutesByFullPath {
   '/faculty-profile': typeof FacultyProfileRoute
   '/import': typeof ImportRoute
   '/login': typeof LoginRoute
+  '/my-attendance': typeof MyAttendanceRoute
   '/reports': typeof ReportsRouteWithChildren
   '/status-dashboard': typeof StatusDashboardRoute
   '/edit/calendar': typeof EditCalendarRoute
@@ -136,6 +143,7 @@ export interface FileRoutesByTo {
   '/faculty-profile': typeof FacultyProfileRoute
   '/import': typeof ImportRoute
   '/login': typeof LoginRoute
+  '/my-attendance': typeof MyAttendanceRoute
   '/reports': typeof ReportsRouteWithChildren
   '/status-dashboard': typeof StatusDashboardRoute
   '/edit/calendar': typeof EditCalendarRoute
@@ -155,6 +163,7 @@ export interface FileRoutesById {
   '/faculty-profile': typeof FacultyProfileRoute
   '/import': typeof ImportRoute
   '/login': typeof LoginRoute
+  '/my-attendance': typeof MyAttendanceRoute
   '/reports': typeof ReportsRouteWithChildren
   '/status-dashboard': typeof StatusDashboardRoute
   '/edit/calendar': typeof EditCalendarRoute
@@ -175,6 +184,7 @@ export interface FileRouteTypes {
     | '/faculty-profile'
     | '/import'
     | '/login'
+    | '/my-attendance'
     | '/reports'
     | '/status-dashboard'
     | '/edit/calendar'
@@ -193,6 +203,7 @@ export interface FileRouteTypes {
     | '/faculty-profile'
     | '/import'
     | '/login'
+    | '/my-attendance'
     | '/reports'
     | '/status-dashboard'
     | '/edit/calendar'
@@ -211,6 +222,7 @@ export interface FileRouteTypes {
     | '/faculty-profile'
     | '/import'
     | '/login'
+    | '/my-attendance'
     | '/reports'
     | '/status-dashboard'
     | '/edit/calendar'
@@ -230,6 +242,7 @@ export interface RootRouteChildren {
   FacultyProfileRoute: typeof FacultyProfileRoute
   ImportRoute: typeof ImportRoute
   LoginRoute: typeof LoginRoute
+  MyAttendanceRoute: typeof MyAttendanceRoute
   ReportsRoute: typeof ReportsRouteWithChildren
   StatusDashboardRoute: typeof StatusDashboardRoute
   EditCalendarRoute: typeof EditCalendarRoute
@@ -309,6 +322,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/my-attendance': {
+      id: '/my-attendance'
+      path: '/my-attendance'
+      fullPath: '/my-attendance'
+      preLoaderRoute: typeof MyAttendanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reports': {
       id: '/reports'
       path: '/reports'
@@ -376,6 +396,7 @@ const rootRouteChildren: RootRouteChildren = {
   FacultyProfileRoute: FacultyProfileRoute,
   ImportRoute: ImportRoute,
   LoginRoute: LoginRoute,
+  MyAttendanceRoute: MyAttendanceRoute,
   ReportsRoute: ReportsRouteWithChildren,
   StatusDashboardRoute: StatusDashboardRoute,
   EditCalendarRoute: EditCalendarRoute,
