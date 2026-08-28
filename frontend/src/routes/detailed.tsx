@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   UploadCloud,
@@ -32,6 +32,18 @@ import {
   departmentsQuery,
 } from "@/lib/queries";
 import { toast } from "sonner";
+import { MONTH_NAMES } from "@/lib/constants";
+import { useMonthYearSelector } from "@/hooks/useMonthYearSelector";
+import {
+  getAttendancePct,
+  tierTextClassFromPct,
+  getPresentDays,
+  getAbsentDays,
+  getLeaveDays,
+  getWorkingDays,
+  getJobStatus,
+} from "@/lib/attendance-utils";
+import { exportAttendanceExcel } from "@/lib/export/exportAttendanceExcel";
 
 export const Route = createFileRoute("/detailed")({
   head: () => ({
@@ -45,11 +57,6 @@ export const Route = createFileRoute("/detailed")({
   }),
   component: AttendancePage,
 });
-
-const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
 
 const cellStyle: Record<string, string> = {
   P: "bg-[var(--status-present-bg)] text-[var(--status-present-fg)] font-bold",
@@ -67,8 +74,15 @@ function AttendancePage() {
   const defaultMonth = availableMonths[0]?.month || 1;
   const defaultYear = availableMonths[0]?.year || 2025;
 
-  const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
-  const [selectedYear, setSelectedYear] = useState(defaultYear);
+  const { month: selectedMonth, year: selectedYear, setMonth: setSelectedMonth, setYear: setSelectedYear } =
+    useMonthYearSelector(defaultMonth, defaultYear);
+
+  useEffect(() => {
+    if (availableMonths.length > 0) {
+      setSelectedMonth(availableMonths[0].month);
+      setSelectedYear(availableMonths[0].year);
+    }
+  }, [availableMonths, setSelectedMonth, setSelectedYear]);
 
   // Tab State: "summary" | "daily"
   const [viewMode, setViewMode] = useState<"summary" | "daily">("summary");
@@ -111,10 +125,11 @@ function AttendancePage() {
 
       const rDept = (r.department || "Uncategorized").toLowerCase();
       const matchDept = selectedDept === "all" || rDept === selectedDept.toLowerCase();
+      const cadre = getJobStatus(r).toLowerCase();
       const matchCadre =
         selectedCadre === "all" ||
-        (selectedCadre === "regular" && (r.jobStatus || r.job_status || "").toLowerCase() === "regular") ||
-        (selectedCadre === "contract" && (r.jobStatus || r.job_status || "").toLowerCase().includes("contract"));
+        (selectedCadre === "regular" && cadre === "regular") ||
+        (selectedCadre === "contract" && cadre.includes("contract"));
 
       return matchSearch && matchDept && matchCadre;
     });
@@ -134,76 +149,19 @@ function AttendancePage() {
   const totalFaculty = records.length;
   const avgAttendance = useMemo(() => {
     if (!records.length) return 0;
-    const sum = records.reduce((acc: number, r: any) => acc + (parseFloat(r.attendancePercentage || r.percentage || 0) || 0), 0);
+    const sum = records.reduce((acc: number, r: any) => acc + getAttendancePct(r), 0);
     return Math.round((sum / records.length) * 10) / 10;
   }, [records]);
 
-  const handleExportExcel = async () => {
-    if (!filteredRecords.length) {
-      toast.error("No records to export.");
-      return;
-    }
-    try {
-      const XLSX = await import("xlsx");
-      let rows: any[];
-
-      if (viewMode === "daily") {
-        rows = filteredRecords.map((r: any, idx: number) => {
-          const daily = Array.isArray(r.attendance)
-            ? r.attendance
-            : Array.isArray(r.dailyRecords)
-            ? r.dailyRecords
-            : Array.isArray(r.daily_records)
-            ? r.daily_records
-            : [];
-
-          const rowObj: Record<string, any> = {
-            "S.No": idx + 1,
-            "CFMS ID": r.cfmsId || r.cfms_id || "",
-            "Faculty Name": r.name || "",
-            "Department": r.department || "",
-            "Designation": r.designation || "",
-            "Cadre": r.jobStatus || r.job_status || "Regular",
-          };
-
-          dayNumbers.forEach((dayNum) => {
-            const dayPad = String(dayNum).padStart(2, "0");
-            const rec = daily[dayNum - 1] || daily.find((d: any) => String(d?.date).endsWith(`-${dayPad}`));
-            rowObj[`Day ${dayNum}`] = rec?.status || "—";
-          });
-
-          rowObj["Present"] = r.presentDays || r.present_days || 0;
-          rowObj["Absent"] = r.absentDays || r.absent_days || 0;
-          rowObj["Leaves"] = r.leaveDays || r.leave_days || 0;
-          rowObj["Working Days"] = r.totalWorkingDays || r.total_working_days || workingDays;
-          rowObj["Attendance %"] = `${r.attendancePercentage || r.percentage || 0}%`;
-
-          return rowObj;
-        });
-      } else {
-        rows = filteredRecords.map((r: any, idx: number) => ({
-          "S.No": idx + 1,
-          "CFMS ID": r.cfmsId || r.cfms_id || "",
-          "Faculty Name": r.name || "",
-          "Department": r.department || "",
-          "Designation": r.designation || "",
-          "Cadre": r.jobStatus || r.job_status || "Regular",
-          "Present": r.presentDays || r.present_days || 0,
-          "Absent": r.absentDays || r.absent_days || 0,
-          "Leaves": r.leaveDays || r.leave_days || 0,
-          "Working Days": r.totalWorkingDays || r.total_working_days || workingDays,
-          "Attendance %": `${r.attendancePercentage || r.percentage || 0}%`,
-        }));
-      }
-
-      const ws = XLSX.utils.json_to_sheet(rows);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, `${viewMode === "daily" ? "Daily" : "Summary"}_${monthName}_${selectedYear}`);
-      XLSX.writeFile(wb, `Attendance_${viewMode === "daily" ? "Daily" : "Summary"}_${monthName}_${selectedYear}.xlsx`);
-      toast.success(`Exported ${filteredRecords.length} records to Excel.`);
-    } catch (e) {
-      toast.error("Export failed: " + String(e));
-    }
+  const handleExportExcel = () => {
+    exportAttendanceExcel(
+      filteredRecords,
+      selectedMonth,
+      selectedYear,
+      viewMode === "daily" ? { dayNumbers, fallbackWorkingDays: workingDays } : { fallbackWorkingDays: workingDays }
+    )
+      .then((count) => toast.success(`Exported ${count} records to Excel.`))
+      .catch((e) => toast.error("Export failed: " + String(e.message ?? e)));
   };
 
   if (availableMonths.length === 0 && !monthsLoading) {
@@ -424,9 +382,9 @@ function AttendancePage() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {filteredRecords.map((r: any, idx: number) => {
-                    const pct = parseFloat(r.attendancePercentage || r.percentage || 0);
+                    const pct = getAttendancePct(r);
                     const isLow = pct < 75;
-                    const isRegular = (r.jobStatus || r.job_status || "").toLowerCase() === "regular";
+                    const isRegular = getJobStatus(r).toLowerCase() === "regular";
 
                     return (
                       <tr key={r.id || r.cfmsId || idx} className="hover:bg-muted/20 transition-colors">
@@ -446,20 +404,20 @@ function AttendancePage() {
                                 : "bg-[var(--badge-muted-bg)] text-[var(--badge-muted-fg)] border-[rgba(255,255,255,0.08)]"
                             }`}
                           >
-                            {r.jobStatus || r.job_status || "Regular"}
+                            {getJobStatus(r)}
                           </span>
                         </td>
                         <td className="py-3 px-3 text-center font-mono font-bold text-[var(--status-present-fg)]">
-                          {r.presentDays || r.present_days || 0}
+                          {getPresentDays(r)}
                         </td>
                         <td className="py-3 px-3 text-center font-mono font-bold text-[var(--status-absent-fg)]">
-                          {r.absentDays || r.absent_days || 0}
+                          {getAbsentDays(r)}
                         </td>
                         <td className="py-3 px-3 text-center font-mono font-medium text-[var(--status-leave-fg)]">
-                          {r.leaveDays || r.leave_days || 0}
+                          {getLeaveDays(r)}
                         </td>
                         <td className="py-3 px-3 text-center font-mono text-muted-foreground">
-                          {r.totalWorkingDays || r.total_working_days || workingDays}
+                          {getWorkingDays(r, workingDays)}
                         </td>
                         <td className="py-3 px-4 text-right">
                           <span
@@ -508,7 +466,7 @@ function AttendancePage() {
                       ? r.daily_records
                       : [];
 
-                    const pct = parseFloat(r.attendancePercentage || r.percentage || 0);
+                    const pct = getAttendancePct(r);
 
                     return (
                       <tr key={r.id || r.cfmsId || idx} className="hover:bg-muted/20 transition-colors">
@@ -518,7 +476,7 @@ function AttendancePage() {
                         <td className="py-2.5 px-4 sticky left-10 bg-card z-10 border-r border-border">
                           <div className="font-semibold text-foreground truncate">{r.name}</div>
                           <div className="text-[10px] text-muted-foreground truncate">
-                            {r.department} · {r.jobStatus || r.job_status || "Regular"}
+                            {r.department} · {getJobStatus(r)}
                           </div>
                         </td>
 
@@ -538,13 +496,13 @@ function AttendancePage() {
                         })}
 
                         <td className="py-2.5 px-3 text-center font-mono font-bold text-[var(--status-present-fg)] border-l border-border bg-card sticky right-16">
-                          {r.presentDays || r.present_days || 0}
+                          {getPresentDays(r)}
                         </td>
                         <td className="py-2.5 px-3 text-center font-mono font-bold text-[var(--status-absent-fg)] bg-card sticky right-8">
-                          {r.absentDays || r.absent_days || 0}
+                          {getAbsentDays(r)}
                         </td>
                         <td className="py-2.5 px-3 text-right font-mono font-bold bg-card sticky right-0">
-                          <span className={pct < 75 ? "text-[var(--status-absent-fg)]" : "text-[var(--status-present-fg)]"}>
+                          <span className={tierTextClassFromPct(pct)}>
                             {pct}%
                           </span>
                         </td>

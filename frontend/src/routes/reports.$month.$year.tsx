@@ -31,8 +31,10 @@ import {
   monthlyAttendanceQuery,
   attendanceMonthsQuery,
 } from "@/lib/queries";
-import { exportToExcelWorkbook } from "@/lib/attendance-helpers";
 import { toast } from "sonner";
+import { MONTH_NAMES } from "@/lib/constants";
+import { getAttendancePct, tierTextClassFromPct } from "@/lib/attendance-utils";
+import { exportAttendanceExcel } from "@/lib/export/exportAttendanceExcel";
 
 export const Route = createFileRoute("/reports/$month/$year")({
   head: ({ params }) => ({
@@ -46,11 +48,6 @@ export const Route = createFileRoute("/reports/$month/$year")({
   }),
   component: MonthReportRoute,
 });
-
-const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
 
 const MONTH_ALIASES = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 
@@ -120,9 +117,9 @@ function MonthReportPage({ month, year }: { month: number; year: number }) {
 
     return Array.from(map.entries()).map(([dept, list]) => {
       const total = list.length;
-      const totalPct = list.reduce((sum: number, r: any) => sum + (parseFloat(r.attendancePercentage || r.percentage || "0")), 0);
+      const totalPct = list.reduce((sum: number, r: any) => sum + getAttendancePct(r), 0);
       const avgPct = total > 0 ? Math.round((totalPct / total) * 10) / 10 : 0;
-      const regularCount = list.filter((r: any) => (r.jobStatus || r.job_status || "").toLowerCase() === "regular").length;
+      const regularCount = list.filter((r: any) => getJobStatus(r).toLowerCase() === "regular").length;
       const contractCount = total - regularCount;
 
       return {
@@ -147,10 +144,11 @@ function MonthReportPage({ month, year }: { month: number; year: number }) {
         (r.department && r.department.toLowerCase().includes(search.toLowerCase()));
 
       const matchDept = selectedDept === "all" || r.department === selectedDept;
+      const cadre = getJobStatus(r).toLowerCase();
       const matchCadre =
         selectedCadre === "all" ||
-        (selectedCadre === "regular" && (r.jobStatus || r.job_status || "").toLowerCase() === "regular") ||
-        (selectedCadre === "contract" && (r.jobStatus || r.job_status || "").toLowerCase() === "contract");
+        (selectedCadre === "regular" && cadre === "regular") ||
+        (selectedCadre === "contract" && cadre.includes("contract"));
 
       return matchSearch && matchDept && matchCadre;
     });
@@ -160,28 +158,19 @@ function MonthReportPage({ month, year }: { month: number; year: number }) {
   const totalFaculty = records.length;
   const overallAvgPct = totalFaculty > 0
     ? Math.round(
-        (records.reduce((sum: number, r: any) => sum + (parseFloat(r.attendancePercentage || r.percentage || "0")), 0) / totalFaculty) * 10
+        (records.reduce((sum: number, r: any) => sum + getAttendancePct(r), 0) / totalFaculty) * 10
       ) / 10
     : 0;
 
-  const totalPresentDays = records.reduce((sum: number, r: any) => sum + (parseInt(r.presentDays || r.present_days || "0", 10)), 0);
-  const totalAbsentDays = records.reduce((sum: number, r: any) => sum + (parseInt(r.absentDays || r.absent_days || "0", 10)), 0);
-  const totalLeaves = records.reduce((sum: number, r: any) => sum + (parseInt(r.leaveDays || r.leave_days || "0", 10)), 0);
+  const totalPresentDays = records.reduce((sum: number, r: any) => sum + getPresentDays(r), 0);
+  const totalAbsentDays = records.reduce((sum: number, r: any) => sum + getAbsentDays(r), 0);
+  const totalLeaves = records.reduce((sum: number, r: any) => sum + getLeaveDays(r), 0);
 
-  // Export to Excel handler (Multi-sheet workbook: Summary, Daily Matrix, Department Stats)
+  // Export to Excel handler
   const handleExportExcel = () => {
-    if (!records.length) {
-      toast.error("No records to export.");
-      return;
-    }
-
-    try {
-      const daysInMonth = new Date(year, month, 0).getDate();
-      exportToExcelWorkbook(records, monthName, year, daysInMonth);
-      toast.success(`Exported complete multi-sheet report for ${records.length} faculty.`);
-    } catch (err: any) {
-      toast.error("Export failed: " + String(err?.message || err));
-    }
+    exportAttendanceExcel(records, month, year, { fallbackWorkingDays: workingDays })
+      .then((count) => toast.success(`Exported complete report for ${count} faculty.`))
+      .catch((e) => toast.error("Export failed: " + String(e.message ?? e)));
   };
 
   if (error || (!isLoading && records.length === 0)) {
@@ -374,11 +363,9 @@ function MonthReportPage({ month, year }: { month: number; year: number }) {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {filteredRecords.map((r: any, idx: number) => {
-                    const pct = parseFloat(r.attendancePercentage || r.percentage || "0");
-                    const isHigh = pct >= 90;
-                    const isLow = pct < 75;
-                    const pDays = r.presentDays || r.present_days || 0;
-                    const wDays = r.totalWorkingDays || r.total_working_days || workingDays;
+                    const pct = getAttendancePct(r);
+                    const pDays = getPresentDays(r);
+                    const wDays = getWorkingDays(r, workingDays);
 
                     return (
                       <tr key={idx} className="hover:bg-muted/40 transition-colors">
@@ -392,12 +379,12 @@ function MonthReportPage({ month, year }: { month: number; year: number }) {
                         <td className="px-3 py-2 text-center">
                           <span
                             className={`rounded-sm px-1.5 py-0.5 text-[10px] font-bold border ${
-                              (r.jobStatus || r.job_status || "").toLowerCase() === "regular"
+                              getJobStatus(r).toLowerCase() === "regular"
                                 ? "bg-[var(--badge-accent-bg)] text-[var(--badge-accent-fg)] border-[rgba(94,106,210,0.2)]"
                                 : "bg-[var(--badge-muted-bg)] text-[var(--badge-muted-fg)] border-[rgba(255,255,255,0.08)]"
                             }`}
                           >
-                            {(r.jobStatus || r.job_status || "Regular").toUpperCase()}
+                            {getJobStatus(r).toUpperCase()}
                           </span>
                         </td>
                         <td className="px-4 py-2 text-center font-mono font-semibold text-foreground">
@@ -408,23 +395,17 @@ function MonthReportPage({ month, year }: { month: number; year: number }) {
                           {pDays}
                         </td>
                         <td className="px-3 py-2 text-right font-mono text-muted-foreground">
-                          {r.absentDays || r.absent_days || 0}
+                          {getAbsentDays(r)}
                         </td>
                         <td className="px-3 py-2 text-right font-mono text-muted-foreground">
-                          {r.leaveDays || r.leave_days || 0}
+                          {getLeaveDays(r)}
                         </td>
                         <td className="px-3 py-2 text-right font-mono text-muted-foreground">
                           {r.halfDays || r.half_days || 0}
                         </td>
                         <td className="px-4 py-2 text-right">
                           <span
-                            className={`font-mono text-xs font-bold ${
-                              isHigh
-                                ? "text-[var(--status-present-fg)]"
-                                : isLow
-                                ? "text-[var(--status-absent-fg)]"
-                                : "text-foreground"
-                            }`}
+                            className={`font-mono text-xs font-bold ${tierTextClassFromPct(pct)}`}
                           >
                             {pct}%
                           </span>

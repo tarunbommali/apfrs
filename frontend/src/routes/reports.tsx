@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   BarChart3,
@@ -31,6 +31,10 @@ import {
   departmentsQuery,
 } from "@/lib/queries";
 import { toast } from "sonner";
+import { MONTH_NAMES } from "@/lib/constants";
+import { useMonthYearSelector } from "@/hooks/useMonthYearSelector";
+import { getAttendancePct, tierTextClassFromPct } from "@/lib/attendance-utils";
+import { exportAttendanceExcel } from "@/lib/export/exportAttendanceExcel";
 
 export const Route = createFileRoute("/reports")({
   head: () => ({
@@ -45,11 +49,6 @@ export const Route = createFileRoute("/reports")({
   component: ReportsArchivePage,
 });
 
-const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-
 function ReportsArchivePage() {
   const navigate = useNavigate();
   const { data: monthsData, isLoading: monthsLoading } = useQuery(attendanceMonthsQuery());
@@ -58,8 +57,15 @@ function ReportsArchivePage() {
   const defaultMonth = availableMonths[0]?.month || 1;
   const defaultYear = availableMonths[0]?.year || 2025;
 
-  const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
-  const [selectedYear, setSelectedYear] = useState(defaultYear);
+  const { month: selectedMonth, year: selectedYear, setMonth: setSelectedMonth, setYear: setSelectedYear } =
+    useMonthYearSelector(defaultMonth, defaultYear);
+
+  useEffect(() => {
+    if (availableMonths.length > 0) {
+      setSelectedMonth(availableMonths[0].month);
+      setSelectedYear(availableMonths[0].year);
+    }
+  }, [availableMonths, setSelectedMonth, setSelectedYear]);
 
   const { data: activeAttendance, isLoading: recordsLoading } = useQuery(
     monthlyAttendanceQuery(selectedMonth, selectedYear)
@@ -79,7 +85,7 @@ function ReportsArchivePage() {
       const dept = r.department || "General";
       if (!registeredCodes.has(dept.toUpperCase())) return;
 
-      const pct = parseFloat(r.attendancePercentage || r.percentage || r.attendance_percentage || 0);
+      const pct = getAttendancePct(r);
       if (!deptsMap[dept]) {
         deptsMap[dept] = { totalPct: 0, count: 0, name: dept };
       }
@@ -94,37 +100,10 @@ function ReportsArchivePage() {
     })).sort((a, b) => a.name.localeCompare(b.name));
   }, [activeRecords, registeredCodes]);
 
-  const handleExportExcel = async (m: number, y: number, recs: any[]) => {
-    if (!recs.length) {
-      toast.error("No records to export.");
-      return;
-    }
-    try {
-      const XLSX = await import("xlsx");
-      const rows = recs.map((r: any, idx: number) => ({
-        "S.No": idx + 1,
-        "CFMS ID": r.cfmsId || r.cfms_id || "",
-        "Faculty Name": r.name || "",
-        "Department": r.department || "",
-        "Designation": r.designation || "",
-        "Cadre": r.jobStatus || r.job_status || "Regular",
-        "Present Days": r.presentDays || r.present_days || 0,
-        "Absent Days": r.absentDays || r.absent_days || 0,
-        "Leave Days": r.leaveDays || r.leave_days || 0,
-        "Total Working Days": r.totalWorkingDays || r.total_working_days || activeWorkingDays,
-        "Attendance %": `${r.attendancePercentage || r.percentage || 0}%`,
-      }));
-
-      const ws = XLSX.utils.json_to_sheet(rows);
-      const wb = XLSX.utils.book_new();
-      const mName = MONTH_NAMES[m - 1];
-      XLSX.utils.book_append_sheet(wb, ws, `Attendance_${mName}_${y}`);
-      XLSX.writeFile(wb, `Official_Attendance_Report_${mName}_${y}.xlsx`);
-      toast.success(`Exported ${recs.length} faculty attendance records to Excel.`);
-    } catch (e) {
-      toast.error("Export failed: " + String(e));
-    }
-  };
+  const handleExportExcel = (m: number, y: number, recs: any[]) =>
+    exportAttendanceExcel(recs, m, y, { fallbackWorkingDays: activeWorkingDays, sheetLabel: "Official" })
+      .then((count) => toast.success(`Exported ${count} faculty attendance records to Excel.`))
+      .catch((e) => toast.error("Export failed: " + String(e.message ?? e)));
 
   return (
     <AppShell
