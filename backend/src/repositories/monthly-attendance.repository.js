@@ -65,7 +65,7 @@ class MonthlyAttendanceRepository {
       });
     }
 
-    // 3. Upsert monthly sheet
+    // 3. Upsert monthly sheet and records within a single transaction
     const sheetId = `sheet-${numYear}-${String(numMonth).padStart(2, '0')}`;
     const sheetSql = `
       INSERT INTO monthly_attendance_sheets (
@@ -78,122 +78,125 @@ class MonthlyAttendanceRepository {
         uploaded_by   = VALUES(uploaded_by),
         updated_at    = NOW()
     `;
-    await db.query(sheetSql, [sheetId, numMonth, numYear, fileName, insertedRecords.length, officialWorkingDays, uploadedBy]);
 
-    // 4. Clear existing monthly records for this sheet (to allow re-upload/refresh)
-    await db.query(`DELETE FROM faculty_monthly_attendance WHERE sheet_id = ?`, [sheetId]);
+    await db.transaction(async (conn) => {
+      await conn.query(sheetSql, [sheetId, numMonth, numYear, fileName, insertedRecords.length, officialWorkingDays, uploadedBy]);
 
-    // 5. Bulk insert faculty monthly records with calendar-synchronized working days
-    if (insertedRecords.length > 0) {
-      const placeholders = insertedRecords.map(() => `(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`).join(', ');
-      const values = [];
+      // 4. Clear existing monthly records for this sheet (to allow re-upload/refresh)
+      await conn.query(`DELETE FROM faculty_monthly_attendance WHERE sheet_id = ?`, [sheetId]);
 
-      for (const { raw, existingFaculty } of insertedRecords) {
-        const cfmsId = existingFaculty.cfms_id;
-        const facultyId = existingFaculty.id;
+      // 5. Bulk insert faculty monthly records with calendar-synchronized working days
+      if (insertedRecords.length > 0) {
+        const placeholders = insertedRecords.map(() => `(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`).join(', ');
+        const values = [];
 
-        // Auto-align daily records with calendar holidays, punch timings, and working days
-        const daily = Array.isArray(raw.attendance) ? raw.attendance : [];
-        let presentDays = 0;
-        let absentDays = 0;
-        let leaveDays = 0;
-        let halfDays = 0;
-        let lateDays = 0;
-        let holidayDays = 0;
+        for (const { raw, existingFaculty } of insertedRecords) {
+          const cfmsId = existingFaculty.cfms_id;
+          const facultyId = existingFaculty.id;
 
-        const syncedDaily = daily.map((d) => {
-          if (!d.date) return d;
-          const dateStr = d.date.length === 10 ? d.date : `${numYear}-${String(numMonth).padStart(2, '0')}-${String(d.date).padStart(2, '0')}`;
-          const isSun = new Date(dateStr).getDay() === 0;
-          const isHol = holidayDateSet.has(dateStr);
-          const hasTiming = Boolean((d.inTime && String(d.inTime).trim()) || (d.outTime && String(d.outTime).trim()));
+          // Auto-align daily records with calendar holidays, punch timings, and working days
+          const daily = Array.isArray(raw.attendance) ? raw.attendance : [];
+          let presentDays = 0;
+          let absentDays = 0;
+          let leaveDays = 0;
+          let halfDays = 0;
+          let lateDays = 0;
+          let holidayDays = 0;
 
-          let finalStatus = d.status || 'A';
-          if (isSun || isHol) {
-            finalStatus = 'H';
-            holidayDays += 1;
-          } else if (hasTiming || d.status === 'P' || d.status === 'Late') {
-            finalStatus = 'P';
-            presentDays += 1;
-          } else if (d.status === 'HD' || d.status === 'HALF') {
-            finalStatus = 'HD';
-            halfDays += 1;
-          } else if (d.status === 'L' || d.status === 'CL' || d.status === 'OD' || d.status === 'LEAVE') {
-            finalStatus = 'L';
-            leaveDays += 1;
-          } else {
-            finalStatus = 'A';
-            absentDays += 1;
-          }
+          const syncedDaily = daily.map((d) => {
+            if (!d.date) return d;
+            const dateStr = d.date.length === 10 ? d.date : `${numYear}-${String(numMonth).padStart(2, '0')}-${String(d.date).padStart(2, '0')}`;
+            const isSun = new Date(dateStr).getDay() === 0;
+            const isHol = holidayDateSet.has(dateStr);
+            const hasTiming = Boolean((d.inTime && String(d.inTime).trim()) || (d.outTime && String(d.outTime).trim()));
 
-          return { ...d, date: dateStr, status: finalStatus };
-        });
+            let finalStatus = d.status || 'A';
+            if (isSun || isHol) {
+              finalStatus = 'H';
+              holidayDays += 1;
+            } else if (hasTiming || d.status === 'P' || d.status === 'Late') {
+              finalStatus = 'P';
+              presentDays += 1;
+            } else if (d.status === 'HD' || d.status === 'HALF') {
+              finalStatus = 'HD';
+              halfDays += 1;
+            } else if (d.status === 'L' || d.status === 'CL' || d.status === 'OD' || d.status === 'LEAVE') {
+              finalStatus = 'L';
+              leaveDays += 1;
+            } else {
+              finalStatus = 'A';
+              absentDays += 1;
+            }
 
-        const effectivePresent = presentDays + halfDays * 0.5;
-        const attendancePercentage = officialWorkingDays > 0
-          ? Math.min(100, Math.round((effectivePresent / officialWorkingDays) * 1000) / 10)
-          : 0;
+            return { ...d, date: dateStr, status: finalStatus };
+          });
 
-        const model = new FacultyMonthlyAttendance({
-          sheetId,
-          facultyId,
-          cfmsId,
-          name: existingFaculty.name,
-          email: existingFaculty.email,
-          department: existingFaculty.department,
-          designation: existingFaculty.designation,
-          gender: existingFaculty.gender,
-          incharge: existingFaculty.incharge,
-          jobStatus: existingFaculty.job_status,
-          month: numMonth,
-          year: numYear,
-          presentDays,
-          absentDays,
-          leaveDays,
-          halfDays,
-          lateDays,
-          holidayDays,
-          totalWorkingDays: officialWorkingDays,
-          attendancePercentage,
-          attendance: syncedDaily,
-        });
+          const effectivePresent = presentDays + halfDays * 0.5;
+          const attendancePercentage = officialWorkingDays > 0
+            ? Math.min(100, Math.round((effectivePresent / officialWorkingDays) * 1000) / 10)
+            : 0;
 
-        values.push(
-          model.id,
-          model.sheetId,
-          model.facultyId,
-          model.cfmsId,
-          model.name,
-          model.email,
-          model.department,
-          model.designation,
-          model.gender || 'male',
-          model.jobStatus,
-          model.incharge || 'None',
-          model.month,
-          model.year,
-          model.presentDays,
-          model.absentDays,
-          model.leaveDays,
-          model.halfDays,
-          model.lateDays,
-          model.holidayDays,
-          model.totalWorkingDays,
-          model.attendancePercentage,
-          JSON.stringify(model.dailyRecords)
-        );
+          const model = new FacultyMonthlyAttendance({
+            sheetId,
+            facultyId,
+            cfmsId,
+            name: existingFaculty.name,
+            email: existingFaculty.email,
+            department: existingFaculty.department,
+            designation: existingFaculty.designation,
+            gender: existingFaculty.gender,
+            incharge: existingFaculty.incharge,
+            jobStatus: existingFaculty.job_status,
+            month: numMonth,
+            year: numYear,
+            presentDays,
+            absentDays,
+            leaveDays,
+            halfDays,
+            lateDays,
+            holidayDays,
+            totalWorkingDays: officialWorkingDays,
+            attendancePercentage,
+            attendance: syncedDaily,
+          });
+
+          values.push(
+            model.id,
+            model.sheetId,
+            model.facultyId,
+            model.cfmsId,
+            model.name,
+            model.email,
+            model.department,
+            model.designation,
+            model.gender || 'male',
+            model.jobStatus,
+            model.incharge || 'None',
+            model.month,
+            model.year,
+            model.presentDays,
+            model.absentDays,
+            model.leaveDays,
+            model.halfDays,
+            model.lateDays,
+            model.holidayDays,
+            model.totalWorkingDays,
+            model.attendancePercentage,
+            JSON.stringify(model.dailyRecords)
+          );
+        }
+
+        const insertSql = `
+          INSERT INTO faculty_monthly_attendance (
+            id, sheet_id, faculty_id, cfms_id, name, email, department, designation,
+            gender, job_status, incharge, month, year, present_days, absent_days, leave_days, half_days,
+            late_days, holiday_days, total_working_days, attendance_percentage, daily_records,
+            created_at, updated_at
+          ) VALUES ${placeholders}
+        `;
+        await conn.query(insertSql, values);
       }
-
-      const insertSql = `
-        INSERT INTO faculty_monthly_attendance (
-          id, sheet_id, faculty_id, cfms_id, name, email, department, designation,
-          gender, job_status, incharge, month, year, present_days, absent_days, leave_days, half_days,
-          late_days, holiday_days, total_working_days, attendance_percentage, daily_records,
-          created_at, updated_at
-        ) VALUES ${placeholders}
-      `;
-      await db.query(insertSql, values);
-    }
+    });
 
     logger.info('Monthly attendance workbook successfully synced with calendar and seeded to MySQL', {
       sheetId,
