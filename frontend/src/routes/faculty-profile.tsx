@@ -76,10 +76,6 @@ function formatDateOfJoin(dateVal?: string | null) {
 function FacultyProfile() {
   const { data: profileData, isLoading, error: profileError } = useQuery(facultyProfileQuery());
 
-  if (isLoading) {
-    return <ProfileSkeleton />;
-  }
-
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -88,6 +84,10 @@ function FacultyProfile() {
   const [showNewPw, setShowNewPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  if (isLoading) {
+    return <ProfileSkeleton />;
+  }
 
   if (profileError) {
     return (
