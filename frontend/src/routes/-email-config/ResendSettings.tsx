@@ -1,6 +1,7 @@
-import { Mail } from "lucide-react";
+import { Mail, Save, Loader2 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 interface FormState {
   resendApiKey?: string;
@@ -12,9 +13,17 @@ interface ResendSettingsProps {
   form: FormState;
   hasSavedApiKey: boolean;
   onFieldChange: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
+  onSave: () => void;
+  isSaving: boolean;
 }
 
-export function ResendSettings({ form, hasSavedApiKey, onFieldChange }: ResendSettingsProps) {
+export function ResendSettings({
+  form,
+  hasSavedApiKey,
+  onFieldChange,
+  onSave,
+  isSaving,
+}: ResendSettingsProps) {
   return (
     <section className="surface-panel p-6">
       <div className="border-b border-border pb-4">
@@ -64,6 +73,20 @@ export function ResendSettings({ form, hasSavedApiKey, onFieldChange }: ResendSe
             onChange={(e) => onFieldChange("resendTag", e.target.value)}
           />
         </div>
+      </div>
+
+      <div className="mt-6 flex justify-end border-t border-border/60 pt-4">
+        <Button onClick={onSave} disabled={isSaving} size="sm" className="gap-1.5">
+          {isSaving ? (
+            <>
+              <Loader2 className="size-3.5 animate-spin" /> Saving…
+            </>
+          ) : (
+            <>
+              <Save className="size-3.5" /> Save Resend Settings
+            </>
+          )}
+        </Button>
       </div>
     </section>
   );

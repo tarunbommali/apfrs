@@ -247,6 +247,76 @@ function EmailConfigPage() {
     }
   };
 
+  const [savingSection, setSavingSection] = useState<"smtp" | "resend" | "all" | null>(null);
+
+  // ── Save SMTP Settings Handler ──
+  const handleSaveSmtp = async () => {
+    if (!form.smtpHost.trim()) {
+      toast.error("SMTP host is required.");
+      return;
+    }
+    if (!form.smtpUsername.trim()) {
+      toast.error("SMTP username is required.");
+      return;
+    }
+    if (!settings?.hasSmtpPassword && !form.smtpPassword?.trim()) {
+      toast.error("SMTP app password is required.");
+      return;
+    }
+
+    const payload: Record<string, any> = {
+      smtpHost: form.smtpHost.trim(),
+      smtpPort: form.smtpPort,
+      smtpEncryption: form.smtpEncryption,
+      smtpUsername: form.smtpUsername.trim(),
+      smtpTimeout: form.smtpTimeout,
+      smtpPoolSize: form.smtpPoolSize,
+    };
+
+    if (form.smtpPassword && form.smtpPassword.trim() !== "") {
+      payload.smtpPassword = form.smtpPassword.trim();
+    }
+
+    setSavingSection("smtp");
+    try {
+      await updateConfig.mutateAsync(payload);
+      toast.success("SMTP settings saved successfully.");
+      updateField("smtpPassword", "");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save SMTP settings.");
+    } finally {
+      setSavingSection(null);
+    }
+  };
+
+  // ── Save Resend Settings Handler ──
+  const handleSaveResend = async () => {
+    if (!settings?.hasResendApiKey && !form.resendApiKey?.trim()) {
+      toast.error("Resend API key is required.");
+      return;
+    }
+
+    const payload: Record<string, any> = {
+      resendDomain: form.resendDomain.trim(),
+      resendTag: form.resendTag.trim(),
+    };
+
+    if (form.resendApiKey && form.resendApiKey.trim() !== "") {
+      payload.resendApiKey = form.resendApiKey.trim();
+    }
+
+    setSavingSection("resend");
+    try {
+      await updateConfig.mutateAsync(payload);
+      toast.success("Resend settings saved successfully.");
+      updateField("resendApiKey", "");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save Resend settings.");
+    } finally {
+      setSavingSection(null);
+    }
+  };
+
   // ── Save Configuration Handler ──
   const handleSave = async () => {
     if (!form.fromEmail || !form.fromEmail.includes("@")) {
@@ -308,6 +378,7 @@ function EmailConfigPage() {
       payload.resendApiKey = form.resendApiKey.trim();
     }
 
+    setSavingSection("all");
     try {
       await updateConfig.mutateAsync(payload);
       toast.success("Email configuration saved and applied.");
@@ -318,6 +389,8 @@ function EmailConfigPage() {
       }));
     } catch (err: any) {
       toast.error(err?.message || "Failed to save email configuration.");
+    } finally {
+      setSavingSection(null);
     }
   };
 
@@ -365,7 +438,7 @@ function EmailConfigPage() {
             disabled={updateConfig.isPending}
             className="gap-1.5"
           >
-            {updateConfig.isPending ? (
+            {savingSection === "all" ? (
               <>
                 <Loader2 className="size-3.5 animate-spin" /> Saving…
               </>
@@ -402,12 +475,16 @@ function EmailConfigPage() {
           form={form}
           hasSavedPassword={Boolean(settings?.hasSmtpPassword)}
           onFieldChange={updateField}
+          onSave={handleSaveSmtp}
+          isSaving={savingSection === "smtp"}
         />
 
         <ResendSettings
           form={form}
           hasSavedApiKey={Boolean(settings?.hasResendApiKey)}
           onFieldChange={updateField}
+          onSave={handleSaveResend}
+          isSaving={savingSection === "resend"}
         />
 
         <SenderSettings form={form} onFieldChange={updateField} />

@@ -1,6 +1,7 @@
-import { Server } from "lucide-react";
+import { Server, Save, Loader2 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -25,9 +26,17 @@ interface SmtpSettingsProps {
   form: FormState;
   hasSavedPassword: boolean;
   onFieldChange: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
+  onSave: () => void;
+  isSaving: boolean;
 }
 
-export function SmtpSettings({ form, hasSavedPassword, onFieldChange }: SmtpSettingsProps) {
+export function SmtpSettings({
+  form,
+  hasSavedPassword,
+  onFieldChange,
+  onSave,
+  isSaving,
+}: SmtpSettingsProps) {
   return (
     <section className="surface-panel p-6">
       <div className="border-b border-border pb-4">
@@ -127,6 +136,20 @@ export function SmtpSettings({ form, hasSavedPassword, onFieldChange }: SmtpSett
             onChange={(e) => onFieldChange("smtpPoolSize", parseInt(e.target.value, 10) || 5)}
           />
         </div>
+      </div>
+
+      <div className="mt-6 flex justify-end border-t border-border/60 pt-4">
+        <Button onClick={onSave} disabled={isSaving} size="sm" className="gap-1.5">
+          {isSaving ? (
+            <>
+              <Loader2 className="size-3.5 animate-spin" /> Saving…
+            </>
+          ) : (
+            <>
+              <Save className="size-3.5" /> Save SMTP Settings
+            </>
+          )}
+        </Button>
       </div>
     </section>
   );
