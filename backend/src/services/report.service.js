@@ -21,8 +21,8 @@ class ReportService {
 
     // Map daily records and calculate duration
     const dailyAttendance = (record.dailyRecords || []).map((day, idx) => {
-      let duration = '-';
-      if (day.inTime && day.outTime) {
+      let duration = day.duration || '-';
+      if (duration === '-' && day.inTime && day.outTime) {
         const [inH, inM, inS] = day.inTime.split(':').map(Number);
         const [outH, outM, outS] = day.outTime.split(':').map(Number);
         const diffMs = new Date(2000, 0, 1, outH, outM, outS || 0) - new Date(2000, 0, 1, inH, inM, inS || 0);
@@ -38,7 +38,11 @@ class ReportService {
       let statusStr = day.status;
       if (statusStr === 'P') statusStr = 'Present';
       else if (statusStr === 'A') statusStr = 'Absent';
-      else if (statusStr === 'H') statusStr = 'Holiday';
+      else if (statusStr === 'H') {
+        const [y, m, dayVal] = day.date.split('-').map(Number);
+        const isSunday = new Date(y, m - 1, dayVal).getDay() === 0;
+        statusStr = day.holidayLabel || (isSunday ? 'Sunday' : 'Holiday');
+      }
 
       return {
         day: idx + 1,
@@ -66,6 +70,7 @@ class ReportService {
     const avgHoursStr = presentWorkingDays > 0 ? `${(totalHoursVal / presentWorkingDays).toFixed(1)} hours` : '0.0 hours';
 
     return {
+      reportId: record.id,
       employee: {
         name: record.name,
         employeeId: record.cfmsId,

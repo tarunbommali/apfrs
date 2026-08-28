@@ -19,11 +19,13 @@ class MonthlyAttendanceRepository {
 
     // 1. Sync with Academic Calendar in MySQL
     let holidayDateSet = new Set();
+    let holidayMap = new Map();
     try {
       const allHolidays = await calendarRepository.getHolidays();
       const monthPrefix = `${numYear}-${String(numMonth).padStart(2, '0')}`;
       const monthHolidays = allHolidays.filter((h) => h.date && h.date.startsWith(monthPrefix));
       holidayDateSet = new Set(monthHolidays.map((h) => h.date));
+      holidayMap = new Map(monthHolidays.map((h) => [h.date, h.label || 'Holiday']));
     } catch (calErr) {
       logger.warn('Could not read academic calendar holidays:', { error: calErr.message });
     }
@@ -106,17 +108,20 @@ class MonthlyAttendanceRepository {
           const syncedDaily = daily.map((d) => {
             if (!d.date) return d;
             const dateStr = d.date.length === 10 ? d.date : `${numYear}-${String(numMonth).padStart(2, '0')}-${String(d.date).padStart(2, '0')}`;
-            const isSun = new Date(dateStr).getDay() === 0;
-            const isHol = holidayDateSet.has(dateStr);
+            const dateParts = dateStr.split('-');
+            const isSun = new Date(parseInt(dateParts[0], 10), parseInt(dateParts[1], 10) - 1, parseInt(dateParts[2], 10)).getDay() === 0;
+            const holidayLabel = holidayMap.get(dateStr);
+            const isHol = Boolean(holidayLabel);
+            const isNonWorking = isSun || isHol;
             const hasTiming = Boolean((d.inTime && String(d.inTime).trim()) || (d.outTime && String(d.outTime).trim()));
 
             let finalStatus = d.status || 'A';
-            if (isSun || isHol) {
-              finalStatus = 'H';
-              holidayDays += 1;
-            } else if (hasTiming || d.status === 'P' || d.status === 'Late') {
+            if (hasTiming || d.status === 'P' || d.status === 'Late') {
               finalStatus = 'P';
               presentDays += 1;
+            } else if (isNonWorking) {
+              finalStatus = 'H';
+              holidayDays += 1;
             } else if (d.status === 'HD' || d.status === 'HALF') {
               finalStatus = 'HD';
               halfDays += 1;
@@ -128,8 +133,18 @@ class MonthlyAttendanceRepository {
               absentDays += 1;
             }
 
-            return { ...d, date: dateStr, status: finalStatus };
+            let label = undefined;
+            if (isSun) {
+              label = 'Sunday';
+            } else if (isHol) {
+              label = holidayLabel;
+            }
+
+            return { ...d, date: dateStr, status: finalStatus, holidayLabel: label };
           });
+
+          // Re-balance absentDays to ensure Present + Absent + Leave + HalfDays = officialWorkingDays
+          absentDays = Math.max(0, officialWorkingDays - presentDays - leaveDays - halfDays);
 
           const effectivePresent = presentDays + halfDays * 0.5;
           const attendancePercentage = officialWorkingDays > 0

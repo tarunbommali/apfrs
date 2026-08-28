@@ -1,7 +1,13 @@
-import { EmployeeRecord, AttendanceDay, AttendanceStatus } from '../attendance-context';
+import XLSX from 'xlsx';
+import path from 'path';
+import db from './src/config/database.js';
+import { attendanceService } from './src/services/attendance.service.js';
+import dotenv from 'dotenv';
 
-const MONTH_ALIASES = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
-const STATUS_MAP: Record<string, AttendanceStatus> = {
+dotenv.config();
+
+// Define parseBiometricSheet locally in JS
+const STATUS_MAP = {
   P: "P", p: "P", PRESENT: "P",
   A: "A", a: "A", ABSENT: "A",
   L: "L", l: "L", LEAVE: "L", CL: "L", OD: "L",
@@ -10,23 +16,7 @@ const STATUS_MAP: Record<string, AttendanceStatus> = {
   LATE: "Late", Late: "Late", late: "Late",
 };
 
-export function detectMonthYearFromFileName(name: string): { month: number | null; year: number | null } {
-  const match = name.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[-_]?(\d{4})/i);
-  if (match && match[1] && match[2]) {
-    const mIdx = MONTH_ALIASES.indexOf(match[1].toLowerCase().slice(0, 3));
-    if (mIdx !== -1) {
-      return { month: mIdx + 1, year: parseInt(match[2], 10) };
-    }
-  }
-  return { month: null, year: null };
-}
-
-export function parseBiometricSheet(
-  rawMatrix: unknown[][],
-  month: number,
-  year: number,
-  holidayDateSet: Set<string>
-): { records: EmployeeRecord[]; workingDaysCount: number; holidaysCount: number } {
+function parseBiometricSheet(rawMatrix, month, year, holidayDateSet) {
   if (!rawMatrix || rawMatrix.length < 2) return { records: [], workingDaysCount: 27, holidaysCount: 4 };
 
   const headerRow = (rawMatrix[0] || []).map((h) => String(h ?? "").trim());
@@ -67,9 +57,8 @@ export function parseBiometricSheet(
       officialWorkingDays++;
     }
   }
-  if (officialWorkingDays === 0) officialWorkingDays = 27;
 
-  const records: EmployeeRecord[] = [];
+  const records = [];
 
   for (let r = 1; r < rawMatrix.length; r++) {
     const row = rawMatrix[r];
@@ -84,7 +73,7 @@ export function parseBiometricSheet(
     const department = deptIdx !== -1 ? String(row[deptIdx] ?? "").trim() : "";
     const email = emailIdx !== -1 ? String(row[emailIdx] ?? "").trim() : "";
 
-    const attendance: AttendanceDay[] = [];
+    const attendance = [];
     for (let d = 1; d <= daysInMonth; d++) {
       const dPad = String(d).padStart(2, "0");
       const dateStr = `${year}-${String(month).padStart(2, "0")}-${dPad}`;
@@ -102,16 +91,12 @@ export function parseBiometricSheet(
       const outColIdx = headerLower.findIndex(
         (h) => h === `${String(d).padStart(2, "0")} out` || h === `${d} out` || h === `out ${d}`
       );
-      const durationColIdx = headerLower.findIndex(
-        (h) => h === `${String(d).padStart(2, "0")} duration` || h === `${d} duration` || h === `duration ${d}`
-      );
 
       const rawStatus = statusColIdx !== -1 ? String(row[statusColIdx] ?? "").trim().toUpperCase() : "";
       const inVal = inColIdx !== -1 ? String(row[inColIdx] ?? "").trim() : "";
       const outVal = outColIdx !== -1 ? String(row[outColIdx] ?? "").trim() : "";
-      const durationVal = durationColIdx !== -1 ? String(row[durationColIdx] ?? "").trim() : "";
 
-      let status: AttendanceStatus = "A";
+      let status = "A";
       if (rawStatus === "P" || rawStatus === "PRESENT" || inVal !== "" || outVal !== "") {
         status = "P";
       } else if (rawStatus === "HD" || rawStatus === "HALF") {
@@ -121,7 +106,7 @@ export function parseBiometricSheet(
       } else if (rawStatus === "H" || rawStatus === "HOLIDAY" || isOfficialNonWorking) {
         status = "H";
       } else if (STATUS_MAP[rawStatus]) {
-        status = STATUS_MAP[rawStatus]!;
+        status = STATUS_MAP[rawStatus];
       } else {
         status = "A";
       }
@@ -131,7 +116,6 @@ export function parseBiometricSheet(
         status,
         inTime: inVal || undefined,
         outTime: outVal || undefined,
-        duration: durationVal || undefined,
       });
     }
 
@@ -148,3 +132,32 @@ export function parseBiometricSheet(
 
   return { records, workingDaysCount: officialWorkingDays, holidaysCount };
 }
+
+async function run() {
+  await db.connect();
+  const filePath = path.resolve('../test/22130304001_REGULAR_Jan2025.xlsx');
+  const wb = XLSX.readFile(filePath);
+  const sheetName = wb.SheetNames[0];
+  const ws = wb.Sheets[sheetName];
+  const rawMatrix = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+  const holidayDateSet = new Set(['2025-01-12', '2025-01-19', '2025-01-26']); // sample holidays
+  const { records } = parseBiometricSheet(rawMatrix, 1, 2025, holidayDateSet);
+
+  console.log("RECORDS TO IMPORT: ", records.length);
+
+  await attendanceService.importAttendanceData({
+    records,
+    month: 1,
+    year: 2025,
+    fileName: '22130304001_REGULAR_Jan2025.xlsx'
+  }, 'Admin');
+
+  console.log("Import done! Querying ANIL daily records now...");
+  const dbRows = await db.query("SELECT daily_records FROM faculty_monthly_attendance WHERE name = 'ANIL' LIMIT 1");
+  console.log("DB ROW FOR ANIL AFTER IMPORT:", dbRows[0].daily_records);
+
+  await db.close();
+}
+
+run().catch(console.error);

@@ -34,9 +34,35 @@ class AttendanceService {
           holidays: r.holidayDays,
         }));
     }
+    // Filter out already sent ones to prevent duplicate dispatch in the same month
+    let alreadySent = new Set();
+    const targetMonth = month || (attendanceData && attendanceData[0]?.month);
+    const targetYear = year || (attendanceData && attendanceData[0]?.year);
+    if (targetMonth && targetYear) {
+      try {
+        const sentRows = await db.query(
+          `SELECT DISTINCT employee_id, email FROM attendance_records WHERE month = ? AND year = ? AND status = 'sent'`,
+          [String(targetMonth), String(targetYear)]
+        );
+        for (const r of sentRows) {
+          if (r.employee_id) alreadySent.add(String(r.employee_id).trim());
+          if (r.email) alreadySent.add(r.email.toLowerCase().trim());
+        }
+      } catch (err) {
+        logger.warn('Could not read already sent records:', { error: err.message });
+      }
+    }
+
+    if (attendanceData && attendanceData.length > 0) {
+      attendanceData = attendanceData.filter((r) => {
+        const emailKey = r.email?.toLowerCase().trim();
+        const cfmsKey = String(r.employeeId || r.cfmsId || '').trim();
+        return !alreadySent.has(emailKey) && !alreadySent.has(cfmsKey);
+      });
+    }
 
     if (!attendanceData || attendanceData.length === 0) {
-      throw new AppError(400, 'No attendance records provided for dispatch.');
+      throw new AppError(400, 'All selected faculty members have already received their statements for this month.');
     }
 
     // Phase 5: one bulk IN-clause query instead of N sequential findByEmail/findByCfmsId calls
@@ -105,19 +131,21 @@ class AttendanceService {
         if (f.id) facultyByEmpId.set(String(f.id).trim(), f);
       }
 
-      // 2. Check existing record statuses for idempotency (avoid re-sending already sent emails on retry)
+      // 2. Check all successfully sent emails in the database for this month and year (cross-batch idempotency)
       let alreadySentEmails = new Set();
+      const monthNum = attendanceData[0]?.month ? parseInt(attendanceData[0].month, 10) : new Date().getMonth() + 1;
+      const yearNum = attendanceData[0]?.year ? parseInt(attendanceData[0].year, 10) : new Date().getFullYear();
       try {
-        const existingRecords = await attendanceRepository.getBatchRecords(batchId);
-        if (Array.isArray(existingRecords)) {
-          existingRecords
-            .filter((r) => r.status === 'sent')
-            .forEach((r) => {
-              if (r.email) alreadySentEmails.add(r.email.toLowerCase().trim());
-            });
+        const sentRows = await db.query(
+          `SELECT DISTINCT email, employee_id FROM attendance_records WHERE month = ? AND year = ? AND status = 'sent'`,
+          [String(monthNum), String(yearNum)]
+        );
+        for (const r of sentRows) {
+          if (r.email) alreadySentEmails.add(r.email.toLowerCase().trim());
+          if (r.employee_id) alreadySentEmails.add(String(r.employee_id).trim());
         }
       } catch (err) {
-        logger.warn('Could not query existing batch records for idempotency check:', { error: err.message });
+        logger.warn('Could not query sent records for idempotency check:', { error: err.message });
       }
 
       const emails = [];
@@ -126,9 +154,13 @@ class AttendanceService {
         const recEmail = record.email?.toLowerCase().trim() || '';
         const recEmpId = String(record.cfmsId || record.employeeId || '').trim();
 
-        // Skip if already successfully sent
-        if (recEmail && alreadySentEmails.has(recEmail)) {
-          logger.info('Skipping already-sent email in batch retry', { batchId, email: recEmail });
+        // Skip if already successfully sent for this month in any batch
+        if ((recEmail && alreadySentEmails.has(recEmail)) || (recEmpId && alreadySentEmails.has(recEmpId))) {
+          logger.info('Skipping already-sent email in batch retry', { batchId, email: recEmail, empId: recEmpId });
+          await db.query(
+            `UPDATE attendance_records SET status = 'sent', sent_at = NOW(), updated_at = NOW() WHERE batch_id = ? AND (email = ? OR employee_id = ?)`,
+            [batchId, recEmail, recEmpId]
+          );
           continue;
         }
 
@@ -148,9 +180,10 @@ class AttendanceService {
         const monthName = MONTH_NAMES[monthNum - 1] || 'Monthly';
         const periodLabel = `${monthName} ${yearNum}`;
 
-        let pdfBuffer;
+        let reportData = null;
+        let pdfBuffer = null;
         try {
-          const reportData = await reportService.getReportData(empId, monthNum, yearNum);
+          reportData = await reportService.getReportData(empId, monthNum, yearNum);
           pdfBuffer = await reportService.generatePdf(reportData);
         } catch (reportErr) {
           logger.error('Failed to generate PDF for batch faculty:', { empId, error: reportErr.message });
@@ -163,22 +196,34 @@ class AttendanceService {
           }
         ] : [];
 
-        const html = `
+        // Dispute deadline: 7 days from now formatted as DD-MM-YYYY in local time
+        const disputeDeadline = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
+
+        const html = reportData ? generateFacultyAttendanceEmailHTML({
+          report: reportData,
+          monthName,
+          disputeDeadline,
+        }) : `
           <p>Dear ${name},</p>
           <p>Please find attached your Attendance Performance Report for ${periodLabel}.</p>
           <p>Regards,<br>APFRS Reporting Cell</p>
         `;
 
-        const plainText = `Dear ${name},\n\nPlease find attached your Attendance Performance Report for ${periodLabel}.\n\nRegards,\nAPFRS Reporting Cell`;
+        const plainText = reportData ? generateFacultyAttendanceEmailPlainText({
+          report: reportData,
+          monthName,
+          disputeDeadline,
+        }) : `Dear ${name},\n\nPlease find attached your Attendance Performance Report for ${periodLabel}.\n\nRegards,\nAPFRS Reporting Cell`;
 
         emails.push({
-          to: record.email,
-          subject: emailTemplate?.subject || `Monthly Attendance Statement — ${periodLabel}`,
+          to: record.email || (reportData && reportData.employee?.email),
+          subject: `Attendance Report — ${monthName} ${yearNum}`,
           html,
           text: plainText,
           employeeId: empId,
           employeeName: name,
           attachments,
+          skipSignature: true,
         });
       }
 
