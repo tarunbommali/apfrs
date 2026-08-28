@@ -68,9 +68,21 @@ export function DepartmentTable({
                   <td className="px-5 py-4">
                     <div>
                       <span className="font-semibold text-foreground block">{dept.name}</span>
-                      <span className="font-mono text-[11px] font-bold text-muted-foreground uppercase">
-                        {dept.code}
-                      </span>
+                      <div className="flex flex-wrap gap-2 items-center mt-1">
+                        <span className="font-mono text-[9px] font-bold uppercase bg-muted px-1.5 py-0.5 rounded border border-border text-muted-foreground">
+                          {dept.code}
+                        </span>
+                        {(dept.eapcet_code || dept.eapcetCode) && (
+                          <span title="AP EAPCET Code" className="font-mono text-[9px] font-bold uppercase bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                            EAPCET: {dept.eapcet_code || dept.eapcetCode}
+                          </span>
+                        )}
+                        {(dept.branch_code || dept.branchCode) && (
+                          <span title="JNTU-GV Branch Code" className="font-mono text-[9px] font-bold uppercase bg-primary/10 text-primary px-1.5 py-0.5 rounded border border-primary/20">
+                            Branch: {dept.branch_code || dept.branchCode}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td className="px-5 py-4">

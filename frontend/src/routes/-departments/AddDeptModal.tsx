@@ -29,6 +29,8 @@ interface AddDeptModalProps {
     code: string;
     description: string;
     hodId: string | null;
+    eapcet_code?: string;
+    branch_code?: string;
   }) => Promise<void>;
 }
 
@@ -44,6 +46,8 @@ export function AddDeptModal({
   const [description, setDescription] = useState("");
   const [hodId, setHodId] = useState("none");
   const [role, setRole] = useState("HOD");
+  const [eapcetCode, setEapcetCode] = useState("");
+  const [branchCode, setBranchCode] = useState("");
 
   useEffect(() => {
     if (!isOpen) {
@@ -52,6 +56,8 @@ export function AddDeptModal({
       setDescription("");
       setHodId("none");
       setRole("HOD");
+      setEapcetCode("");
+      setBranchCode("");
     }
   }, [isOpen]);
 
@@ -62,6 +68,8 @@ export function AddDeptModal({
       code,
       description,
       hodId: hodId === "none" ? null : hodId,
+      eapcet_code: eapcetCode,
+      branch_code: branchCode,
     });
   };
 
@@ -94,6 +102,26 @@ export function AddDeptModal({
               placeholder="e.g. CSE"
               required
             />
+          </div>
+          <div className="grid gap-4 grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="add-eapcet">AP EAPCET Code</Label>
+              <Input
+                id="add-eapcet"
+                value={eapcetCode}
+                onChange={(e) => setEapcetCode(e.target.value)}
+                placeholder="e.g. CSE"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="add-branch">JNTU-GV Branch Code</Label>
+              <Input
+                id="add-branch"
+                value={branchCode}
+                onChange={(e) => setBranchCode(e.target.value)}
+                placeholder="e.g. 05"
+              />
+            </div>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="add-desc">Description</Label>

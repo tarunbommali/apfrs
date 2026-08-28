@@ -100,6 +100,18 @@ export class AdminController {
     }
   }
 
+  async retryBatch(req, res, next) {
+    try {
+      const result = await attendanceService.retryBatch(req.params.batchId, {
+        triggeredBy: req.user.name || 'Admin',
+        sentBy: req.user.email,
+      });
+      return sendSuccess(res, result, 202);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async getStats(req, res, next) {
     try {
       const facultyStats = await userService.getStats();

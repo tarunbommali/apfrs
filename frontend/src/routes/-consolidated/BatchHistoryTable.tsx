@@ -1,13 +1,15 @@
 import { MONTH_NAMES } from "@/lib/constants";
 import { BatchStatusBadge } from "./BatchStatusBadge";
 import type { EmailBatch } from "@/lib/queries";
+import { Button } from "@/components/ui/button";
 
 interface BatchHistoryTableProps {
   batches: EmailBatch[];
   isLoading: boolean;
+  onRetry: (batchId: string, failedCount: number) => void;
 }
 
-export function BatchHistoryTable({ batches, isLoading }: BatchHistoryTableProps) {
+export function BatchHistoryTable({ batches, isLoading, onRetry }: BatchHistoryTableProps) {
   if (isLoading) {
     return (
       <div className="py-16 text-center text-sm text-muted-foreground">
@@ -34,7 +36,9 @@ export function BatchHistoryTable({ batches, isLoading }: BatchHistoryTableProps
             <th className="py-3 px-3 text-center">Total</th>
             <th className="py-3 px-3 text-center">Sent</th>
             <th className="py-3 px-3 text-center">Failed</th>
+            <th className="py-3 px-3 text-center">Pending</th>
             <th className="py-3 px-4 text-center">Status</th>
+            <th className="py-3 px-4 text-center">Action</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
@@ -56,8 +60,38 @@ export function BatchHistoryTable({ batches, isLoading }: BatchHistoryTableProps
               <td className="py-3 px-3 text-center font-mono font-bold text-rose-600 dark:text-rose-400">
                 {b.failed}
               </td>
+              <td className="py-3 px-3 text-center font-mono font-bold text-amber-600 dark:text-amber-400">
+                {Math.max(0, b.total - b.sent - b.failed)}
+              </td>
               <td className="py-3 px-4 text-center">
                 <BatchStatusBadge status={b.status} />
+                {(b.status === "processing" || b.status === "pending") && (
+                  <div className="text-[10px] text-muted-foreground mt-1 font-mono">
+                    {b.sent} / {b.total} sent
+                  </div>
+                )}
+                {b.status === "completed" && (
+                  <div className="text-[10px] text-emerald-500/80 mt-1 font-mono">
+                    {b.sent} / {b.total} sent
+                  </div>
+                )}
+                {b.status === "partial_failed" && (
+                  <div className="text-[10px] text-rose-500/80 mt-1 font-mono">
+                    {b.sent} / {b.total} sent
+                  </div>
+                )}
+              </td>
+              <td className="py-3 px-4 text-center">
+                {(b.status === "failed" || b.status === "partial_failed") && b.failed > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onRetry(b.id, b.failed)}
+                    className="h-7 text-[10px] py-1 px-2 border-rose-500/30 hover:bg-rose-500/10 text-rose-500 hover:text-rose-600"
+                  >
+                    Retry {b.failed}
+                  </Button>
+                )}
               </td>
             </tr>
           ))}

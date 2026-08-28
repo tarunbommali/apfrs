@@ -35,7 +35,7 @@ export function LoginForm({
           type="email"
           value={email}
           onChange={(e) => onEmailChange(e.target.value)}
-          placeholder="admin@apfrs.in"
+          placeholder="username@jntugvcev.edu.in"
           autoComplete="email"
         />
       </div>

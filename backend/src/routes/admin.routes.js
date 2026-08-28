@@ -56,6 +56,7 @@ router.post(
   validate(attendanceSendSchema),
   (req, res, next) => adminController.sendAttendance(req, res, next)
 );
+router.post('/attendance/batches/:batchId/retry', (req, res, next) => adminController.retryBatch(req, res, next));
 
 // Monthly Attendance & Excel Import (Database-backed)
 router.post(

@@ -52,7 +52,7 @@ class AttendanceRepository extends BaseRepository {
         f.email,
         batch.month,
         batch.year,
-        'pending',
+        'queued',
       ]);
 
       await db.query(
@@ -89,20 +89,58 @@ class AttendanceRepository extends BaseRepository {
         }
       }
 
-      const completedAt = ['sent', 'failed', 'completed'].includes(status) ? new Date() : null;
-      await conn.query(
-        `UPDATE attendance_batches
-         SET status       = ?,
-             updated_at   = NOW(),
-             completed_at = ?,
-             sent_count   = (SELECT COUNT(*) FROM attendance_records WHERE batch_id = ? AND status = 'sent'),
-             failed_count = (SELECT COUNT(*) FROM attendance_records WHERE batch_id = ? AND status = 'failed')
-         WHERE batch_id = ?`,
-        [status, completedAt, batchId, batchId, batchId]
-      );
+      await this.recalculateBatchStatus(batchId, conn);
     });
 
     return this.findBatchById(batchId);
+  }
+
+  async recalculateBatchStatus(batchId, conn = db) {
+    const [counts] = await conn.query(
+      `SELECT 
+        COUNT(*) as total,
+        SUM(status = 'sent') as sent,
+        SUM(status = 'failed') as failed,
+        SUM(status = 'queued') as queued,
+        SUM(status = 'sending') as sending
+       FROM attendance_records
+       WHERE batch_id = ?`,
+      [batchId]
+    );
+
+    const total = Number(counts.total || 0);
+    const sent = Number(counts.sent || 0);
+    const failed = Number(counts.failed || 0);
+    const queued = Number(counts.queued || 0);
+    const sending = Number(counts.sending || 0);
+
+    let status = 'pending';
+    if (sent === total) {
+      status = 'completed';
+    } else if (failed === total) {
+      status = 'failed';
+    } else if (sent + failed === total) {
+      status = 'partial_failed';
+    } else if (sending > 0 || sent > 0 || failed > 0) {
+      status = 'processing';
+    } else {
+      status = 'pending';
+    }
+
+    const completedAt = ['completed', 'failed', 'partial_failed'].includes(status) ? new Date() : null;
+
+    await conn.query(
+      `UPDATE attendance_batches
+       SET status = ?,
+           sent_count = ?,
+           failed_count = ?,
+           completed_at = ?,
+           updated_at = NOW()
+       WHERE batch_id = ?`,
+      [status, sent, failed, completedAt, batchId]
+    );
+
+    return status;
   }
 
   // ── Read ────────────────────────────────────────────────────────────────────
@@ -168,7 +206,7 @@ class AttendanceRepository extends BaseRepository {
     const sql = `
       SELECT
         COUNT(*)                                AS totalBatches,
-        COALESCE(SUM(status = 'sent'), 0)       AS sentBatches,
+        COALESCE(SUM(status IN ('sent', 'completed', 'partial_failed')), 0) AS sentBatches,
         COALESCE(SUM(status IN ('pending','processing')), 0) AS pendingBatches,
         COALESCE(SUM(status = 'failed'), 0)     AS failedBatches,
         COALESCE(SUM(sent_count), 0)            AS totalFacultySent,

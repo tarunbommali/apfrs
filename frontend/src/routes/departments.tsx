@@ -99,6 +99,8 @@ function DepartmentsPage() {
     code: string;
     description: string;
     hodId: string | null;
+    eapcet_code?: string;
+    branch_code?: string;
   }) => {
     try {
       await createMutation.mutateAsync({
@@ -117,6 +119,8 @@ function DepartmentsPage() {
     code: string;
     description: string;
     status: "active" | "inactive";
+    eapcet_code?: string;
+    branch_code?: string;
   }) => {
     if (!selectedDept) return;
     try {

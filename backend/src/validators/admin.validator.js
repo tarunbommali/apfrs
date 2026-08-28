@@ -73,6 +73,10 @@ export const departmentCreateSchema = z.object({
   description: z.string().optional().nullable(),
   status: z.enum(['active', 'inactive']).optional(),
   hodId: z.string().optional().nullable(),
+  eapcet_code: z.string().optional().nullable(),
+  eapcetCode: z.string().optional().nullable(),
+  branch_code: z.string().optional().nullable(),
+  branchCode: z.string().optional().nullable(),
 });
 
 export const departmentUpdateSchema = departmentCreateSchema.partial();

@@ -46,14 +46,21 @@ export async function apiFetch<T = unknown>(
   }
 
   let json: ApiResponse<T>;
+  let isJson = true;
   try {
     json = (await res.json()) as ApiResponse<T>;
   } catch {
-    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    isJson = false;
   }
 
-  if (!res.ok || !json.success) {
-    throw new Error(json.error ?? json.message ?? `HTTP ${res.status}`);
+  if (!res.ok || (isJson && !json.success)) {
+    const errMsg = isJson ? (json.error ?? json.message) : `HTTP ${res.status}: ${res.statusText}`;
+    const err = new Error(errMsg ?? `HTTP ${res.status}`);
+    (err as any).status = res.status;
+    if (isJson) {
+      (err as any).data = json.data;
+    }
+    throw err;
   }
 
   return json.data as T;

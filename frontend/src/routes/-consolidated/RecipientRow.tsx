@@ -58,7 +58,7 @@ export function RecipientRow({ record, isChecked, onToggle, workingDays }: Recip
           <span className="inline-flex items-center gap-1 rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] font-medium text-destructive">
             Failed
           </span>
-        ) : record.dispatchStatus === "pending" ? (
+        ) : record.dispatchStatus === "pending" || record.dispatchStatus === "sending" || record.dispatchStatus === "queued" ? (
           <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-600 animate-pulse">
             Processing
           </span>

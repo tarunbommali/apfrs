@@ -10,6 +10,7 @@ export function BatchStatusBadge({ status }: BatchStatusBadgeProps) {
     pending: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30",
     processing: "bg-primary/15 text-primary border-primary/30",
     failed: "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30",
+    partial_failed: "bg-rose-500/10 text-orange-500 dark:text-orange-400 border-orange-500/30",
   };
 
   return (

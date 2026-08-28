@@ -43,6 +43,9 @@ class DepartmentService {
     }
 
     const deptId = `dept-${uuidv4().split('-')[0]}`;
+    const eapcetCodeVal = data.eapcet_code || data.eapcetCode || null;
+    const branchCodeVal = data.branch_code || data.branchCode || null;
+
     const newDept = {
       id: deptId,
       name: cleanName,
@@ -50,18 +53,19 @@ class DepartmentService {
       description: description ? description.trim() : null,
       status: status || 'active',
       hod_id: hodId || null,
+      eapcet_code: eapcetCodeVal ? eapcetCodeVal.trim() : null,
+      branch_code: branchCodeVal ? branchCodeVal.trim() : null,
     };
 
     await departmentRepository.create(newDept);
     logger.info('Department created', { deptId, code: newDept.code });
     return this.getDepartmentById(deptId);
   }
-
   async updateDepartment(id, data) {
     const dept = await departmentRepository.findById(id);
     if (!dept) throw new NotFoundError('Department');
 
-    const { name, code, description, status } = data;
+    const { name, code, description, status, eapcet_code, eapcetCode, branch_code, branchCode } = data;
 
     const updates = {};
     if (name !== undefined) {
@@ -90,6 +94,16 @@ class DepartmentService {
         throw new AppError(400, 'Invalid status. Allowed values: active, inactive');
       }
       updates.status = status;
+    }
+
+    const eapcetCodeVal = eapcet_code !== undefined ? eapcet_code : eapcetCode;
+    if (eapcetCodeVal !== undefined) {
+      updates.eapcet_code = eapcetCodeVal ? eapcetCodeVal.trim() : null;
+    }
+
+    const branchCodeVal = branch_code !== undefined ? branch_code : branchCode;
+    if (branchCodeVal !== undefined) {
+      updates.branch_code = branchCodeVal ? branchCodeVal.trim() : null;
     }
 
     if (Object.keys(updates).length > 0) {

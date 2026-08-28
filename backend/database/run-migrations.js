@@ -329,6 +329,72 @@ async function runMigrations() {
       logger.info('✅ Seeded default departments');
     }
 
+    // ────────────────────────────────────────────────
+    // 14. Update status enums for batches & records
+    // ────────────────────────────────────────────────
+    logger.info('Running enum status normalization & updates...');
+    
+    // We update existing records to be 'queued' before changing the enum
+    // First, verify/add 'queued' and other new enums to attendance_records
+    await db.query(`
+      ALTER TABLE attendance_records 
+      MODIFY COLUMN status ENUM('pending', 'queued', 'sending', 'sent', 'failed') DEFAULT 'pending'
+    `);
+    
+    await db.query(`
+      UPDATE attendance_records SET status = 'queued' WHERE status = 'pending'
+    `);
+    
+    await db.query(`
+      ALTER TABLE attendance_records 
+      MODIFY COLUMN status ENUM('queued', 'sending', 'sent', 'failed') DEFAULT 'queued'
+    `);
+
+    // Modify attendance_batches to add partial_failed & completed
+    await db.query(`
+      ALTER TABLE attendance_batches 
+      MODIFY COLUMN status ENUM('pending', 'processing', 'sent', 'failed', 'completed', 'partial_failed') DEFAULT 'pending'
+    `);
+
+    if (!(await columnExists('attendance_batches', 'retry_of_batch_id'))) {
+      await db.query(`
+        ALTER TABLE attendance_batches
+        ADD COLUMN retry_of_batch_id VARCHAR(50) NULL AFTER batch_id
+      `);
+      try {
+        await db.query(`
+          ALTER TABLE attendance_batches 
+          ADD CONSTRAINT fk_retry_of_batch FOREIGN KEY (retry_of_batch_id) REFERENCES attendance_batches(batch_id) ON DELETE SET NULL
+        `);
+      } catch (err) {
+        logger.warn('Failed to add foreign key constraint for retry_of_batch_id (might already exist):', err.message);
+      }
+      logger.info('✅ retry_of_batch_id column added to attendance_batches');
+    }
+
+    // ────────────────────────────────────────────────
+    // 8. Add EAPCET and branch code columns to departments
+    // ────────────────────────────────────────────────
+    if (!(await columnExists('departments', 'eapcet_code'))) {
+      await db.query(`
+        ALTER TABLE departments
+        ADD COLUMN eapcet_code VARCHAR(50) NULL,
+        ADD COLUMN branch_code VARCHAR(50) NULL
+      `);
+      
+      // Update default seeded values
+      await db.query("UPDATE departments SET eapcet_code = 'CIV', branch_code = '01' WHERE code = 'CIVIL'");
+      await db.query("UPDATE departments SET eapcet_code = 'EEE', branch_code = '02' WHERE code = 'EEE'");
+      await db.query("UPDATE departments SET eapcet_code = 'MEC', branch_code = '03' WHERE code = 'ME'");
+      await db.query("UPDATE departments SET eapcet_code = 'ECE', branch_code = '04' WHERE code = 'ECE'");
+      await db.query("UPDATE departments SET eapcet_code = 'CSE', branch_code = '05' WHERE code = 'CSE'");
+      await db.query("UPDATE departments SET eapcet_code = 'IT', branch_code = '06' WHERE code = 'IT'");
+      await db.query("UPDATE departments SET eapcet_code = 'ADMIN', branch_code = '00' WHERE code = 'ADMINISTRATION'");
+      await db.query("UPDATE departments SET eapcet_code = 'BS&HSS', branch_code = '99' WHERE code = 'BS&HSS'");
+
+      logger.info('✅ eapcet_code and branch_code columns added to departments table');
+    }
+
     logger.info('🎉 All migrations applied successfully.');
     await db.close();
     process.exit(0);

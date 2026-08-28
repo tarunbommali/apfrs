@@ -38,7 +38,7 @@ function AdminDashboard() {
 
   // ── Queries ──
   const { data, isLoading, error, refetch } = useQuery(
-    facultyListQuery({ search: search || undefined, department: department, limit: 200 }),
+    facultyListQuery({ limit: 1000 }),
   );
   const deleteFaculty = useDeleteFaculty();
 

@@ -208,7 +208,7 @@ export type EmailBatch = {
   sent: number;
   failed: number;
   created_at: string;
-  status: "pending" | "processing" | "completed" | "failed";
+  status: "pending" | "processing" | "completed" | "failed" | "partial_failed";
 };
 
 export const batchesQuery = (filters: { page?: number; limit?: number } = {}) => {
@@ -272,18 +272,38 @@ export const facultyDepartmentQuery = () =>
 // ─── Email Send ───────────────────────────────────────────────────────────────
 
 export type SendAttendancePayload = {
-  attendanceData: unknown[];
+  attendanceData?: unknown[];
   emailTemplate?: string;
   sentBy?: string;
+  month?: number;
+  year?: number;
+  facultyIds?: string[];
+  forceResend?: boolean;
 };
 
 export function useSendAttendance() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: SendAttendancePayload) =>
-      apiFetch("/api/admin/attendance/send", { method: "POST", body: payload }),
+      apiFetch<{ success: boolean; message: string; batchId: string }>("/api/admin/attendance/send", { method: "POST", body: payload }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["batches"] });
+      qc.invalidateQueries({ queryKey: ["attendance"] });
+    },
+  });
+}
+
+export function useRetryBatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (batchId: string) =>
+      apiFetch<{ success: boolean; message: string; batchId: string }>(
+        `/api/admin/attendance/batches/${batchId}/retry`,
+        { method: "POST" }
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["batches"] });
+      qc.invalidateQueries({ queryKey: ["attendance"] });
     },
   });
 }
@@ -536,6 +556,10 @@ export type Department = {
   hod_email?: string | null;
   hod_photo_url?: string | null;
   faculty_count?: number;
+  eapcet_code?: string | null;
+  branch_code?: string | null;
+  eapcetCode?: string | null;
+  branchCode?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -580,6 +604,8 @@ export function useCreateDepartment() {
       description?: string;
       status?: "active" | "inactive";
       hodId?: string | null;
+      eapcet_code?: string | null;
+      branch_code?: string | null;
     }) =>
       apiFetch<{ department: Department; message: string }>("/api/admin/departments", {
         method: "POST",
@@ -599,6 +625,8 @@ export function useUpdateDepartment(id: string) {
       code?: string;
       description?: string | null;
       status?: "active" | "inactive";
+      eapcet_code?: string | null;
+      branch_code?: string | null;
     }) =>
       apiFetch<{ department: Department; message: string }>(`/api/admin/departments/${id}`, {
         method: "PUT",

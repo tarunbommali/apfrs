@@ -99,6 +99,7 @@ export class FacultyMonthlyAttendance {
 
     this.createdAt = data.createdAt || data.created_at || new Date().toISOString();
     this.updatedAt = data.updatedAt || data.updated_at || new Date().toISOString();
+    this.dispatchStatus = data.dispatchStatus || data.dispatch_status || null;
   }
 
   toRecord() {
@@ -150,6 +151,8 @@ export class FacultyMonthlyAttendance {
       attendance: this.dailyRecords,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
+      dispatchStatus: this.dispatchStatus,
+      dispatch_status: this.dispatchStatus,
     };
   }
 }

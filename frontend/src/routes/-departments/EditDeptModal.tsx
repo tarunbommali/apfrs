@@ -29,6 +29,8 @@ interface EditDeptModalProps {
     code: string;
     description: string;
     status: "active" | "inactive";
+    eapcet_code?: string;
+    branch_code?: string;
   }) => Promise<void>;
 }
 
@@ -43,6 +45,8 @@ export function EditDeptModal({
   const [code, setCode] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<"active" | "inactive">("active");
+  const [eapcetCode, setEapcetCode] = useState("");
+  const [branchCode, setBranchCode] = useState("");
 
   useEffect(() => {
     if (selectedDept && isOpen) {
@@ -50,6 +54,8 @@ export function EditDeptModal({
       setCode(selectedDept.code);
       setDescription(selectedDept.description || "");
       setStatus(selectedDept.status);
+      setEapcetCode(selectedDept.eapcet_code || selectedDept.eapcetCode || "");
+      setBranchCode(selectedDept.branch_code || selectedDept.branchCode || "");
     }
   }, [selectedDept, isOpen]);
 
@@ -60,6 +66,8 @@ export function EditDeptModal({
       code,
       description,
       status,
+      eapcet_code: eapcetCode,
+      branch_code: branchCode,
     });
   };
 
@@ -88,6 +96,24 @@ export function EditDeptModal({
               onChange={(e) => setCode(e.target.value)}
               required
             />
+          </div>
+          <div className="grid gap-4 grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-eapcet">AP EAPCET Code</Label>
+              <Input
+                id="edit-eapcet"
+                value={eapcetCode}
+                onChange={(e) => setEapcetCode(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-branch">JNTU-GV Branch Code</Label>
+              <Input
+                id="edit-branch"
+                value={branchCode}
+                onChange={(e) => setBranchCode(e.target.value)}
+              />
+            </div>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="edit-desc">Description</Label>
