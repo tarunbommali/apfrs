@@ -1,6 +1,8 @@
 // backend/src/routes/admin.routes.js
 import express, { Router } from 'express';
 import { adminController } from '../controllers/admin.controller.js';
+import { reportService } from '../services/report.service.js';
+import { generateReportHTML } from '../utils/report-template.js';
 import { verifyToken } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
 import { validate } from '../middleware/validation.js';
@@ -62,6 +64,42 @@ router.post(
   (req, res, next) => adminController.importAttendance(req, res, next)
 );
 router.get('/attendance/records', (req, res, next) => adminController.getAttendanceRecords(req, res, next));
+
+// Attendance HTML-to-PDF Reports Preview & Export
+router.get('/attendance/report/:cfmsId/preview', async (req, res, next) => {
+  try {
+    const { month, year } = req.query;
+    const reportData = await reportService.getReportData(req.params.cfmsId, parseInt(month), parseInt(year));
+    res.send(generateReportHTML(reportData));
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/attendance/report/consolidated/pdf', async (req, res, next) => {
+  try {
+    const { month, year, cfmsIds } = req.query;
+    const ids = String(cfmsIds).split(',');
+    const reportsList = [];
+    for (const id of ids) {
+      try {
+        const data = await reportService.getReportData(id, parseInt(month), parseInt(year));
+        reportsList.push(data);
+      } catch (err) {
+        // Skip missing individual records in consolidated export
+      }
+    }
+    if (reportsList.length === 0) {
+      return res.status(404).json({ success: false, error: 'No matching faculty records found.' });
+    }
+    const pdf = await reportService.generateConsolidatedPdf(reportsList);
+    res.contentType('application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=APFRS_Attendance_Consolidated_${month}_${year}.pdf`);
+    res.send(pdf);
+  } catch (err) {
+    next(err);
+  }
+});
 router.get('/attendance/months', (req, res, next) => adminController.getAttendanceMonths(req, res, next));
 router.get('/attendance/analytics', (req, res, next) => adminController.getAttendanceAnalytics(req, res, next));
 
