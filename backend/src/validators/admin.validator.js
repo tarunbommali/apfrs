@@ -64,10 +64,37 @@ export const attendanceSendSchema = z.object({
   sentBy: z.string().optional(),
 });
 
+export const departmentCreateSchema = z.object({
+  name: z.string().min(1, 'Department name is required'),
+  code: z.string().min(1, 'Department code is required'),
+  description: z.string().optional().nullable(),
+  status: z.enum(['active', 'inactive']).optional(),
+  hodId: z.string().optional().nullable(),
+});
+
+export const departmentUpdateSchema = departmentCreateSchema.partial();
+
+export const departmentStatusSchema = z.object({
+  status: z.enum(['active', 'inactive'], {
+    errorMap: () => ({ message: 'Status must be active or inactive' }),
+  }),
+});
+
+export const departmentInchargeSchema = z.object({
+  hodId: z.string().nullable().optional(),
+  role: z.enum(VALID_INCHARGE_ROLES).optional(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Start date must be in YYYY-MM-DD format').optional().nullable(),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'End date must be in YYYY-MM-DD format').optional().nullable(),
+});
+
 export default {
   facultyCreateSchema,
   facultyUpdateSchema,
   inchargeCreateSchema,
   inchargeUpdateSchema,
   attendanceSendSchema,
+  departmentCreateSchema,
+  departmentUpdateSchema,
+  departmentStatusSchema,
+  departmentInchargeSchema,
 };

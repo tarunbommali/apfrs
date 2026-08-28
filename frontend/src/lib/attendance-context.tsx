@@ -68,6 +68,20 @@ type AttendanceValue = {
 
 const STORAGE_KEY = "apfrs.attendance.v1";
 
+function normalizeRecords(records: EmployeeRecord[]): EmployeeRecord[] {
+  if (!Array.isArray(records)) return [];
+  return records.map((r) => ({
+    ...r,
+    attendance: Array.isArray(r.attendance)
+      ? r.attendance
+      : Array.isArray((r as any).dailyRecords)
+      ? (r as any).dailyRecords
+      : Array.isArray((r as any).daily_records)
+      ? (r as any).daily_records
+      : [],
+  }));
+}
+
 const AttendanceContext = createContext<AttendanceValue | null>(null);
 
 export function AttendanceProvider({ children }: { children: ReactNode }) {
@@ -102,20 +116,6 @@ export function AttendanceProvider({ children }: { children: ReactNode }) {
       setReady(true);
       return;
     }
-
-function normalizeRecords(records: EmployeeRecord[]): EmployeeRecord[] {
-  if (!Array.isArray(records)) return [];
-  return records.map((r) => ({
-    ...r,
-    attendance: Array.isArray(r.attendance)
-      ? r.attendance
-      : Array.isArray((r as any).dailyRecords)
-      ? (r as any).dailyRecords
-      : Array.isArray((r as any).daily_records)
-      ? (r as any).daily_records
-      : [],
-  }));
-}
 
     try {
       setLoading(true);

@@ -3,6 +3,8 @@ import { v4 as uuidv4 } from 'uuid';
 
 export const VALID_INCHARGE_ROLES = [
   'HOD',
+  'Department Incharge',
+  'Coordinator',
   'Principal',
   'Vice Principal',
   'Vice Chancellor (VC)',

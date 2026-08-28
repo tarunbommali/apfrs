@@ -6,6 +6,7 @@ import { AppError, ConflictError, NotFoundError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
 import db from '../config/database.js';
 import { v4 as uuidv4 } from 'uuid';
+import { VALID_INCHARGE_ROLES } from '../models/InchargeAssignment.js';
 
 class DepartmentService {
   async getDepartmentsList(filters = {}) {
@@ -129,8 +130,35 @@ class DepartmentService {
     if (!dept) throw new NotFoundError('Department');
 
     const cleanRole = (role || 'HOD').trim();
-    if (!['HOD', 'Department Incharge', 'Coordinator'].includes(cleanRole)) {
-      throw new AppError(400, 'Invalid role. Allowed values: HOD, Department Incharge, Coordinator');
+    if (!VALID_INCHARGE_ROLES.includes(cleanRole)) {
+      throw new AppError(400, `Invalid role. Allowed values: ${VALID_INCHARGE_ROLES.join(', ')}`);
+    }
+
+    const cleanStartDate = startDate || new Date().toISOString().split('T')[0];
+    if (!cleanStartDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      throw new AppError(400, 'Valid start date (YYYY-MM-DD) is required.');
+    }
+    if (endDate && !endDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      throw new AppError(400, 'End date must be in YYYY-MM-DD format.');
+    }
+    if (endDate && endDate < cleanStartDate) {
+      throw new AppError(400, 'End date cannot be earlier than start date.');
+    }
+
+    const prevHodId = dept.hod_id;
+
+    // Clean up previous HOD assignment if they are changing or cleared
+    if (prevHodId && prevHodId !== hodId) {
+      try {
+        const prevAssignment = await inchargeRepository.findCurrentByFacultyId(prevHodId);
+        if (prevAssignment) {
+          await inchargeRepository.endAssignment(prevAssignment.id, cleanStartDate);
+        }
+        await userRepository.update(prevHodId, { incharge: 'None' });
+        logger.info('Cleaned up previous HOD assignment and user profile', { prevHodId, cleanStartDate });
+      } catch (err) {
+        logger.error('Failed to clean up previous HOD assignment:', { error: err.message });
+      }
     }
 
     if (hodId) {
@@ -144,18 +172,6 @@ class DepartmentService {
       const otherDepts = await db.query(sqlCheck, [hodId, id]);
       if (otherDepts.length > 0) {
         throw new ConflictError(`This faculty member is already the active HOD for the "${otherDepts[0].name}" department.`);
-      }
-
-      // Validate custom dates if provided
-      const cleanStartDate = startDate || new Date().toISOString().split('T')[0];
-      if (!cleanStartDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        throw new AppError(400, 'Valid start date (YYYY-MM-DD) is required.');
-      }
-      if (endDate && !endDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        throw new AppError(400, 'End date must be in YYYY-MM-DD format.');
-      }
-      if (endDate && endDate < cleanStartDate) {
-        throw new AppError(400, 'End date cannot be earlier than start date.');
       }
 
       // Assign incharge role in faculty_incharge_assignments
@@ -178,7 +194,7 @@ class DepartmentService {
 
     // Update departments table hod_id
     await departmentRepository.update(id, { hod_id: hodId || null });
-    logger.info('Department HOD assigned', { id, hodId, role: cleanRole, startDate, endDate });
+    logger.info('Department HOD assigned', { id, hodId, role: cleanRole, startDate: cleanStartDate, endDate });
 
     return this.getDepartmentById(id);
   }

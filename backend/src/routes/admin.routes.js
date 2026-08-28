@@ -10,6 +10,10 @@ import {
   inchargeCreateSchema,
   inchargeUpdateSchema,
   attendanceSendSchema,
+  departmentCreateSchema,
+  departmentUpdateSchema,
+  departmentStatusSchema,
+  departmentInchargeSchema,
 } from '../validators/admin.validator.js';
 
 const router = Router();
@@ -27,11 +31,11 @@ router.delete('/faculty/:id', (req, res, next) => adminController.deleteFaculty(
 // Departments management
 router.get('/departments', (req, res, next) => adminController.getDepartmentsList(req, res, next));
 router.get('/departments/:id', (req, res, next) => adminController.getDepartmentById(req, res, next));
-router.post('/departments', (req, res, next) => adminController.createDepartment(req, res, next));
-router.put('/departments/:id', (req, res, next) => adminController.updateDepartment(req, res, next));
+router.post('/departments', validate(departmentCreateSchema), (req, res, next) => adminController.createDepartment(req, res, next));
+router.put('/departments/:id', validate(departmentUpdateSchema), (req, res, next) => adminController.updateDepartment(req, res, next));
 router.delete('/departments/:id', (req, res, next) => adminController.deleteDepartment(req, res, next));
-router.put('/departments/:id/incharge', (req, res, next) => adminController.assignDepartmentIncharge(req, res, next));
-router.put('/departments/:id/status', (req, res, next) => adminController.updateDepartmentStatus(req, res, next));
+router.put('/departments/:id/incharge', validate(departmentInchargeSchema), (req, res, next) => adminController.assignDepartmentIncharge(req, res, next));
+router.put('/departments/:id/status', validate(departmentStatusSchema), (req, res, next) => adminController.updateDepartmentStatus(req, res, next));
 router.get('/departments/:id/faculty', (req, res, next) => adminController.getDepartmentFaculty(req, res, next));
 
 // Faculty Incharge Assignment management
