@@ -40,6 +40,17 @@ import {
 } from "@/lib/queries";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
+import { useEffect } from "react";
+import { MONTH_NAMES } from "@/lib/constants";
+import { useMonthYearSelector } from "@/hooks/useMonthYearSelector";
+import {
+  getAttendancePct,
+  tierTextClassFromPct,
+  getPresentDays,
+  getWorkingDays,
+  getJobStatus,
+  getCfmsId,
+} from "@/lib/attendance-utils";
 
 export const Route = createFileRoute("/consolidated")({
   head: () => ({
@@ -53,11 +64,6 @@ export const Route = createFileRoute("/consolidated")({
   }),
   component: DispatchPage,
 });
-
-const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
 
 function BatchStatusBadge({ status }: { status: EmailBatch["status"] }) {
   const map: Record<EmailBatch["status"], string> = {
@@ -87,8 +93,15 @@ function DispatchPage() {
   const defaultMonth = availableMonths[0]?.month || 1;
   const defaultYear = availableMonths[0]?.year || 2025;
 
-  const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
-  const [selectedYear, setSelectedYear] = useState(defaultYear);
+  const { month: selectedMonth, year: selectedYear, setMonth: setSelectedMonth, setYear: setSelectedYear } =
+    useMonthYearSelector(defaultMonth, defaultYear);
+
+  useEffect(() => {
+    if (availableMonths.length > 0) {
+      setSelectedMonth(availableMonths[0].month);
+      setSelectedYear(availableMonths[0].year);
+    }
+  }, [availableMonths, setSelectedMonth, setSelectedYear]);
 
   // Tab State: "recipients" | "history"
   const [viewTab, setViewTab] = useState<"recipients" | "history">("recipients");
@@ -137,10 +150,11 @@ function DispatchPage() {
 
       const rDept = (r.department || "Uncategorized").toLowerCase();
       const matchDept = selectedDept === "all" || rDept === selectedDept.toLowerCase();
+      const cadre = getJobStatus(r).toLowerCase();
       const matchCadre =
         selectedCadre === "all" ||
-        (selectedCadre === "regular" && (r.jobStatus || r.job_status || "").toLowerCase() === "regular") ||
-        (selectedCadre === "contract" && (r.jobStatus || r.job_status || "").toLowerCase().includes("contract"));
+        (selectedCadre === "regular" && cadre === "regular") ||
+        (selectedCadre === "contract" && cadre.includes("contract"));
 
       return matchSearch && matchDept && matchCadre;
     });
@@ -392,7 +406,7 @@ function DispatchPage() {
                       {filteredRecords.map((r: any) => {
                         const recId = r.id || r.cfmsId;
                         const isChecked = selectedIds.has(recId);
-                        const pct = parseFloat(r.attendancePercentage || r.percentage || 0);
+                        const pct = getAttendancePct(r);
 
                         return (
                           <tr
@@ -415,14 +429,14 @@ function DispatchPage() {
                             <td className="py-3 px-4">
                               <div className="font-medium text-foreground">{r.department}</div>
                               <div className="text-[10px] text-muted-foreground">
-                                {r.jobStatus || r.job_status || "Regular"} · {r.designation}
+                                {getJobStatus(r)} · {r.designation}
                               </div>
                             </td>
                             <td className="py-3 px-3 text-center font-mono font-bold text-foreground">
-                              {r.presentDays || r.present_days || 0} / {r.totalWorkingDays || r.total_working_days || 27}
+                              {getPresentDays(r)} / {getWorkingDays(r, 27)}
                             </td>
                             <td className="py-3 px-3 text-center font-mono font-bold">
-                              <span className={pct < 75 ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}>
+                              <span className={tierTextClassFromPct(pct)}>
                                 {pct}%
                               </span>
                             </td>

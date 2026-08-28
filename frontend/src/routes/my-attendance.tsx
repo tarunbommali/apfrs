@@ -20,6 +20,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { facultyProfileQuery, facultyMonthlyAttendanceQuery } from "@/lib/queries";
+import { MONTH_NAMES } from "@/lib/constants";
+import { useMonthYearSelector, getYearRange } from "@/hooks/useMonthYearSelector";
+import {
+  getAttendancePct,
+  tierTextClassFromPct,
+  getPresentDays,
+  getAbsentDays,
+  getLeaveDays,
+  getWorkingDays,
+} from "@/lib/attendance-utils";
 
 export const Route = createFileRoute("/my-attendance")({
   head: () => ({
@@ -34,18 +44,15 @@ export const Route = createFileRoute("/my-attendance")({
   component: MyAttendancePage,
 });
 
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-
-const currentYear = new Date().getFullYear();
-const YEARS = Array.from({ length: 5 }, (_, i) => String(currentYear - 2 + i));
-
 function MyAttendancePage() {
-  const now = new Date();
-  const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1));
-  const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
+  const {
+    monthStr: selectedMonth,
+    yearStr: selectedYear,
+    setMonthStr: setSelectedMonth,
+    setYearStr: setSelectedYear,
+    month: selectedMonthNum,
+    year: selectedYearNum,
+  } = useMonthYearSelector();
 
   // 1. Fetch faculty profile
   const { data: profileData } = useQuery(facultyProfileQuery());
@@ -66,9 +73,7 @@ function MyAttendancePage() {
     );
   };
 
-  const pct = parseFloat(report?.attendancePercentage || report?.percentage || "0");
-  const isHigh = pct >= 90;
-  const isLow = pct < 75;
+  const pct = getAttendancePct(report);
 
   return (
     <AppShell
@@ -88,7 +93,7 @@ function MyAttendancePage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {MONTHS.map((m, i) => (
+                    {MONTH_NAMES.map((m, i) => (
                       <SelectItem key={m} value={String(i + 1)}>
                         {m}
                       </SelectItem>
@@ -104,8 +109,8 @@ function MyAttendancePage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {YEARS.map((y) => (
-                      <SelectItem key={y} value={y}>
+                    {getYearRange(5, 2).map((y) => (
+                      <SelectItem key={String(y)} value={String(y)}>
                         {y}
                       </SelectItem>
                     ))}
@@ -136,7 +141,7 @@ function MyAttendancePage() {
             <p className="text-xs text-muted-foreground text-center">
               There is no finalized attendance statement generated for the period{" "}
               <strong>
-                {MONTHS[parseInt(selectedMonth) - 1]} {selectedYear}
+                {MONTH_NAMES[selectedMonthNum - 1]} {selectedYear}
               </strong>
               .
             </p>
@@ -148,35 +153,27 @@ function MyAttendancePage() {
               <div className="surface-panel p-4 flex flex-col justify-between">
                 <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Present Days</span>
                 <strong className="text-2xl font-mono text-[var(--status-present-fg)] mt-2">
-                  {report.presentDays} <span className="text-xs font-sans text-muted-foreground">/ {report.totalWorkingDays}</span>
+                  {getPresentDays(report)} <span className="text-xs font-sans text-muted-foreground">/ {getWorkingDays(report)}</span>
                 </strong>
               </div>
 
               <div className="surface-panel p-4 flex flex-col justify-between">
                 <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Absent Days</span>
                 <strong className="text-2xl font-mono text-[var(--status-absent-fg)] mt-2">
-                  {report.absentDays}
+                  {getAbsentDays(report)}
                 </strong>
               </div>
 
               <div className="surface-panel p-4 flex flex-col justify-between">
                 <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Leave Days</span>
                 <strong className="text-2xl font-mono text-[var(--status-leave-fg)] mt-2">
-                  {report.leaveDays}
+                  {getLeaveDays(report)}
                 </strong>
               </div>
 
               <div className="surface-panel p-4 flex flex-col justify-between">
                 <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Attendance Rate</span>
-                <strong
-                  className={`text-2xl font-mono mt-2 ${
-                    isHigh
-                      ? "text-[var(--status-present-fg)]"
-                      : isLow
-                      ? "text-[var(--status-absent-fg)]"
-                      : "text-foreground"
-                  }`}
-                >
+                <strong className={`text-2xl font-mono mt-2 ${tierTextClassFromPct(pct)}`}>
                   {pct}%
                 </strong>
               </div>
@@ -240,7 +237,7 @@ function MyAttendancePage() {
                   <div className="space-y-3.5 text-xs">
                     <div className="flex items-center justify-between">
                       <span className="text-muted-foreground">Working Days</span>
-                      <span className="font-bold font-mono">{report.totalWorkingDays} Days</span>
+                      <span className="font-bold font-mono">{getWorkingDays(report)} Days</span>
                     </div>
                     <div className="flex items-center justify-between border-t border-border/60 pt-2.5">
                       <span className="text-muted-foreground">Holidays & Sundays</span>

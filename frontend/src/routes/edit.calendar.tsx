@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { MONTH_NAMES } from "@/lib/constants";
 import {
   AlertTriangle,
   Braces,
@@ -108,11 +109,6 @@ export function buildDefaultHolidays(year: number): Holiday[] {
 }
 
 const YEAR_RANGE = { past: 5, future: 10 };
-
-const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
 
 const iso = (y: number, m: number, d: number) =>
   `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;

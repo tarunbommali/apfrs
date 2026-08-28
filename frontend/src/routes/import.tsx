@@ -27,6 +27,8 @@ import {
 import { calendarQuery } from "@/lib/queries";
 import { useAttendanceImport } from "@/lib/import/useAttendanceImport";
 import { toast } from "sonner";
+import { MONTH_NAMES } from "@/lib/constants";
+import { useMonthYearSelector, getYearRange } from "@/hooks/useMonthYearSelector";
 
 export const Route = createFileRoute("/import")({
   head: () => ({
@@ -41,14 +43,6 @@ export const Route = createFileRoute("/import")({
   component: ImportPage,
 });
 
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-
-const currentYear = new Date().getFullYear();
-const YEARS = Array.from({ length: 10 }, (_, i) => String(currentYear - 5 + i));
-
 function ImportPage() {
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -57,9 +51,14 @@ function ImportPage() {
   const { data: calendarData } = useQuery(calendarQuery());
   const allHolidays = calendarData?.holidays || [];
 
-  const now = new Date();
-  const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1));
-  const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
+  const {
+    monthStr: selectedMonth,
+    yearStr: selectedYear,
+    setMonthStr: setSelectedMonth,
+    setYearStr: setSelectedYear,
+    month: selectedMonthNum,
+    year: selectedYearNum,
+  } = useMonthYearSelector();
 
   // Filter holidays for the selected month/year
   const monthHolidaysList = useMemo(() => {
@@ -152,7 +151,7 @@ function ImportPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {MONTHS.map((m, i) => (
+                  {MONTH_NAMES.map((m, i) => (
                     <SelectItem key={m} value={String(i + 1)}>
                       {m}
                     </SelectItem>
@@ -167,8 +166,8 @@ function ImportPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {YEARS.map((y) => (
-                    <SelectItem key={y} value={y}>
+                  {getYearRange(10, 5).map((y) => (
+                    <SelectItem key={String(y)} value={String(y)}>
                       {y}
                     </SelectItem>
                   ))}
@@ -184,7 +183,7 @@ function ImportPage() {
               <div>
                 <span className="font-semibold text-foreground">Academic Calendar Auto-Sync: </span>
                 <span className="text-muted-foreground">
-                  {MONTHS[parseInt(selectedMonth, 10) - 1]} {selectedYear} has{" "}
+                  {MONTH_NAMES[selectedMonthNum - 1]} {selectedYear} has{" "}
                   <strong className="text-foreground">{monthHolidaysList.length}</strong> official calendar holidays.
                 </span>
               </div>

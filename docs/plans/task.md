@@ -1,6 +1,6 @@
 | id | task | status | notes |
 | --- | --- | --- | --- |
-| t-1 | Create Frontend Excel Parser & Custom Hook Modules | done | |
-| t-2 | Refactor `/import` Route UI Page | done | |
-| t-3 | Implement Backend Safe Database Transactions | done | |
-| t-4 | Run Verification & Syntax Checks | in_progress | |
+| t-1 | Create Shared Modules (constants, attendance-utils, useMonthYearSelector, exportAttendanceExcel) | done | |
+| t-2 | Refactor Frontend Dashboard, Calendar, and Profile pages | in_progress | |
+| t-3 | Refactor Frontend Reports and Attendance Table pages | pending | |
+| t-4 | Run Compilation and Verification Checks | pending | |

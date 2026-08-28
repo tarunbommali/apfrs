@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   Users,
   Calendar,
@@ -33,6 +33,9 @@ import {
   departmentsQuery,
 } from "@/lib/queries";
 import { calculateOverallStats } from "@/lib/attendance-helpers";
+import { MONTH_NAMES } from "@/lib/constants";
+import { getAttendancePct, tierTextClassFromPct } from "@/lib/attendance-utils";
+import { useMonthYearSelector } from "@/hooks/useMonthYearSelector";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -46,11 +49,6 @@ export const Route = createFileRoute("/")({
   }),
   component: DashboardPage,
 });
-
-const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
 
 function DashboardSkeleton() {
   return (
@@ -72,11 +70,18 @@ function DashboardPage() {
   const defaultMonth = availableMonths[0]?.month || 1;
   const defaultYear = availableMonths[0]?.year || 2025;
 
-  const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
-  const [selectedYear, setSelectedYear] = useState(defaultYear);
+  const { month: selectedMonth, year: selectedYear, setMonth: setSelectedMonth, setYear: setSelectedYear } =
+    useMonthYearSelector(defaultMonth, defaultYear);
+
+  useEffect(() => {
+    if (availableMonths.length > 0) {
+      setSelectedMonth(availableMonths[0].month);
+      setSelectedYear(availableMonths[0].year);
+    }
+  }, [availableMonths, setSelectedMonth, setSelectedYear]);
 
   // Fetch monthly attendance from MySQL
-  const { data: attendanceData, isLoading: attendanceLoading } = useQuery(
+  const { data: attendanceData } = useQuery(
     monthlyAttendanceQuery(selectedMonth, selectedYear)
   );
 
@@ -100,12 +105,12 @@ function DashboardPage() {
   const attentionList = useMemo(() => {
     return records
       .filter((r: any) => {
-        const pct = parseFloat(r.attendancePercentage || r.percentage || 0);
+        const pct = getAttendancePct(r);
         return pct < 75;
       })
       .sort((a: any, b: any) => {
-        const pA = parseFloat(a.attendancePercentage || a.percentage || 0);
-        const pB = parseFloat(b.attendancePercentage || b.percentage || 0);
+        const pA = getAttendancePct(a);
+        const pB = getAttendancePct(b);
         return pA - pB;
       });
   }, [records]);
@@ -277,7 +282,7 @@ function DashboardPage() {
             ) : (
               <div className="divide-y divide-border max-h-72 overflow-y-auto">
                 {attentionList.slice(0, 6).map((f: any) => {
-                  const pct = parseFloat(f.attendancePercentage || f.percentage || 0);
+                  const pct = getAttendancePct(f);
                   return (
                     <div key={f.id || f.cfmsId} className="py-2.5 flex items-center justify-between gap-3 text-xs">
                       <div>
@@ -287,7 +292,7 @@ function DashboardPage() {
                         </p>
                       </div>
                       <div className="text-right">
-                        <span className="font-mono font-bold text-[var(--status-absent-fg)]">
+                        <span className={`font-mono font-bold ${tierTextClassFromPct(pct)}`}>
                           {pct}%
                         </span>
                         <p className="text-[10px] text-muted-foreground">

@@ -43,6 +43,8 @@ import {
   type CalendarHoliday,
 } from "@/lib/queries";
 import { toast } from "sonner";
+import { MONTH_NAMES } from "@/lib/constants";
+import { useMonthYearSelector, getYearRange } from "@/hooks/useMonthYearSelector";
 
 export const Route = createFileRoute("/calendar")({
   head: () => ({
@@ -58,17 +60,10 @@ export const Route = createFileRoute("/calendar")({
   component: AcademicCalendarPage,
 });
 
-const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-
 const MONTH_SHORT = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
-
-const YEARS = ["2024", "2025", "2026", "2027", "2028"];
 
 const HOLIDAY_TYPES = [
   "Public holiday",
@@ -108,9 +103,8 @@ function AcademicCalendarPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
 
-  const now = new Date();
-  const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
+  const { month: selectedMonth, year: selectedYear, setMonth: setSelectedMonth, setYear: setSelectedYear } =
+    useMonthYearSelector();
 
   // ── Database Query for Calendar Data ──
   const {
@@ -303,7 +297,7 @@ function AcademicCalendarPage() {
                 {/* Month Dropdown */}
                 <Select
                   value={String(selectedMonth)}
-                  onValueChange={(val) => setSelectedMonth(parseInt(val, 10))}
+                  onValueChange={(val) => setSelectedMonth(Number(val))}
                 >
                   <SelectTrigger className="h-8 w-36 font-semibold">
                     <SelectValue />
@@ -320,14 +314,14 @@ function AcademicCalendarPage() {
                 {/* Year Dropdown */}
                 <Select
                   value={String(selectedYear)}
-                  onValueChange={(val) => setSelectedYear(parseInt(val, 10))}
+                  onValueChange={(val) => setSelectedYear(Number(val))}
                 >
                   <SelectTrigger className="h-8 w-24 font-mono font-semibold">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {YEARS.map((y) => (
-                      <SelectItem key={y} value={y}>
+                    {getYearRange(5, 2).map((y) => (
+                      <SelectItem key={String(y)} value={String(y)}>
                         {y}
                       </SelectItem>
                     ))}
