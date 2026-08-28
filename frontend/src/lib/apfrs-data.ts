@@ -63,16 +63,7 @@ export const departments = [
   "ECE",
   "EEE",
   "ME",
-  "MECH",
   "CIVIL",
-  "CE",
-  "MET",
-  "Math",
-  "Maths",
-  "Physics",
-  "Chemistry",
-  "BS&HSS",
-  "Commerce",
   "Administration",
 ];
 
