@@ -46,7 +46,8 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-const YEARS = ["2024", "2025", "2026", "2027", "2028"];
+const currentYear = new Date().getFullYear();
+const YEARS = Array.from({ length: 10 }, (_, i) => String(currentYear - 5 + i));
 
 function ImportPage() {
   const navigate = useNavigate();
