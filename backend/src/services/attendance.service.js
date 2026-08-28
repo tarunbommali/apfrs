@@ -7,10 +7,37 @@ import { jobQueueService } from './job-queue.service.js';
 import { logger } from '../utils/logger.js';
 import { AppError } from '../utils/errors.js';
 import { generateFacultyAttendanceEmailHTML, generateFacultyAttendanceEmailPlainText } from '../utils/email-template.js';
+import { reportService } from './report.service.js';
 
 class AttendanceService {
   async sendAttendance(data) {
-    const { attendanceData, emailTemplate, sentBy, triggeredBy } = data;
+    let { attendanceData, emailTemplate, sentBy, triggeredBy, month, year, facultyIds } = data;
+
+    // Resolve database records if dispatched from cockpit using faculty IDs
+    if ((!attendanceData || attendanceData.length === 0) && month && year && facultyIds && facultyIds.length > 0) {
+      const recordsObj = await monthlyAttendanceRepository.getMonthlyAttendance(month, year);
+      if (!recordsObj) {
+        throw new AppError(404, `No attendance statement found for ${month}/${year}`);
+      }
+      attendanceData = recordsObj.records
+        .filter(r => facultyIds.includes(r.facultyId) || facultyIds.includes(r.cfmsId) || facultyIds.includes(r.id))
+        .map(r => ({
+          employeeId: r.cfmsId,
+          employeeName: r.name,
+          email: r.email,
+          month: month,
+          year: year,
+          presentDays: r.presentDays,
+          workingDays: r.totalWorkingDays,
+          absentDays: r.absentDays,
+          attendancePercentage: r.attendancePercentage,
+          holidays: r.holidayDays,
+        }));
+    }
+
+    if (!attendanceData || attendanceData.length === 0) {
+      throw new AppError(400, 'No attendance records provided for dispatch.');
+    }
 
     // Phase 5: one bulk IN-clause query instead of N sequential findByEmail/findByCfmsId calls
     const emails  = attendanceData.map((r) => r.email).filter(Boolean);
@@ -112,43 +139,37 @@ class AttendanceService {
         const dept = faculty?.department || record.department || 'Academic Department';
         const desig = faculty?.designation || record.designation || 'Faculty';
 
-        const monthName = record.monthName || record.month || 'January';
-        const year = record.year || 2025;
-        const periodLabel = `${monthName} ${year}`;
+        const monthNum = record.month ? parseInt(record.month, 10) : new Date().getMonth() + 1;
+        const yearNum = record.year ? parseInt(record.year, 10) : new Date().getFullYear();
+        const MONTH_NAMES = [
+          'January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        const monthName = MONTH_NAMES[monthNum - 1] || 'Monthly';
+        const periodLabel = `${monthName} ${yearNum}`;
 
-        const summary = {
-          presentDays: record.presentDays ?? record.pDays ?? record.present_days ?? 0,
-          workingDays: record.workingDays ?? record.wDays ?? record.total_working_days ?? 27,
-          absentDays: record.absentDays ?? record.aDays ?? record.absent_days ?? 0,
-          attendancePercentage: record.attendancePercentage ?? record.percentage ?? undefined,
-          holidays: record.holidays ?? 4,
-        };
+        let pdfBuffer;
+        try {
+          const reportData = await reportService.getReportData(empId, monthNum, yearNum);
+          pdfBuffer = await reportService.generatePdf(reportData);
+        } catch (reportErr) {
+          logger.error('Failed to generate PDF for batch faculty:', { empId, error: reportErr.message });
+        }
 
-        const html = generateFacultyAttendanceEmailHTML({
-          faculty: {
-            name,
-            cfmsId: empId,
-            employeeId: empId,
-            department: dept,
-            designation: desig,
-            email: record.email,
-          },
-          summary,
-          periodLabel,
-        });
+        const attachments = pdfBuffer ? [
+          {
+            filename: `attendance-${empId}-${yearNum}-${monthNum}.pdf`,
+            content: pdfBuffer,
+          }
+        ] : [];
 
-        const plainText = generateFacultyAttendanceEmailPlainText({
-          faculty: {
-            name,
-            cfmsId: empId,
-            employeeId: empId,
-            department: dept,
-            designation: desig,
-            email: record.email,
-          },
-          summary,
-          periodLabel,
-        });
+        const html = `
+          <p>Dear ${name},</p>
+          <p>Please find attached your Attendance Performance Report for ${periodLabel}.</p>
+          <p>Regards,<br>APFRS Reporting Cell</p>
+        `;
+
+        const plainText = `Dear ${name},\n\nPlease find attached your Attendance Performance Report for ${periodLabel}.\n\nRegards,\nAPFRS Reporting Cell`;
 
         emails.push({
           to: record.email,
@@ -157,6 +178,7 @@ class AttendanceService {
           text: plainText,
           employeeId: empId,
           employeeName: name,
+          attachments,
         });
       }
 
