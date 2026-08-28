@@ -1,24 +1,10 @@
+// frontend/src/routes/detailed.tsx
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  UploadCloud,
-  Search,
-  Calendar,
-  Building2,
-  Users,
-  Download,
-  Table2,
-  ListFilter,
-  CheckCircle2,
-  Briefcase,
-  Layers,
-  ArrowUpDown,
-  FileSpreadsheet,
-} from "lucide-react";
+import { UploadCloud, Calendar, Download } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -34,16 +20,16 @@ import {
 import { toast } from "sonner";
 import { MONTH_NAMES } from "@/lib/constants";
 import { useMonthYearSelector } from "@/hooks/useMonthYearSelector";
-import {
-  getAttendancePct,
-  tierTextClassFromPct,
-  getPresentDays,
-  getAbsentDays,
-  getLeaveDays,
-  getWorkingDays,
-  getJobStatus,
-} from "@/lib/attendance-utils";
+import { getAttendancePct, getJobStatus } from "@/lib/attendance-utils";
 import { exportAttendanceExcel } from "@/lib/export/exportAttendanceExcel";
+
+// Import split components
+import { KPIMetrics } from "./-detailed/KPIMetrics";
+import { ViewModeTabs } from "./-detailed/ViewModeTabs";
+import { AttendanceFilters } from "./-detailed/AttendanceFilters";
+import { SummaryTable } from "./-detailed/SummaryTable";
+import { DailyTable } from "./-detailed/DailyTable";
+import { EmptyState } from "./-detailed/EmptyState";
 
 export const Route = createFileRoute("/detailed")({
   head: () => ({
@@ -58,14 +44,7 @@ export const Route = createFileRoute("/detailed")({
   component: AttendancePage,
 });
 
-const cellStyle: Record<string, string> = {
-  P: "bg-[var(--status-present-bg)] text-[var(--status-present-fg)] font-bold",
-  A: "bg-[var(--status-absent-bg)] text-[var(--status-absent-fg)] font-bold",
-  L: "bg-[var(--status-leave-bg)] text-[var(--status-leave-fg)] font-bold",
-  H: "bg-[var(--status-holiday-bg)] text-[var(--status-holiday-fg)] font-medium",
-  HD: "bg-[var(--status-halfday-bg)] text-[var(--status-halfday-fg)] font-bold",
-  Late: "bg-[var(--status-leave-bg)] text-[var(--status-leave-fg)] font-bold",
-};
+type ViewMode = "summary" | "daily";
 
 function AttendancePage() {
   const { data: monthsData, isLoading: monthsLoading } = useQuery(attendanceMonthsQuery());
@@ -85,7 +64,7 @@ function AttendancePage() {
   }, [availableMonths, setSelectedMonth, setSelectedYear]);
 
   // Tab State: "summary" | "daily"
-  const [viewMode, setViewMode] = useState<"summary" | "daily">("summary");
+  const [viewMode, setViewMode] = useState<ViewMode>("summary");
 
   const { data: attendanceData, isLoading: recordsLoading } = useQuery(
     monthlyAttendanceQuery(selectedMonth, selectedYear)
@@ -106,7 +85,7 @@ function AttendancePage() {
   const departmentsList = useMemo(() => {
     const list = dbDepartments.map((d) => d.code);
     const cleanList = Array.from(new Set(list));
-    if (!cleanList.some(code => code.toLowerCase() === "uncategorized")) {
+    if (!cleanList.some((code) => code.toLowerCase() === "uncategorized")) {
       cleanList.push("Uncategorized");
     }
     return cleanList.sort();
@@ -165,26 +144,7 @@ function AttendancePage() {
   };
 
   if (availableMonths.length === 0 && !monthsLoading) {
-    return (
-      <AppShell
-        roles={["admin"]}
-        title="Attendance"
-        subtitle="No attendance data loaded"
-      >
-        <div className="surface-panel flex flex-col items-center gap-4 p-16 text-center">
-          <UploadCloud className="size-12 text-muted-foreground/40" strokeWidth={1} />
-          <h2 className="text-lg font-semibold">No attendance sheets imported yet</h2>
-          <p className="text-sm text-muted-foreground">
-            Upload a monthly biometric sheet to view attendance summary and daily records.
-          </p>
-          <Button asChild className="mt-4">
-            <Link to="/import">
-              <UploadCloud className="mr-2 size-4" /> Import Biometric Data
-            </Link>
-          </Button>
-        </div>
-      </AppShell>
-    );
+    return <EmptyState />;
   }
 
   return (
@@ -237,284 +197,52 @@ function AttendancePage() {
       }
     >
       <div className="space-y-6">
-        {/* ── Summary Metric Strip ── */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="surface-panel p-4 flex items-center justify-between">
-            <div>
-              <p className="label-caps">Total Faculty</p>
-              <p className="mt-1 font-mono text-2xl font-bold text-foreground">{totalFaculty}</p>
-              <p className="text-[11px] text-muted-foreground">{monthName} {selectedYear}</p>
-            </div>
-            <Users className="size-6 text-primary/80" />
-          </div>
+        {/* KPI metrics strip */}
+        <KPIMetrics
+          totalFaculty={totalFaculty}
+          workingDays={workingDays}
+          avgAttendance={avgAttendance}
+          departmentsCount={departmentsList.length}
+          monthName={monthName}
+          year={selectedYear}
+        />
 
-          <div className="surface-panel p-4 flex items-center justify-between">
-            <div>
-              <p className="label-caps">Working Days</p>
-              <p className="mt-1 font-mono text-2xl font-bold text-foreground">{workingDays}</p>
-              <p className="text-[11px] text-muted-foreground">Synchronized with calendar</p>
-            </div>
-            <Calendar className="size-6 text-amber-500/80" />
-          </div>
-
-          <div className="surface-panel p-4 flex items-center justify-between">
-            <div>
-              <p className="label-caps">Average Attendance</p>
-              <p className="mt-1 font-mono text-2xl font-bold text-foreground">{avgAttendance}%</p>
-              <p className="text-[11px] text-muted-foreground">College-wide rate</p>
-            </div>
-            <CheckCircle2 className="size-6 text-emerald-500/80" />
-          </div>
-
-          <div className="surface-panel p-4 flex items-center justify-between">
-            <div>
-              <p className="label-caps">Departments</p>
-              <p className="mt-1 font-mono text-2xl font-bold text-foreground">{departmentsList.length}</p>
-              <p className="text-[11px] text-muted-foreground">Active in reporting</p>
-            </div>
-            <Building2 className="size-6 text-indigo-500/80" />
-          </div>
-        </div>
-
-        {/* ── View Mode Tabs & Filter Bar ── */}
+        {/* View mode tabs & Filters */}
         <div className="surface-panel p-4 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
-            {/* Segmented View Switcher: Summary vs Daily View */}
-            <div className="inline-flex rounded-lg border border-border bg-muted/40 p-1">
-              <button
-                type="button"
-                onClick={() => setViewMode("summary")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                  viewMode === "summary"
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <ListFilter className="size-3.5" /> Summary View
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("daily")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                  viewMode === "daily"
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <Table2 className="size-3.5" /> Daily View (Day 1..{totalDaysInMonth})
-              </button>
-            </div>
+          <ViewModeTabs
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            filteredCount={filteredRecords.length}
+            totalCount={records.length}
+            totalDays={totalDaysInMonth}
+          />
 
-            <div className="text-xs text-muted-foreground font-mono">
-              Showing <span className="font-bold text-foreground">{filteredRecords.length}</span> of {records.length} records
-            </div>
-          </div>
-
-          {/* Filters Row */}
-          <div className="grid gap-3 sm:grid-cols-[1.5fr_1fr_1fr]">
-            <div className="relative">
-              <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
-              <Input
-                placeholder="Search faculty name, CFMS ID, designation..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 h-9 text-xs"
-              />
-            </div>
-
-            <Select value={selectedDept} onValueChange={setSelectedDept}>
-              <SelectTrigger className="h-9 text-xs">
-                <Building2 className="mr-1.5 size-3.5 text-muted-foreground" />
-                <SelectValue placeholder="Department" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Departments ({departmentsList.length})</SelectItem>
-                {departmentsList.map((d) => (
-                  <SelectItem key={d} value={d}>
-                    {d}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={selectedCadre} onValueChange={setSelectedCadre}>
-              <SelectTrigger className="h-9 text-xs">
-                <Briefcase className="mr-1.5 size-3.5 text-muted-foreground" />
-                <SelectValue placeholder="Cadre" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Cadres</SelectItem>
-                <SelectItem value="regular">Regular Faculty</SelectItem>
-                <SelectItem value="contract">Contract / Adjunct</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <AttendanceFilters
+            search={search}
+            onSearchChange={setSearch}
+            selectedDept={selectedDept}
+            onDeptChange={setSelectedDept}
+            selectedCadre={selectedCadre}
+            onCadreChange={setSelectedCadre}
+            departmentsList={departmentsList}
+          />
         </div>
 
-        {/* ── Table Container ── */}
+        {/* Tables */}
         <div className="surface-panel overflow-hidden">
           {recordsLoading ? (
             <div className="py-20 text-center text-sm text-muted-foreground">
               Loading attendance records…
             </div>
-          ) : filteredRecords.length === 0 ? (
-            <div className="py-16 text-center text-sm text-muted-foreground">
-              No matching records found.
-            </div>
           ) : viewMode === "summary" ? (
-            /* ── VIEW 1: SUMMARY TABLE ── */
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead className="border-b border-border bg-muted/30 font-semibold text-muted-foreground uppercase text-[10px] tracking-wider">
-                  <tr>
-                    <th className="py-3 px-4 w-12 text-center">#</th>
-                    <th className="py-3 px-4">CFMS ID</th>
-                    <th className="py-3 px-4">Faculty Name</th>
-                    <th className="py-3 px-4">Department</th>
-                    <th className="py-3 px-4">Designation</th>
-                    <th className="py-3 px-4 text-center">Cadre</th>
-                    <th className="py-3 px-3 text-center">Present</th>
-                    <th className="py-3 px-3 text-center">Absent</th>
-                    <th className="py-3 px-3 text-center">Leaves</th>
-                    <th className="py-3 px-3 text-center">Working</th>
-                    <th className="py-3 px-4 text-right">Attendance %</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filteredRecords.map((r: any, idx: number) => {
-                    const pct = getAttendancePct(r);
-                    const isLow = pct < 75;
-                    const isRegular = getJobStatus(r).toLowerCase() === "regular";
-
-                    return (
-                      <tr key={r.id || r.cfmsId || idx} className="hover:bg-muted/20 transition-colors">
-                        <td className="py-3 px-4 text-center font-mono text-muted-foreground">{idx + 1}</td>
-                        <td className="py-3 px-4 font-mono font-medium text-foreground">{r.cfmsId || r.cfms_id || "—"}</td>
-                        <td className="py-3 px-4">
-                          <div className="font-semibold text-foreground">{r.name}</div>
-                          <div className="text-[10px] text-muted-foreground font-mono">{r.email || ""}</div>
-                        </td>
-                        <td className="py-3 px-4 font-medium text-foreground">{r.department || "—"}</td>
-                        <td className="py-3 px-4 text-muted-foreground">{r.designation || "—"}</td>
-                        <td className="py-3 px-4 text-center">
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
-                              isRegular
-                                ? "bg-[var(--badge-accent-bg)] text-[var(--badge-accent-fg)] border-[rgba(94,106,210,0.2)]"
-                                : "bg-[var(--badge-muted-bg)] text-[var(--badge-muted-fg)] border-[rgba(255,255,255,0.08)]"
-                            }`}
-                          >
-                            {getJobStatus(r)}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3 text-center font-mono font-bold text-[var(--status-present-fg)]">
-                          {getPresentDays(r)}
-                        </td>
-                        <td className="py-3 px-3 text-center font-mono font-bold text-[var(--status-absent-fg)]">
-                          {getAbsentDays(r)}
-                        </td>
-                        <td className="py-3 px-3 text-center font-mono font-medium text-[var(--status-leave-fg)]">
-                          {getLeaveDays(r)}
-                        </td>
-                        <td className="py-3 px-3 text-center font-mono text-muted-foreground">
-                          {getWorkingDays(r, workingDays)}
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <span
-                            className={`inline-block font-mono font-bold px-2 py-0.5 rounded text-xs ${
-                              isLow
-                                ? "bg-[var(--status-absent-bg)] text-[var(--status-absent-fg)]"
-                                : "bg-[var(--status-present-bg)] text-[var(--status-present-fg)]"
-                            }`}
-                          >
-                            {pct}%
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <SummaryTable records={filteredRecords} workingDays={workingDays} />
           ) : (
-            /* ── VIEW 2: DAY-BY-DAY ATTENDANCE GRID ── */
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead className="border-b border-border bg-muted/30 font-semibold text-muted-foreground uppercase text-[10px] tracking-wider sticky top-0">
-                  <tr>
-                    <th className="py-3 px-3 w-10 text-center sticky left-0 bg-card z-10">#</th>
-                    <th className="py-3 px-4 min-w-[200px] sticky left-10 bg-card z-10 border-r border-border">
-                      Faculty / Cadre
-                    </th>
-                    {dayNumbers.map((d) => (
-                      <th key={d} className="py-2.5 px-1.5 text-center min-w-[28px] font-mono">
-                        {d}
-                      </th>
-                    ))}
-                    <th className="py-3 px-3 text-center border-l border-border bg-card sticky right-16">P</th>
-                    <th className="py-3 px-3 text-center bg-card sticky right-8">A</th>
-                    <th className="py-3 px-3 text-right bg-card sticky right-0 font-bold">%</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filteredRecords.map((r: any, idx: number) => {
-                    const daily = Array.isArray(r.attendance)
-                      ? r.attendance
-                      : Array.isArray(r.dailyRecords)
-                      ? r.dailyRecords
-                      : Array.isArray(r.daily_records)
-                      ? r.daily_records
-                      : [];
-
-                    const pct = getAttendancePct(r);
-
-                    return (
-                      <tr key={r.id || r.cfmsId || idx} className="hover:bg-muted/20 transition-colors">
-                        <td className="py-2.5 px-3 text-center font-mono text-muted-foreground sticky left-0 bg-card z-10">
-                          {idx + 1}
-                        </td>
-                        <td className="py-2.5 px-4 sticky left-10 bg-card z-10 border-r border-border">
-                          <div className="font-semibold text-foreground truncate">{r.name}</div>
-                          <div className="text-[10px] text-muted-foreground truncate">
-                            {r.department} · {getJobStatus(r)}
-                          </div>
-                        </td>
-
-                        {dayNumbers.map((dayNum) => {
-                          const dayPad = String(dayNum).padStart(2, "0");
-                          const rec = daily[dayNum - 1] || daily.find((d: any) => String(d?.date).endsWith(`-${dayPad}`));
-                          const status = rec?.status || "—";
-                          const badge = cellStyle[status] || "bg-muted/30 text-muted-foreground";
-
-                          return (
-                            <td key={dayNum} className="py-2 px-1 text-center font-mono">
-                              <span className={`inline-flex size-6 items-center justify-center rounded text-[11px] ${badge}`}>
-                                {status}
-                              </span>
-                            </td>
-                          );
-                        })}
-
-                        <td className="py-2.5 px-3 text-center font-mono font-bold text-[var(--status-present-fg)] border-l border-border bg-card sticky right-16">
-                          {getPresentDays(r)}
-                        </td>
-                        <td className="py-2.5 px-3 text-center font-mono font-bold text-[var(--status-absent-fg)] bg-card sticky right-8">
-                          {getAbsentDays(r)}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono font-bold bg-card sticky right-0">
-                          <span className={tierTextClassFromPct(pct)}>
-                            {pct}%
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <DailyTable records={filteredRecords} dayNumbers={dayNumbers} />
           )}
         </div>
       </div>
     </AppShell>
   );
 }
+
+export default AttendancePage;
