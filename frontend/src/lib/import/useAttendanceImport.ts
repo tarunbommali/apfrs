@@ -97,9 +97,20 @@ export function useAttendanceImport() {
     }
   };
 
+  const reset = () => {
+    setStatus("idle");
+    setFileName("");
+    setParsedCount(0);
+    setErrorMsg("");
+    setParsedRecords([]);
+    setDetectedMonth(null);
+    setDetectedYear(null);
+  };
+
   return {
     parseFile,
     importData,
+    reset,
     status,
     fileName,
     parsedCount,
