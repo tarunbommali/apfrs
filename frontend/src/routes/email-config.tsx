@@ -341,7 +341,7 @@ function EmailConfigPage() {
 
   if (isLoading) {
     return (
-      <AppShell title="Email Configuration" subtitle="Configure how APFRS sends attendance emails.">
+      <AppShell roles={["admin"]} title="Email Configuration" subtitle="Configure how APFRS sends attendance emails.">
         <div className="surface-panel p-12 text-center text-muted-foreground flex items-center justify-center gap-2 text-sm">
           <Loader2 className="size-4 animate-spin text-primary" /> Loading configuration…
         </div>
@@ -351,6 +351,7 @@ function EmailConfigPage() {
 
   return (
     <AppShell
+      roles={["admin"]}
       title="Email Configuration"
       subtitle="Configure how APFRS sends attendance emails."
       actions={

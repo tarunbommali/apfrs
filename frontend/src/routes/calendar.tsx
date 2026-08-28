@@ -397,12 +397,14 @@ function AcademicCalendarPage() {
                       }}
                       className={`group relative flex flex-col justify-between rounded-lg border p-2 h-20 text-xs transition-all ${
                         holiday
-                          ? "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300 font-semibold cursor-pointer hover:border-rose-500"
+                          ? `border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300 font-semibold ${
+                              isAdmin ? "cursor-pointer hover:border-rose-500" : ""
+                            }`
                           : isSunday
                           ? "border-border/60 bg-muted/40 text-muted-foreground/70"
                           : isSaturday
-                          ? "border-border bg-card/60 hover:border-primary/40 cursor-pointer"
-                          : "border-border bg-card hover:border-primary/50 cursor-pointer"
+                          ? `border-border bg-card/60 ${isAdmin ? "hover:border-primary/40 cursor-pointer" : ""}`
+                          : `border-border bg-card ${isAdmin ? "hover:border-primary/50 cursor-pointer" : ""}`
                       }`}
                     >
                       <div className="flex items-center justify-between">

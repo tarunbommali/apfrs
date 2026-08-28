@@ -404,11 +404,13 @@ export function Sidebar() {
                 </Link>
               </DropdownMenuItem>
 
-              <DropdownMenuItem asChild className="hover:bg-sidebar-accent text-xs cursor-pointer">
-                <Link to="/email-config" className="flex items-center gap-2">
-                  <Mailbox className="size-3.5" /> Email Settings
-                </Link>
-              </DropdownMenuItem>
+              {role === "admin" && (
+                <DropdownMenuItem asChild className="hover:bg-sidebar-accent text-xs cursor-pointer">
+                  <Link to="/email-config" className="flex items-center gap-2">
+                    <Mailbox className="size-3.5" /> Email Settings
+                  </Link>
+                </DropdownMenuItem>
+              )}
 
               <DropdownMenuSeparator className="bg-sidebar-border" />
 
