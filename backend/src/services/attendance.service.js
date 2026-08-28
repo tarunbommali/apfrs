@@ -292,6 +292,16 @@ class AttendanceService {
   }
 
   /**
+   * Retrieves personal attendance history for all months.
+   */
+  async getAllMyAttendance(user) {
+    if (!user || (!user.email && !user.cfms_id)) {
+      throw new AppError(401, 'User context not found');
+    }
+    return monthlyAttendanceRepository.getAllFacultyAttendance(user.email || user.cfms_id);
+  }
+
+  /**
    * Register this service's job handlers with the queue.
    * Must be called once in server.js after jobQueueService.start().
    */

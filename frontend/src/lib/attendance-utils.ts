@@ -62,3 +62,20 @@ export function tierTextClass(tier: AttendanceTier): string {
 export function tierTextClassFromPct(pct: number): string {
   return tierTextClass(attendanceTier(pct));
 }
+
+export function calculateTotalWorkingHours(dailyRecords: any[]): string {
+  let totalMinutes = 0;
+  (dailyRecords || []).forEach((d: any) => {
+    if (d.inTime && d.outTime) {
+      const [inH, inM, inS] = d.inTime.split(':').map(Number);
+      const [outH, outM, outS] = d.outTime.split(':').map(Number);
+      const diffMs = new Date(2000, 0, 1, outH, outM, outS || 0).getTime() - new Date(2000, 0, 1, inH, inM, inS || 0).getTime();
+      if (diffMs > 0) {
+        totalMinutes += Math.floor(diffMs / 60000);
+      }
+    }
+  });
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours}h ${minutes}m`;
+}

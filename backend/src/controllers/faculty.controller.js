@@ -17,8 +17,9 @@ export class FacultyController {
     try {
       const { month, year } = req.query;
       const monthlyRecords = await attendanceService.getMyAttendance(req.user, month, year);
+      const history = await attendanceService.getAllMyAttendance(req.user);
       const attendance = await attendanceService.getFacultyAttendance(req.user.id);
-      return sendSuccess(res, { attendance, monthlyRecords });
+      return sendSuccess(res, { attendance, monthlyRecords, history });
     } catch (error) {
       next(error);
     }

@@ -2,26 +2,16 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  CalendarDays,
   Download,
   AlertCircle,
   Clock,
-  CheckCircle2,
-  FileText,
+  ArrowLeft,
+  Eye,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { facultyProfileQuery, facultyMonthlyAttendanceQuery } from "@/lib/queries";
 import { MONTH_NAMES } from "@/lib/constants";
-import { useMonthYearSelector, getYearRange } from "@/hooks/useMonthYearSelector";
 import {
   getAttendancePct,
   tierTextClassFromPct,
@@ -29,6 +19,7 @@ import {
   getAbsentDays,
   getLeaveDays,
   getWorkingDays,
+  calculateTotalWorkingHours,
 } from "@/lib/attendance-utils";
 
 export const Route = createFileRoute("/my-attendance")({
@@ -45,94 +36,159 @@ export const Route = createFileRoute("/my-attendance")({
 });
 
 function MyAttendancePage() {
-  const {
-    monthStr: selectedMonth,
-    yearStr: selectedYear,
-    setMonthStr: setSelectedMonth,
-    setYearStr: setSelectedYear,
-    month: selectedMonthNum,
-    year: selectedYearNum,
-  } = useMonthYearSelector();
+  const [viewDetailsPeriod, setViewDetailsPeriod] = useState<{ month: number; year: number } | null>(null);
 
   // 1. Fetch faculty profile
   const { data: profileData } = useQuery(facultyProfileQuery());
   const me = profileData?.profile;
 
-  // 2. Fetch monthly attendance record
+  // 2. Fetch monthly attendance data
   const { data: attendanceData, isLoading, error } = useQuery(
-    facultyMonthlyAttendanceQuery(selectedMonth, selectedYear)
+    facultyMonthlyAttendanceQuery(
+      viewDetailsPeriod ? String(viewDetailsPeriod.month) : undefined,
+      viewDetailsPeriod ? String(viewDetailsPeriod.year) : undefined
+    )
   );
 
   const report = attendanceData?.monthlyRecords;
   const dailyRecords = report?.dailyRecords || [];
+  const history = attendanceData?.history || [];
 
   const handleDownloadPdf = () => {
+    if (!viewDetailsPeriod) return;
     window.open(
-      `/api/faculty/attendance/report/pdf?month=${selectedMonth}&year=${selectedYear}`,
+      `/api/faculty/attendance/report/pdf?month=${viewDetailsPeriod.month}&year=${viewDetailsPeriod.year}`,
       "_blank"
     );
   };
 
+  // ── VIEW 1: MASTER ATTENDANCE SHEETS HISTORY ──
+  if (!viewDetailsPeriod) {
+    return (
+      <AppShell
+        roles={["faculty", "admin"]}
+        title="My Attendance"
+        subtitle="Manage and view all your monthly attendance records uploaded in the registry"
+      >
+        <div className="mx-auto max-w-5xl space-y-6">
+          <section className="surface-panel p-6 space-y-4">
+            <div className="border-b border-border pb-3 flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-foreground">Available Monthly Statements</h2>
+                <p className="text-xs text-muted-foreground">All biometric cycles stored in database for your account</p>
+              </div>
+              <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-mono font-medium text-foreground">
+                {history.length} cycles
+              </span>
+            </div>
+
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center p-20 gap-3">
+                <Clock className="size-8 text-indigo-400 animate-spin" />
+                <p className="text-sm text-muted-foreground">Loading attendance history...</p>
+              </div>
+            ) : error || history.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-16 gap-3 border border-dashed border-border/80">
+                <AlertCircle className="size-8 text-muted-foreground" />
+                <p className="font-semibold text-sm">No attendance records found</p>
+                <p className="text-xs text-muted-foreground text-center">
+                  There are no attendance statements uploaded for your CFMS ID or email yet.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="border-b border-border bg-muted/30 font-semibold text-muted-foreground uppercase text-[10px] tracking-wider">
+                    <tr>
+                      <th className="py-3 px-4">Period</th>
+                      <th className="py-3 px-4 text-center">Present / Working Days</th>
+                      <th className="py-3 px-4 text-center">Absent Days</th>
+                      <th className="py-3 px-4 text-center">Holidays & Sundays</th>
+                      <th className="py-3 px-4 text-center">Working Hours</th>
+                      <th className="py-3 px-4 text-center">Attendance %</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {history.map((row: any, idx: number) => {
+                      const pct = getAttendancePct(row);
+                      return (
+                        <tr key={idx} className="hover:bg-muted/20 transition-colors">
+                          <td className="py-3.5 px-4 font-semibold text-foreground">
+                            {MONTH_NAMES[row.month - 1]} {row.year}
+                          </td>
+                          <td className="py-3.5 px-4 text-center font-mono font-medium text-foreground">
+                            {getPresentDays(row)} / {getWorkingDays(row)}
+                          </td>
+                          <td className="py-3.5 px-4 text-center font-mono font-medium text-[var(--status-absent-fg)]">
+                            {getAbsentDays(row)}
+                          </td>
+                          <td className="py-3.5 px-4 text-center font-mono text-muted-foreground">
+                            {row.holidayDays ?? row.holiday_days ?? 0}
+                          </td>
+                          <td className="py-3.5 px-4 text-center font-mono text-muted-foreground">
+                            {calculateTotalWorkingHours(row.dailyRecords || row.attendance)}
+                          </td>
+                          <td className="py-3.5 px-4 text-center font-mono">
+                            <span className={tierTextClassFromPct(pct)}>{pct}%</span>
+                          </td>
+                          <td className="py-3.5 px-4 text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setViewDetailsPeriod({ month: row.month, year: row.year })}
+                              className="gap-1.5 h-8 text-xs font-semibold"
+                            >
+                              <Eye className="size-3.5" /> Open Details
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </div>
+      </AppShell>
+    );
+  }
+
+  // ── VIEW 2: MONTH DAY-WISE PUNCH TIMES BREAKDOWN ──
   const pct = getAttendancePct(report);
 
   return (
     <AppShell
       roles={["faculty", "admin"]}
-      title="My Attendance"
-      subtitle="View your monthly attendance performance summary, check-in punch times, and export PDF statements"
+      title="My Attendance Details"
+      subtitle={`${MONTH_NAMES[viewDetailsPeriod.month - 1]} ${viewDetailsPeriod.year} · Personal breakdown`}
+      actions={
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setViewDetailsPeriod(null)}
+            className="gap-1.5 h-9 text-xs"
+          >
+            <ArrowLeft className="size-4" /> Back to History
+          </Button>
+
+          <Button
+            onClick={handleDownloadPdf}
+            disabled={!report}
+            className="gap-2 h-9 text-xs"
+          >
+            <Download className="size-4" /> Download PDF Statement
+          </Button>
+        </div>
+      }
     >
       <div className="mx-auto max-w-5xl space-y-6">
-        {/* Period selection cockpit */}
-        <section className="surface-panel p-5">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div className="flex flex-wrap gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Select Month</Label>
-                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                  <SelectTrigger className="w-40 h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MONTH_NAMES.map((m, i) => (
-                      <SelectItem key={m} value={String(i + 1)}>
-                        {m}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Select Year</Label>
-                <Select value={selectedYear} onValueChange={setSelectedYear}>
-                  <SelectTrigger className="w-28 h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {getYearRange(5, 2).map((y) => (
-                      <SelectItem key={String(y)} value={String(y)}>
-                        {y}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <Button
-              onClick={handleDownloadPdf}
-              disabled={!report}
-              className="gap-2 h-9 text-xs"
-            >
-              <Download className="size-4" /> Download PDF Statement
-            </Button>
-          </div>
-        </section>
-
         {isLoading ? (
           <div className="flex flex-col items-center justify-center p-20 gap-3 surface-panel">
             <Clock className="size-8 text-indigo-400 animate-spin" />
-            <p className="text-sm text-muted-foreground">Loading attendance report data...</p>
+            <p className="text-sm text-muted-foreground">Loading attendance report details...</p>
           </div>
         ) : error || !report ? (
           <div className="flex flex-col items-center justify-center p-16 gap-3 surface-panel border border-dashed border-border/80">
@@ -141,7 +197,7 @@ function MyAttendancePage() {
             <p className="text-xs text-muted-foreground text-center">
               There is no finalized attendance statement generated for the period{" "}
               <strong>
-                {MONTH_NAMES[selectedMonthNum - 1]} {selectedYear}
+                {MONTH_NAMES[viewDetailsPeriod.month - 1]} {viewDetailsPeriod.year}
               </strong>
               .
             </p>

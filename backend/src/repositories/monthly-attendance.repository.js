@@ -359,6 +359,22 @@ class MonthlyAttendanceRepository {
   }
 
   /**
+   * Retrieves all historical individual faculty attendance records.
+   */
+  async getAllFacultyAttendance(identifier) {
+    const sql = `
+      SELECT fma.*, s.working_days as official_working_days
+      FROM faculty_monthly_attendance fma
+      JOIN monthly_attendance_sheets s ON fma.sheet_id = s.id
+      WHERE (fma.email = ? OR fma.cfms_id = ? OR fma.faculty_id = ?)
+      ORDER BY fma.year DESC, fma.month DESC
+    `;
+    const params = [identifier, identifier, identifier];
+    const rows = await db.query(sql, params);
+    return rows.map((r) => new FacultyMonthlyAttendance(r));
+  }
+
+  /**
    * Syncs user changes to all of their records in the monthly attendance registry.
    */
   async updateFacultyRegistryInfo(facultyId, updates) {
