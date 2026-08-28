@@ -24,8 +24,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAttendance, type EmployeeRecord, type AttendanceDay, type AttendanceStatus } from "@/lib/attendance-context";
-import { useImportAttendance, calendarQuery } from "@/lib/queries";
+import { calendarQuery } from "@/lib/queries";
+import { useAttendanceImport } from "@/lib/import/useAttendanceImport";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/import")({
@@ -46,170 +46,10 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-const MONTH_ALIASES = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
-
 const YEARS = ["2024", "2025", "2026", "2027", "2028"];
-
-const STATUS_MAP: Record<string, AttendanceStatus> = {
-  P: "P", p: "P", PRESENT: "P",
-  A: "A", a: "A", ABSENT: "A",
-  L: "L", l: "L", LEAVE: "L", CL: "L", OD: "L",
-  H: "H", h: "H", HOLIDAY: "H",
-  HD: "HD", hd: "HD", HALF: "HD",
-  LATE: "Late", Late: "Late", late: "Late",
-};
-
-/** Detect month and year from filename, e.g. 22130304001_REGULAR_Jan2025.xlsx */
-function detectMonthYearFromFileName(name: string): { month: number | null; year: number | null } {
-  const match = name.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[-_]?(\d{4})/i);
-  if (match && match[1] && match[2]) {
-    const mIdx = MONTH_ALIASES.indexOf(match[1].toLowerCase().slice(0, 3));
-    if (mIdx !== -1) {
-      return {
-        month: mIdx + 1,
-        year: parseInt(match[2], 10),
-      };
-    }
-  }
-  return { month: null, year: null };
-}
-
-function dpad(n: number) {
-  return String(n).padStart(2, "0");
-}
-
-/** Robust parser for APFRS Biometric Excel Sheets syncing with Academic Calendar holidays */
-function parseBiometricSheet(
-  rawMatrix: unknown[][],
-  month: number,
-  year: number,
-  holidayDateSet: Set<string>
-): { records: EmployeeRecord[]; workingDaysCount: number; holidaysCount: number } {
-  if (!rawMatrix || rawMatrix.length < 2) return { records: [], workingDaysCount: 27, holidaysCount: 4 };
-
-  const headerRow = (rawMatrix[0] || []).map((h) => String(h ?? "").trim());
-  const headerLower = headerRow.map((h) => h.toLowerCase());
-
-  // Find column indices
-  const nameIdx = headerLower.findIndex((h) =>
-    ["name", "employee name", "faculty name", "staff name", "person name"].some((a) => h.includes(a))
-  );
-  const cfmsIdx = headerLower.findIndex((h) =>
-    ["cfms id", "cfmsid", "cfms", "cfms_id", "employee id", "emp id", "empid"].some((a) => h === a || h.includes(a))
-  );
-  const desigIdx = headerLower.findIndex((h) =>
-    ["designation", "desig", "role"].some((a) => h.includes(a))
-  );
-  const typeIdx = headerLower.findIndex((h) =>
-    ["emp type", "emptype", "job status", "job_status", "type", "cadre"].some((a) => h.includes(a))
-  );
-  const deptIdx = headerLower.findIndex((h) =>
-    ["department", "dept", "dept.", "branch"].some((a) => h.includes(a))
-  );
-  const emailIdx = headerLower.findIndex((h) =>
-    ["email", "mail", "e-mail", "email address"].some((a) => h.includes(a))
-  );
-
-  const daysInMonth = new Date(year, month, 0).getDate();
-
-  // Compute official working days from calendar for this month
-  let officialWorkingDays = 0;
-  let holidaysCount = 0;
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dPad = String(d).padStart(2, "0");
-    const dateStr = `${year}-${String(month).padStart(2, "0")}-${dPad}`;
-    const dayOfWeek = new Date(year, month - 1, d).getDay();
-    const isSunday = dayOfWeek === 0;
-    const isHoliday = holidayDateSet.has(dateStr);
-
-    if (isSunday || isHoliday) {
-      holidaysCount++;
-    } else {
-      officialWorkingDays++;
-    }
-  }
-  if (officialWorkingDays === 0) officialWorkingDays = 27;
-
-  const records: EmployeeRecord[] = [];
-
-  for (let r = 1; r < rawMatrix.length; r++) {
-    const row = rawMatrix[r];
-    if (!row || !row[nameIdx !== -1 ? nameIdx : 0]) continue;
-
-    const name = String(row[nameIdx !== -1 ? nameIdx : 0] ?? "").trim();
-    if (!name || name.toLowerCase() === "total" || name.toLowerCase() === "grand total") continue;
-
-    const cfmsId = cfmsIdx !== -1 ? String(row[cfmsIdx] ?? "").trim() : "";
-    const designation = desigIdx !== -1 ? String(row[desigIdx] ?? "").trim() : "";
-    const empType = typeIdx !== -1 ? String(row[typeIdx] ?? "").trim() : "Regular";
-    const department = deptIdx !== -1 ? String(row[deptIdx] ?? "").trim() : "";
-    const email = emailIdx !== -1 ? String(row[emailIdx] ?? "").trim() : "";
-
-    // Parse all 1..daysInMonth daily records
-    const attendance: AttendanceDay[] = [];
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dPad = String(d).padStart(2, "0");
-      const dateStr = `${year}-${String(month).padStart(2, "0")}-${dPad}`;
-      const dayOfWeek = new Date(year, month - 1, d).getDay();
-      const isSunday = dayOfWeek === 0;
-      const isCalendarHoliday = holidayDateSet.has(dateStr);
-      const isOfficialNonWorking = isSunday || isCalendarHoliday;
-
-      // Look for status column or punch in column
-      const statusColIdx = headerLower.findIndex(
-        (h) => h === `${dpad(d)} status` || h === `${d} status` || h === `day ${d}` || h === `day${d}`
-      );
-      const inColIdx = headerLower.findIndex(
-        (h) => h === `${dpad(d)} in` || h === `${d} in` || h === `in ${d}`
-      );
-      const outColIdx = headerLower.findIndex(
-        (h) => h === `${dpad(d)} out` || h === `${d} out` || h === `out ${d}`
-      );
-
-      const rawStatus = statusColIdx !== -1 ? String(row[statusColIdx] ?? "").trim().toUpperCase() : "";
-      const inVal = inColIdx !== -1 ? String(row[inColIdx] ?? "").trim() : "";
-      const outVal = outColIdx !== -1 ? String(row[outColIdx] ?? "").trim() : "";
-
-      let status: AttendanceStatus = "A";
-      if (rawStatus === "P" || rawStatus === "PRESENT" || inVal !== "" || outVal !== "") {
-        status = "P";
-      } else if (rawStatus === "HD" || rawStatus === "HALF") {
-        status = "HD";
-      } else if (rawStatus === "L" || rawStatus === "CL" || rawStatus === "OD" || rawStatus === "LEAVE") {
-        status = "L";
-      } else if (rawStatus === "H" || rawStatus === "HOLIDAY" || isOfficialNonWorking) {
-        status = "H";
-      } else if (STATUS_MAP[rawStatus]) {
-        status = STATUS_MAP[rawStatus]!;
-      } else {
-        status = "A";
-      }
-
-      attendance.push({
-        date: dateStr,
-        status,
-        inTime: inVal || undefined,
-        outTime: outVal || undefined,
-      });
-    }
-
-    records.push({
-      name,
-      cfmsId,
-      designation: designation || "Assistant Professor",
-      department: department || "General",
-      email,
-      jobStatus: empType.toLowerCase() === "regular" ? "Regular" : "contract",
-      attendance,
-    });
-  }
-
-  return { records, workingDaysCount: officialWorkingDays, holidaysCount };
-}
 
 function ImportPage() {
   const navigate = useNavigate();
-  const { setAttendanceData } = useAttendance();
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Fetch official Academic Calendar holidays
@@ -219,14 +59,6 @@ function ImportPage() {
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1));
   const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
-
-  const [status, setStatus] = useState<"idle" | "parsing" | "done" | "error">("idle");
-  const [fileName, setFileName] = useState("");
-  const [parsedCount, setParsedCount] = useState(0);
-  const [errorMsg, setErrorMsg] = useState("");
-  const [parsedRecords, setParsedRecords] = useState<EmployeeRecord[]>([]);
-  const [monthWorkingDays, setMonthWorkingDays] = useState(27);
-  const [monthHolidaysCount, setMonthHolidaysCount] = useState(4);
 
   // Filter holidays for the selected month/year
   const monthHolidaysList = useMemo(() => {
@@ -239,108 +71,50 @@ function ImportPage() {
     return new Set(monthHolidaysList.map((h) => h.date));
   }, [monthHolidaysList]);
 
+  // Hook orchestration
+  const {
+    parseFile,
+    importData,
+    reset,
+    status,
+    fileName,
+    parsedCount,
+    errorMsg,
+    parsedRecords,
+    monthWorkingDays,
+    monthHolidaysCount,
+    isImporting,
+  } = useAttendanceImport();
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setStatus("parsing");
-    setFileName(file.name);
-    setErrorMsg("");
-
     try {
-      // Auto-detect month and year from filename
-      const detected = detectMonthYearFromFileName(file.name);
-      let targetMonth = parseInt(selectedMonth, 10);
-      let targetYear = parseInt(selectedYear, 10);
-
-      if (detected.month && detected.year) {
-        targetMonth = detected.month;
-        targetYear = detected.year;
-        setSelectedMonth(String(detected.month));
-        setSelectedYear(String(detected.year));
-        toast.info(`Auto-detected reporting period: ${MONTHS[detected.month - 1]} ${detected.year}`);
+      const res = await parseFile(file, selectedMonth, selectedYear, holidayDateSet);
+      if (res && res.detected.month && res.detected.year) {
+        setSelectedMonth(String(res.detected.month));
+        setSelectedYear(String(res.detected.year));
+        toast.info(`Auto-detected reporting period: ${MONTHS[res.detected.month - 1]} ${res.detected.year}`);
       }
-
-      // Build target holiday set
-      const mPad = String(targetMonth).padStart(2, "0");
-      const prefix = `${targetYear}-${mPad}`;
-      const targetHolidays = allHolidays.filter((h) => h.date && h.date.startsWith(prefix));
-      const targetHolidaySet = new Set(targetHolidays.map((h) => h.date));
-
-      // Dynamic import of xlsx
-      const XLSX = await import("xlsx");
-      const buffer = await file.arrayBuffer();
-      const wb = XLSX.read(buffer, { type: "array" });
-      const sheetName = wb.SheetNames[0];
-      if (!sheetName) throw new Error("Excel workbook has no sheets.");
-
-      const ws = wb.Sheets[sheetName]!;
-      const rawMatrix = XLSX.utils.sheet_to_json<unknown[]>(ws, {
-        header: 1,
-        defval: "",
-        raw: false,
-      });
-
-      const { records, workingDaysCount, holidaysCount } = parseBiometricSheet(
-        rawMatrix,
-        targetMonth,
-        targetYear,
-        targetHolidaySet
-      );
-
-      if (records.length === 0) {
-        throw new Error(
-          "No faculty records found in Excel sheet. Ensure the file contains CFMS ID, Name, and day status columns."
-        );
-      }
-
-      setParsedRecords(records);
-      setParsedCount(records.length);
-      setMonthWorkingDays(workingDaysCount);
-      setMonthHolidaysCount(holidaysCount);
-      setStatus("done");
-      toast.success(`Successfully parsed ${records.length} faculty attendance records with Academic Calendar sync.`);
+      toast.success(`Successfully parsed ${res?.records.length} faculty attendance records.`);
     } catch (err) {
-      setStatus("error");
-      setErrorMsg(err instanceof Error ? err.message : "Failed to parse file.");
+      // Errors already reported by hook
     }
 
     if (fileRef.current) fileRef.current.value = "";
   };
 
-  const importAttendance = useImportAttendance();
-  const [saving, setSaving] = useState(false);
-
   const handleProcess = async () => {
-    if (!parsedRecords.length || saving) return;
-    setSaving(true);
+    if (!parsedRecords.length || isImporting) return;
 
     const monthNum = parseInt(selectedMonth, 10);
     const yearNum = parseInt(selectedYear, 10);
 
     try {
-      // 1. Seed & persist into MySQL database (auto-syncs with CFMS IDs and academic calendar)
-      const res = await importAttendance.mutateAsync({
-        records: parsedRecords,
-        month: monthNum,
-        year: yearNum,
-        fileName: fileName || `attendance-${yearNum}-${monthNum}.xlsx`,
-      });
-
-      // 2. Update client context store using the database-seeded records returned by backend
-      const savedRecords = res.data?.records || [];
-      setAttendanceData(
-        savedRecords.map((r: any) => ({
-          ...r,
-          cfmsId: r.cfmsId || r.cfms_id || "",
-          jobStatus: r.jobStatus || r.job_status || "Regular",
-        })),
-        monthNum,
-        yearNum,
-        fileName
-      );
-
-      if (res.warnings && res.warnings.length > 0) {
+      const res = await importData(monthNum, yearNum);
+      const savedRecords = res?.data?.records || [];
+      if (res?.warnings && res.warnings.length > 0) {
         toast.warning(
           `Synced ${savedRecords.length} records. Skipped ${res.warnings.length} unregistered CFMS IDs: ${res.warnings.join(", ")}`,
           { duration: 8000 }
@@ -351,23 +125,13 @@ function ImportPage() {
         );
       }
       void navigate({ to: "/reports" });
-    } catch (err) {
-      toast.error(
-        err instanceof Error
-          ? `Database save failed: ${err.message}`
-          : "Failed to persist attendance to database."
-      );
-    } finally {
-      setSaving(false);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to persist attendance to database.");
     }
   };
 
   const handleClear = () => {
-    setStatus("idle");
-    setFileName("");
-    setParsedCount(0);
-    setErrorMsg("");
-    setParsedRecords([]);
+    reset();
   };
 
   return (
@@ -526,8 +290,8 @@ function ImportPage() {
               </div>
 
               <div className="flex items-center justify-end gap-3">
-                <Button onClick={handleProcess} disabled={saving} className="w-full sm:w-auto">
-                  {saving ? (
+                <Button onClick={handleProcess} disabled={isImporting} className="w-full sm:w-auto">
+                  {isImporting ? (
                     <>
                       <Loader2 className="mr-2 size-4 animate-spin" />
                       Seeding &amp; Syncing into Database…
