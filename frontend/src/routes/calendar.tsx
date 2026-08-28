@@ -255,6 +255,7 @@ function AcademicCalendarPage() {
 
   return (
     <AppShell
+      roles={["admin", "faculty"]}
       title="Academic Calendar"
       subtitle={`${monthName} ${selectedYear} · Working days and holidays synchronization`}
       actions={
