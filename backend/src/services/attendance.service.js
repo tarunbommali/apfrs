@@ -205,12 +205,29 @@ class AttendanceService {
         const monthName = MONTH_NAMES[monthNum - 1] || 'Monthly';
         const periodLabel = `${monthName} ${yearNum}`;
 
-        // Set status to 'sending' before we start
+        // Mark as processing and increment attempt counter
         await db.query(
-          `UPDATE attendance_records SET status = 'sending', updated_at = NOW() WHERE batch_id = ? AND (email = ? OR employee_id = ?)`,
+          `UPDATE attendance_records
+           SET status = 'processing', attempts = attempts + 1, updated_at = NOW()
+           WHERE batch_id = ? AND (email = ? OR employee_id = ?)`,
           [batchId, recEmail || null, recEmpId || null]
         );
-        await attendanceRepository.recalculateBatchStatus(batchId);
+
+        // Skip item if already at max attempts (3)
+        const [itemRow] = await db.query(
+          `SELECT attempts FROM attendance_records WHERE batch_id = ? AND (email = ? OR employee_id = ?) LIMIT 1`,
+          [batchId, recEmail || null, recEmpId || null]
+        );
+        if (itemRow && itemRow.attempts > 3) {
+          logger.warn('Skipping item: max attempts reached', { batchId, email: recEmail, empId: recEmpId });
+          await db.query(
+            `UPDATE attendance_records SET status = 'failed', error_message = 'Max attempts (3) reached', updated_at = NOW()
+             WHERE batch_id = ? AND (email = ? OR employee_id = ?)`,
+            [batchId, recEmail || null, recEmpId || null]
+          );
+          await attendanceRepository.recalculateBatchStatus(batchId);
+          continue;
+        }
 
         let reportData = null;
         let pdfBuffer = null;
@@ -263,9 +280,9 @@ class AttendanceService {
           const emailRes = await emailService.sendEmail(emailOptions, settings);
           await db.query(
             `UPDATE attendance_records 
-             SET status = 'sent', message_id = ?, error_message = NULL, sent_at = NOW(), updated_at = NOW() 
+             SET status = 'sent', provider = ?, message_id = ?, error_message = NULL, sent_at = NOW(), updated_at = NOW() 
              WHERE batch_id = ? AND (email = ? OR employee_id = ?)`,
-            [emailRes.messageId, batchId, recEmail || null, recEmpId || null]
+            [emailRes.provider || 'smtp', emailRes.messageId, batchId, recEmail || null, recEmpId || null]
           );
         } catch (emailErr) {
           await db.query(
@@ -403,6 +420,78 @@ class AttendanceService {
       message: `Attendance retry dispatch initiated for ${failedRecords.length} failed faculty members.`,
       batchId: retryBatchId,
     };
+  }
+
+  /**
+   * Retry a single attendance_records item.
+   * Resets status to 'queued' and increments attempts so the batch worker picks it up.
+   */
+  async retryItem(recordId) {
+    const [item] = await db.query(
+      `SELECT * FROM attendance_records WHERE id = ?`,
+      [recordId]
+    );
+    if (!item) throw new AppError(404, 'Dispatch record not found.');
+    if (item.status === 'sent') throw new AppError(400, 'This report has already been sent.');
+
+    // Reset to queued — re-enqueue its parent batch job
+    await db.query(
+      `UPDATE attendance_records
+       SET status = 'queued', error_message = NULL, updated_at = NOW()
+       WHERE id = ?`,
+      [recordId]
+    );
+
+    // Pull batch info to reconstruct a minimal dispatch job
+    const [batch] = await db.query(
+      `SELECT ab.*, ar.faculty_id, ar.employee_id, ar.employee_name, ar.email, ar.month, ar.year
+       FROM attendance_batches ab
+       JOIN attendance_records ar ON ar.batch_id = ab.batch_id
+       WHERE ar.id = ?`,
+      [recordId]
+    );
+
+    if (!batch) throw new AppError(404, 'Parent batch not found.');
+
+    const monthNum = parseInt(batch.month, 10);
+    const yearNum = parseInt(batch.year, 10);
+    const recordsObj = await monthlyAttendanceRepository.getMonthlyAttendance(monthNum, yearNum);
+    const targetRecord = recordsObj?.records?.find(
+      r => r.facultyId === batch.faculty_id || r.cfmsId === batch.employee_id || r.id === batch.faculty_id
+    );
+
+    if (!targetRecord) throw new AppError(404, 'Attendance data for this faculty member not found.');
+
+    const attendanceData = [{
+      employeeId: targetRecord.cfmsId,
+      employeeName: targetRecord.name,
+      email: targetRecord.email,
+      month: monthNum,
+      year: yearNum,
+      presentDays: targetRecord.presentDays,
+      workingDays: targetRecord.totalWorkingDays,
+      absentDays: targetRecord.absentDays,
+      attendancePercentage: targetRecord.attendancePercentage,
+      holidays: targetRecord.holidayDays,
+    }];
+
+    const facultyList = [{
+      id: batch.faculty_id,
+      employeeId: batch.employee_id,
+      employeeName: batch.employee_name,
+      email: batch.email,
+      name: batch.employee_name,
+    }];
+
+    await jobQueueService.enqueue('dispatch_attendance_batch', {
+      batchId: batch.batch_id,
+      attendanceData,
+      emailTemplate: { subject: batch.email_template_subject },
+      facultyList,
+    });
+
+    logger.info('Single item retry enqueued', { recordId, batchId: batch.batch_id });
+    return { success: true, message: 'Retry queued for this faculty member.' };
   }
 
   async getBatches(filters) {

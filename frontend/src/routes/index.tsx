@@ -29,6 +29,7 @@ import { KPIMetrics } from "./-dashboard/KPIMetrics";
 import { AttendanceBreakdown } from "./-dashboard/AttendanceBreakdown";
 import { AttentionList } from "./-dashboard/AttentionList";
 import { RecentActivity } from "./-dashboard/RecentActivity";
+import { StoredReportsList } from "./-dashboard/StoredReportsList";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -206,6 +207,18 @@ function DashboardPage() {
             workingDays={workingDays}
           />
         </div>
+
+        {/* Stored Reports Archive */}
+        <StoredReportsList
+          availableMonths={availableMonths}
+          selectedMonth={selectedMonth}
+          selectedYear={selectedYear}
+          onSelect={(m, y) => {
+            setSelectedMonth(m);
+            setSelectedYear(y);
+          }}
+          isLoading={monthsLoading}
+        />
       </div>
     </AppShell>
   );

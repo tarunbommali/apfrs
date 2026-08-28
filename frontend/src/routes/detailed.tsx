@@ -29,6 +29,7 @@ import { ViewModeTabs } from "./-detailed/ViewModeTabs";
 import { AttendanceFilters } from "./-detailed/AttendanceFilters";
 import { SummaryTable } from "./-detailed/SummaryTable";
 import { DailyTable } from "./-detailed/DailyTable";
+import { DepartmentView } from "./-detailed/DepartmentView";
 import { EmptyState } from "./-detailed/EmptyState";
 
 export const Route = createFileRoute("/detailed")({
@@ -44,7 +45,7 @@ export const Route = createFileRoute("/detailed")({
   component: AttendancePage,
 });
 
-type ViewMode = "summary" | "daily";
+type ViewMode = "summary" | "daily" | "department";
 
 function AttendancePage() {
   const { data: monthsData, isLoading: monthsLoading } = useQuery(attendanceMonthsQuery());
@@ -236,8 +237,15 @@ function AttendancePage() {
             </div>
           ) : viewMode === "summary" ? (
             <SummaryTable records={filteredRecords} workingDays={workingDays} />
-          ) : (
+          ) : viewMode === "daily" ? (
             <DailyTable records={filteredRecords} dayNumbers={dayNumbers} />
+          ) : (
+            <DepartmentView
+              records={records}
+              workingDays={workingDays}
+              monthName={monthName}
+              year={selectedYear}
+            />
           )}
         </div>
       </div>

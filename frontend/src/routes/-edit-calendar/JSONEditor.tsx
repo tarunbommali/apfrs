@@ -38,6 +38,29 @@ export function JSONEditor({
         onChange={(e) => onJsonChange(e.target.value)}
         spellCheck={false}
         aria-label="Holidays JSON editor"
+        placeholder={`[
+  {
+    "date": "2026-01-26",
+    "label": "Republic Day",
+    "type": "Public holiday"
+  },
+  {
+    "date": "2026-04-14",
+    "label": "Dr. Ambedkar Jayanti",
+    "type": "Public holiday"
+  },
+  {
+    "date": "2026-08-15",
+    "label": "Independence Day",
+    "type": "Public holiday"
+  }
+]
+
+// Supported fields:
+//   date  — Required. Format: YYYY-MM-DD
+//   label — Required. Display name of the holiday (also accepted as "name")
+//   type  — Optional. One of: "Public holiday", "Institutional", "Academic", "Vacation"
+//   id    — Optional. Auto-generated if omitted.`}
         className="min-h-[500px] w-full resize-y rounded-none border-0 font-mono text-xs leading-relaxed focus-visible:ring-0"
       />
 

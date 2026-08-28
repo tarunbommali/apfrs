@@ -45,7 +45,6 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { to: "/", label: "Overview", icon: LayoutDashboard, roles: ["admin"], section: "main" },
-  { to: "/reports", label: "Reports", icon: BarChart3, roles: ["admin"], section: "main" },
   { to: "/detailed", label: "Detailed View", icon: Table2, roles: ["admin"], section: "main" },
   { to: "/consolidated", label: "Bulk Dispatch", icon: Mails, roles: ["admin"], section: "main" },
   { to: "/status-dashboard", label: "Delivery Status", icon: Radio, roles: ["admin"], section: "main" },

@@ -127,7 +127,7 @@ async function seedEmailSettings() {
       retries, batch_delay, sandbox_mode
     ) VALUES (
       'default', 'smtp', 1, 'smtp_first',
-      'smtp.gmail.com', 587, 'tls', 'reports@jntugvcev.edu.in', NULL,
+      'smtp.gmail.com', 465, 'ssl', 'reports@jntugvcev.edu.in', NULL,
       5, 30, NULL, 'notify.jntugvcev.edu.in',
       'Digital Monitoring Cell', 'reports@jntugvcev.edu.in', 'admin@apfrs.in',
       'Monthly Attendance Statement — {{month}} {{year}}', 'Regards,\nDigital Monitoring Cell',
@@ -210,7 +210,7 @@ async function seedFaculty() {
     const mobile = String(person.mobile || '').trim();
     const gender = String(person.gender || 'male').trim().toLowerCase();
     const rawStatus = String(person.job_status || '').trim().toLowerCase();
-    const jobStatus = rawStatus === 'regular' ? 'Regular' : 'contract';
+    const jobStatus = rawStatus === 'regular' ? 'Regular' : 'Contract';
 
     const userId = `fac-${person.id}`;
 

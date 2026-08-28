@@ -73,8 +73,8 @@ export function RecentActivity({
 
       <div className="pt-2 flex items-center gap-2">
         <Button size="sm" variant="outline" asChild className="w-full text-xs gap-1.5">
-          <Link to="/reports">
-            <BarChart3 className="size-3.5" /> Open Reports
+          <Link to="/detailed">
+            <History className="size-3.5" /> View Attendance
           </Link>
         </Button>
         <Button size="sm" variant="outline" asChild className="w-full text-xs gap-1.5">

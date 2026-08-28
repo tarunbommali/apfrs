@@ -1,5 +1,8 @@
+import { useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { MONTH_NAMES } from "@/lib/constants";
 import { BatchStatusBadge } from "./BatchStatusBadge";
+import { BatchDetailPanel } from "./BatchDetailPanel";
 import type { EmailBatch } from "@/lib/queries";
 import { Button } from "@/components/ui/button";
 
@@ -10,6 +13,8 @@ interface BatchHistoryTableProps {
 }
 
 export function BatchHistoryTable({ batches, isLoading, onRetry }: BatchHistoryTableProps) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
   if (isLoading) {
     return (
       <div className="py-16 text-center text-sm text-muted-foreground">
@@ -41,60 +46,88 @@ export function BatchHistoryTable({ batches, isLoading, onRetry }: BatchHistoryT
             <th className="py-3 px-4 text-center">Action</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-border">
-          {batches.map((b) => (
-            <tr key={b.id} className="hover:bg-muted/20 transition-colors">
-              <td className="py-3 px-4">
-                <div className="font-mono font-medium text-foreground">{b.id}</div>
-                <div className="text-[10px] text-muted-foreground font-mono">
-                  {new Date(b.created_at || (b as any).createdAt).toLocaleString("en-IN")}
-                </div>
-              </td>
-              <td className="py-3 px-4 font-medium text-foreground">
-                {MONTH_NAMES[(Number(b.month) || 1) - 1]} {b.year}
-              </td>
-              <td className="py-3 px-3 text-center font-mono font-bold text-foreground">{b.total}</td>
-              <td className="py-3 px-3 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                {b.sent}
-              </td>
-              <td className="py-3 px-3 text-center font-mono font-bold text-rose-600 dark:text-rose-400">
-                {b.failed}
-              </td>
-              <td className="py-3 px-3 text-center font-mono font-bold text-amber-600 dark:text-amber-400">
-                {Math.max(0, b.total - b.sent - b.failed)}
-              </td>
-              <td className="py-3 px-4 text-center">
-                <BatchStatusBadge status={b.status} />
-                {(b.status === "processing" || b.status === "pending") && (
-                  <div className="text-[10px] text-muted-foreground mt-1 font-mono">
-                    {b.sent} / {b.total} sent
-                  </div>
+        <tbody>
+          {batches.map((b) => {
+            const isExpanded = expandedId === b.id;
+            return (
+              <>
+                <tr
+                  key={b.id}
+                  className="hover:bg-muted/20 transition-colors border-b border-border cursor-pointer"
+                  onClick={() => setExpandedId(isExpanded ? null : b.id)}
+                >
+                  <td className="py-3 px-4">
+                    <div className="flex items-center gap-1.5">
+                      {isExpanded
+                        ? <ChevronUp className="size-3.5 text-muted-foreground shrink-0" />
+                        : <ChevronDown className="size-3.5 text-muted-foreground shrink-0" />}
+                      <div>
+                        <div className="font-mono font-medium text-foreground">{b.id}</div>
+                        <div className="text-[10px] text-muted-foreground font-mono">
+                          {new Date(b.created_at || (b as any).createdAt).toLocaleString("en-IN")}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3 px-4 font-medium text-foreground">
+                    {MONTH_NAMES[(Number(b.month) || 1) - 1]} {b.year}
+                  </td>
+                  <td className="py-3 px-3 text-center font-mono font-bold text-foreground">{b.total}</td>
+                  <td className="py-3 px-3 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                    {b.sent}
+                  </td>
+                  <td className="py-3 px-3 text-center font-mono font-bold text-rose-600 dark:text-rose-400">
+                    {b.failed}
+                  </td>
+                  <td className="py-3 px-3 text-center font-mono font-bold text-amber-600 dark:text-amber-400">
+                    {Math.max(0, b.total - b.sent - b.failed)}
+                  </td>
+                  <td className="py-3 px-4 text-center">
+                    <BatchStatusBadge status={b.status} />
+                    {(b.status === "processing" || b.status === "pending") && (
+                      <div className="text-[10px] text-muted-foreground mt-1 font-mono">
+                        {b.sent} / {b.total} sent
+                      </div>
+                    )}
+                    {b.status === "completed" && (
+                      <div className="text-[10px] text-emerald-500/80 mt-1 font-mono">
+                        {b.sent} / {b.total} sent
+                      </div>
+                    )}
+                    {b.status === "partial_failed" && (
+                      <div className="text-[10px] text-rose-500/80 mt-1 font-mono">
+                        {b.sent} / {b.total} sent
+                      </div>
+                    )}
+                  </td>
+                  <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
+                    {(b.status === "failed" || b.status === "partial_failed") && b.failed > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onRetry(b.id, b.failed)}
+                        className="h-7 text-[10px] py-1 px-2 border-rose-500/30 hover:bg-rose-500/10 text-rose-500 hover:text-rose-600"
+                      >
+                        Retry {b.failed}
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+
+                {/* Inline expandable detail panel */}
+                {isExpanded && (
+                  <tr key={`${b.id}-detail`}>
+                    <td colSpan={8} className="p-0">
+                      <BatchDetailPanel
+                        batch={b}
+                        onClose={() => setExpandedId(null)}
+                      />
+                    </td>
+                  </tr>
                 )}
-                {b.status === "completed" && (
-                  <div className="text-[10px] text-emerald-500/80 mt-1 font-mono">
-                    {b.sent} / {b.total} sent
-                  </div>
-                )}
-                {b.status === "partial_failed" && (
-                  <div className="text-[10px] text-rose-500/80 mt-1 font-mono">
-                    {b.sent} / {b.total} sent
-                  </div>
-                )}
-              </td>
-              <td className="py-3 px-4 text-center">
-                {(b.status === "failed" || b.status === "partial_failed") && b.failed > 0 && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => onRetry(b.id, b.failed)}
-                    className="h-7 text-[10px] py-1 px-2 border-rose-500/30 hover:bg-rose-500/10 text-rose-500 hover:text-rose-600"
-                  >
-                    Retry {b.failed}
-                  </Button>
-                )}
-              </td>
-            </tr>
-          ))}
+              </>
+            );
+          })}
         </tbody>
       </table>
     </div>

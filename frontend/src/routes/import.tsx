@@ -100,7 +100,7 @@ function ImportPage() {
           `Successfully synced ${savedRecords.length} records into database for ${MONTH_NAMES[selectedMonthNum - 1]} ${selectedYearNum}`
         );
       }
-      void navigate({ to: "/reports" });
+      void navigate({ to: "/detailed" });
     } catch (err: any) {
       toast.error(err.message || "Failed to persist attendance to database.");
     }

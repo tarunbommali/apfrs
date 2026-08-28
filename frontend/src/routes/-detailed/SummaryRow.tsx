@@ -2,8 +2,6 @@ import {
   getAttendancePct,
   getJobStatus,
   getPresentDays,
-  getAbsentDays,
-  getLeaveDays,
   getWorkingDays,
 } from "@/lib/attendance-utils";
 
@@ -17,6 +15,8 @@ export function SummaryRow({ record, index, workingDays }: SummaryRowProps) {
   const pct = getAttendancePct(record);
   const isLow = pct < 75;
   const isRegular = getJobStatus(record).toLowerCase() === "regular";
+  const present = getPresentDays(record);
+  const working = getWorkingDays(record, workingDays);
 
   return (
     <tr className="hover:bg-muted/20 transition-colors">
@@ -41,18 +41,17 @@ export function SummaryRow({ record, index, workingDays }: SummaryRowProps) {
           {getJobStatus(record)}
         </span>
       </td>
-      <td className="py-3 px-3 text-center font-mono font-bold text-[var(--status-present-fg)]">
-        {getPresentDays(record)}
+
+      {/* Present / Working Days — merged column */}
+      <td className="py-3 px-3 text-center font-mono">
+        <span className={present > 0 ? "font-bold text-[var(--status-present-fg)]" : "text-muted-foreground"}>
+          {present}
+        </span>
+        <span className="text-muted-foreground mx-0.5">/</span>
+        <span className="text-muted-foreground">{working}</span>
       </td>
-      <td className="py-3 px-3 text-center font-mono font-bold text-[var(--status-absent-fg)]">
-        {getAbsentDays(record)}
-      </td>
-      <td className="py-3 px-3 text-center font-mono font-medium text-[var(--status-leave-fg)]">
-        {getLeaveDays(record)}
-      </td>
-      <td className="py-3 px-3 text-center font-mono text-muted-foreground">
-        {getWorkingDays(record, workingDays)}
-      </td>
+
+      {/* Attendance % */}
       <td className="py-3 px-4 text-right">
         <span
           className={`inline-block font-mono font-bold px-2 py-0.5 rounded text-xs ${

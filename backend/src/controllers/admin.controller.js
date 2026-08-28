@@ -1,4 +1,5 @@
 // backend/src/controllers/admin.controller.js
+import db from '../config/database.js';
 import { userService } from '../services/user.service.js';
 import { attendanceService } from '../services/attendance.service.js';
 import { inchargeService } from '../services/incharge.service.js';
@@ -399,6 +400,33 @@ export class AdminController {
     try {
       const faculty = await departmentService.getDepartmentFaculty(req.params.id);
       return sendSuccess(res, { faculty });
+    } catch (error) {
+      next(error);
+    }
+  }
+  async getBatchItems(req, res, next) {
+    try {
+      const { batchId } = req.params;
+      const rows = await db.query(
+        `SELECT id, faculty_id, employee_id, employee_name, email, month, year,
+                status, attempts, provider, message_id, error_message, sent_at,
+                created_at, updated_at
+         FROM attendance_records
+         WHERE batch_id = ?
+         ORDER BY created_at ASC`,
+        [batchId]
+      );
+      return sendSuccess(res, { items: rows, total: rows.length });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async retryItem(req, res, next) {
+    try {
+      const { recordId } = req.params;
+      const result = await attendanceService.retryItem(recordId);
+      return sendSuccess(res, result);
     } catch (error) {
       next(error);
     }

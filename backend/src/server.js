@@ -111,6 +111,23 @@ async function startServer() {
         jobQueueService.start();
         logger.info('✅ Job queue worker started');
 
+        // Recover any attendance_records stuck in 'processing' from a crash.
+        // If a server crash happened mid-send, items are left in 'processing'.
+        // We reset them to 'queued' so they are retried on the next job tick.
+        try {
+          const staleResult = await db.query(
+            `UPDATE attendance_records
+             SET status = 'queued', error_message = 'Reset after server restart', updated_at = NOW()
+             WHERE status = 'processing'
+               AND updated_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)`
+          );
+          if (staleResult.affectedRows > 0) {
+            logger.warn(`♻️  Reset ${staleResult.affectedRows} stale dispatch item(s) to queued after restart`);
+          }
+        } catch (err) {
+          logger.warn('Stale attendance_records recovery warning:', { error: err.message });
+        }
+
         // Start server
         server.listen(config.port, '0.0.0.0', () => {
             logger.info(`🚀 APFRS API Service running on port ${config.port}`);

@@ -2,7 +2,6 @@
 import express, { Router } from 'express';
 import { adminController } from '../controllers/admin.controller.js';
 import { reportService } from '../services/report.service.js';
-import { generateReportHTML } from '../utils/report-template.js';
 import { verifyToken } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
 import { validate } from '../middleware/validation.js';
@@ -66,17 +65,7 @@ router.post(
 );
 router.get('/attendance/records', (req, res, next) => adminController.getAttendanceRecords(req, res, next));
 
-// Attendance HTML-to-PDF Reports Preview & Export
-router.get('/attendance/report/:cfmsId/preview', async (req, res, next) => {
-  try {
-    const { month, year } = req.query;
-    const reportData = await reportService.getReportData(req.params.cfmsId, parseInt(month), parseInt(year));
-    res.send(generateReportHTML(reportData));
-  } catch (err) {
-    next(err);
-  }
-});
-
+// Attendance Consolidated PDF Export
 router.get('/attendance/report/consolidated/pdf', async (req, res, next) => {
   try {
     const { month, year, cfmsIds } = req.query;
@@ -116,6 +105,10 @@ router.get('/email-config', (req, res, next) => adminController.getEmailConfig(r
 router.put('/email-config', (req, res, next) => adminController.updateEmailConfig(req, res, next));
 router.post('/email-config/test', (req, res, next) => adminController.sendTestEmail(req, res, next));
 router.get('/email-config/logs', (req, res, next) => adminController.getEmailConfigLogs(req, res, next));
+
+// Batch item detail + per-item retry
+router.get('/attendance/batches/:batchId/items', (req, res, next) => adminController.getBatchItems(req, res, next));
+router.post('/attendance/records/:recordId/retry', (req, res, next) => adminController.retryItem(req, res, next));
 
 // Stats
 router.get('/stats', (req, res, next) => adminController.getStats(req, res, next));

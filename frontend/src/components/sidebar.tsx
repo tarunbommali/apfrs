@@ -50,7 +50,6 @@ const navItems: NavItem[] = [
   // WORKSPACE
   { to: "/", label: "Dashboard", icon: LayoutDashboard, roles: ["admin"], section: "main" },
   { to: "/detailed", label: "Attendance", icon: Table2, roles: ["admin"], section: "main" },
-  { to: "/reports", label: "Reports", icon: BarChart3, roles: ["admin"], section: "main" },
   { to: "/consolidated", label: "Dispatch", icon: Mails, roles: ["admin"], section: "main" },
 
   // MANAGEMENT

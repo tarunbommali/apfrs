@@ -35,7 +35,12 @@ export function getCfmsId(record: any): string {
 }
 
 export function getJobStatus(record: any): string {
-  return record?.jobStatus ?? record?.job_status ?? "Regular";
+  const raw: string = record?.jobStatus ?? record?.job_status ?? "Regular";
+  const normalised = raw.trim().toLowerCase();
+  if (normalised === "regular") return "Regular";
+  if (normalised === "contract") return "Contract";
+  // Fallback: title-case whatever value comes in
+  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
 }
 
 // Attendance policy thresholds. Change the numbers once, every screen follows.

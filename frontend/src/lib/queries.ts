@@ -308,6 +308,50 @@ export function useRetryBatch() {
   });
 }
 
+export type BatchItem = {
+  id: string;
+  faculty_id: string;
+  employee_id: string;
+  employee_name: string;
+  email: string;
+  month: string;
+  year: string;
+  status: "queued" | "processing" | "sent" | "failed";
+  attempts: number;
+  provider: string | null;
+  message_id: string | null;
+  error_message: string | null;
+  sent_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export const batchItemsQuery = (batchId: string) =>
+  queryOptions({
+    queryKey: ["batch-items", batchId],
+    queryFn: () =>
+      apiFetch<{ items: BatchItem[]; total: number }>(
+        `/api/admin/attendance/batches/${batchId}/items`
+      ),
+    enabled: !!batchId,
+    staleTime: 5_000,
+  });
+
+export function useRetryItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (recordId: string) =>
+      apiFetch<{ success: boolean; message: string }>(
+        `/api/admin/attendance/records/${recordId}/retry`,
+        { method: "POST" }
+      ),
+    onSuccess: (_data, _recordId, _ctx) => {
+      qc.invalidateQueries({ queryKey: ["batch-items"] });
+      qc.invalidateQueries({ queryKey: ["batches"] });
+    },
+  });
+}
+
 export function useSendEmail() {
   return useMutation({
     mutationFn: (payload: {
