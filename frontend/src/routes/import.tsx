@@ -1,6 +1,6 @@
 // frontend/src/routes/import.tsx
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useRef, useMemo } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { calendarQuery } from "@/lib/queries";
@@ -30,7 +30,6 @@ export const Route = createFileRoute("/import")({
 
 function ImportPage() {
   const navigate = useNavigate();
-  const fileRef = useRef<HTMLInputElement>(null);
 
   // Fetch official Academic Calendar holidays
   const { data: calendarData } = useQuery(calendarQuery());
@@ -71,10 +70,7 @@ function ImportPage() {
     isImporting,
   } = useAttendanceImport();
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const handleFileSelected = async (file: File) => {
     try {
       const res = await parseFile(file, selectedMonth, selectedYear, holidayDateSet);
       if (res && res.detected.month && res.detected.year) {
@@ -86,8 +82,6 @@ function ImportPage() {
     } catch (err: any) {
       // Errors already reported by hook
     }
-
-    if (fileRef.current) fileRef.current.value = "";
   };
 
   const handleProcess = async () => {
@@ -134,7 +128,7 @@ function ImportPage() {
             holidayNames={monthHolidaysList.map((h) => h.name || h.label || "Holiday")}
           />
 
-          <Dropzone onFileChange={handleFileChange} />
+          <Dropzone onFileSelected={handleFileSelected} />
 
           {/* Status Feedback */}
           <StatusFeedback status={status} errorMsg={errorMsg} />
