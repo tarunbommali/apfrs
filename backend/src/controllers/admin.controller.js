@@ -69,6 +69,9 @@ export class AdminController {
         emailTemplate: req.body.emailTemplate,
         sentBy: req.body.sentBy || req.user.email,
         triggeredBy: req.user.name || 'Admin',
+        month: req.body.month,
+        year: req.body.year,
+        facultyIds: req.body.facultyIds,
       });
       return sendSuccess(res, result, 202);
     } catch (error) {
