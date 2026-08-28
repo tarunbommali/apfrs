@@ -1,49 +1,26 @@
+// frontend/src/routes/edit.calendar.tsx
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { MONTH_NAMES } from "@/lib/constants";
 import {
-  AlertTriangle,
   Braces,
   CalendarDays,
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  ListChecks,
-  Pencil,
-  Plus,
-  RotateCcw,
-  Trash2,
-  Wand2,
-  Briefcase,
-  Layers,
-  Sparkles,
-  Calendar as CalendarIcon,
   ArrowLeft,
   SlidersHorizontal,
+  Loader2,
+  AlertTriangle,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useAuth } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
 import { toast } from "sonner";
+
+// Import split components
+import { YearSelector } from "./-edit-calendar/YearSelector";
+import { JSONEditor } from "./-edit-calendar/JSONEditor";
+import { MonthlyCard } from "./-edit-calendar/MonthlyCard";
+import { HolidayFormDialog } from "./-edit-calendar/HolidayFormDialog";
 
 export const Route = createFileRoute("/edit/calendar")({
   head: () => ({
@@ -69,46 +46,8 @@ export type Holiday = {
 
 export const HOLIDAY_TYPES: HolidayType[] = ["Public holiday", "Institutional", "Academic", "Vacation"];
 
-const typeStyles: Record<HolidayType, string> = {
-  "Public holiday": "border-destructive/40 bg-destructive/10 text-destructive",
-  Institutional: "border-accent/50 bg-accent/15 text-accent-foreground",
-  Academic: "border-primary/40 bg-primary/10 text-primary",
-  Vacation: "border-border bg-muted text-muted-foreground",
-};
-
-const STORAGE_KEY = "apfrs.academic-calendar.v1";
-
-type HolidayTemplate = {
-  monthDay: string; // "MM-DD"
-  label: string;
-  type: HolidayType;
-};
-
-const defaultHolidayTemplates: HolidayTemplate[] = [
-  { monthDay: "01-14", label: "Makara Sankranti / Pongal", type: "Public holiday" },
-  { monthDay: "01-26", label: "Republic Day", type: "Public holiday" },
-  { monthDay: "03-22", label: "Ugadi (Telugu New Year)", type: "Public holiday" },
-  { monthDay: "04-05", label: "Babu Jagjivan Ram Birthday", type: "Public holiday" },
-  { monthDay: "04-14", label: "Dr. B.R. Ambedkar Jayanthi", type: "Public holiday" },
-  { monthDay: "08-15", label: "Independence Day", type: "Public holiday" },
-  { monthDay: "08-22", label: "Vinayaka Chavithi", type: "Public holiday" },
-  { monthDay: "09-02", label: "Mid-term examinations begin", type: "Academic" },
-  { monthDay: "09-05", label: "Teachers' Day", type: "Institutional" },
-  { monthDay: "10-02", label: "Mahatma Gandhi Jayanti", type: "Public holiday" },
-  { monthDay: "10-20", label: "Vijaya Dasami / Dussehra", type: "Public holiday" },
-  { monthDay: "11-08", label: "Diwali", type: "Public holiday" },
-  { monthDay: "12-25", label: "Christmas", type: "Public holiday" },
-];
-
-export function buildDefaultHolidays(year: number): Holiday[] {
-  return defaultHolidayTemplates.map((t) => ({
-    date: `${year}-${t.monthDay}`,
-    label: t.label,
-    type: t.type,
-  }));
-}
-
 const YEAR_RANGE = { past: 5, future: 10 };
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const iso = (y: number, m: number, d: number) =>
   `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
@@ -123,10 +62,10 @@ const formatDayLabel = (dateStr: string) => {
   });
 };
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
 function parseHolidaysJson(text: string): { holidays: Holiday[]; error: null } | { holidays: null; error: string } {
-  if (text.trim() === "") return { holidays: null, error: "JSON is empty — add at least one holiday object." };
+  if (text.trim() === "") {
+    return { holidays: null, error: "JSON is empty — add at least one holiday object." };
+  }
 
   let raw: unknown;
   try {
@@ -167,7 +106,9 @@ function parseHolidaysJson(text: string): { holidays: Holiday[]; error: null } |
 
   const seen = new Set<string>();
   for (const h of out) {
-    if (seen.has(h.date)) return { holidays: null, error: `Duplicate date "${h.date}" — each date can appear only once.` };
+    if (seen.has(h.date)) {
+      return { holidays: null, error: `Duplicate date "${h.date}" — each date can appear only once.` };
+    }
     seen.add(h.date);
   }
 
@@ -180,65 +121,60 @@ function EditAcademicCalendarPage() {
 
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
-  const [holidays, setHolidays] = useState<Holiday[]>(() => buildDefaultHolidays(now.getFullYear()));
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"manual" | "json">("manual");
   const [draft, setDraft] = useState<Holiday | null>(null);
   const [isNew, setIsNew] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [categoryFilter] = useState<string>("all");
 
   // Bulk JSON editor state
   const [jsonText, setJsonText] = useState("");
   const [jsonError, setJsonError] = useState<string | null>(null);
 
   // Load holidays from DB
-  useEffect(() => {
-    async function loadCalendar() {
-      try {
-        const res = await apiFetch<{ holidays: Holiday[] }>("/api/admin/calendar");
-        if (res && Array.isArray(res.holidays) && res.holidays.length > 0) {
-          setHolidays(res.holidays);
-          setJsonText(JSON.stringify(res.holidays, null, 2));
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(res.holidays));
-          return;
-        }
-      } catch {
-        // Local storage fallback
+  const loadCalendar = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await apiFetch<{ holidays: Holiday[] }>("/api/admin/calendar");
+      if (res && Array.isArray(res.holidays)) {
+        const sorted = [...res.holidays].sort((a, b) => a.date.localeCompare(b.date));
+        setHolidays(sorted);
+        setJsonText(JSON.stringify(sorted, null, 2));
+      } else {
+        throw new Error("Invalid calendar data received from database.");
       }
-
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw) as Holiday[];
-          setHolidays(parsed);
-          setJsonText(JSON.stringify(parsed, null, 2));
-        }
-      } catch {
-        /* ignore */
-      }
+    } catch (err: any) {
+      setError(err?.message || "Unable to load academic calendar from database.");
+    } finally {
+      setIsLoading(false);
     }
+  };
 
+  useEffect(() => {
     void loadCalendar();
   }, []);
 
   const persist = async (next: Holiday[]) => {
     const sorted = [...next].sort((a, b) => a.date.localeCompare(b.date));
-    setHolidays(sorted);
-    setJsonText(JSON.stringify(sorted, null, 2));
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(sorted));
-    } catch {
-      /* storage unavailable */
-    }
-
     if (isAdmin) {
       try {
         await apiFetch<{ holidays: Holiday[] }>("/api/admin/calendar", {
           method: "POST",
           body: { holidays: sorted },
         });
-      } catch (err) {
-        console.warn("Could not sync calendar to backend:", err);
+        setHolidays(sorted);
+        setJsonText(JSON.stringify(sorted, null, 2));
+        return true;
+      } catch (err: any) {
+        toast.error(err?.message || "Could not save calendar to backend database.");
+        return false;
       }
+    } else {
+      toast.error("Unauthorized: Only administrators can modify the academic calendar.");
+      return false;
     }
   };
 
@@ -267,8 +203,28 @@ function EditAcademicCalendarPage() {
   const yearPrefix = `${year}-`;
   const yearHolidays = useMemo(
     () => holidays.filter((h) => h.date.startsWith(yearPrefix)),
-    [holidays, yearPrefix],
+    [holidays, yearPrefix]
   );
+
+  const totalAnnualHolidays = yearHolidays.length;
+  const totalAnnualWorkingDays = useMemo(() => {
+    let total = 0;
+    for (let monthIndex = 0; monthIndex < 12; monthIndex++) {
+      const prefix = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+      const monthHolidays = yearHolidays.filter((h) => h.date.startsWith(prefix));
+      const totalDays = new Date(year, monthIndex + 1, 0).getDate();
+      let sundaysCount = 0;
+      for (let d = 1; d <= totalDays; d += 1) {
+        if (new Date(year, monthIndex, d).getDay() === 0) sundaysCount += 1;
+      }
+      const nonWorkingWeekdayHolidays = monthHolidays.filter((h) => {
+        const dayNum = Number(h.date.slice(8, 10));
+        return new Date(year, monthIndex, dayNum).getDay() !== 0;
+      });
+      total += Math.max(0, totalDays - sundaysCount - nonWorkingWeekdayHolidays.length);
+    }
+    return total;
+  }, [year, yearHolidays]);
 
   const classifiedMonths = useMemo(() => {
     return MONTH_NAMES.map((monthName, monthIndex) => {
@@ -304,13 +260,19 @@ function EditAcademicCalendarPage() {
     });
   }, [year, yearHolidays, categoryFilter]);
 
-  const totalAnnualHolidays = yearHolidays.length;
-  const totalAnnualWorkingDays = classifiedMonths.reduce((acc, m) => acc + m.workingDays, 0);
-
   const handleOpenAddForMonth = (monthIndex: number) => {
     setIsNew(true);
     setDraft({
       date: iso(year, monthIndex, 1),
+      label: "",
+      type: "Public holiday",
+    });
+  };
+
+  const handleOpenAddGeneric = () => {
+    setIsNew(true);
+    setDraft({
+      date: iso(year, 0, 1),
       label: "",
       type: "Public holiday",
     });
@@ -321,27 +283,35 @@ function EditAcademicCalendarPage() {
     setDraft(holiday);
   };
 
-  const saveDraft = () => {
+  const saveDraft = async () => {
     if (!draft || draft.label.trim() === "") return;
-    void persist([...holidays.filter((h) => h.date !== draft.date), { ...draft, label: draft.label.trim() }]);
-    toast.success(`Holiday saved for ${formatDayLabel(draft.date)}`);
-    setDraft(null);
+    const cleanDraft = { ...draft, label: draft.label.trim() };
+    const success = await persist([
+      ...holidays.filter((h) => h.date !== cleanDraft.date),
+      cleanDraft,
+    ]);
+    if (success) {
+      toast.success(`Holiday saved for ${formatDayLabel(cleanDraft.date)}`);
+      setDraft(null);
+    }
   };
 
-  const removeDate = (date: string) => {
-    void persist(holidays.filter((h) => h.date !== date));
-    toast.info(`Holiday removed for ${formatDayLabel(date)}`);
-    setDraft(null);
+  const removeDate = async (date: string) => {
+    const success = await persist(holidays.filter((h) => h.date !== date));
+    if (success) {
+      toast.info(`Holiday removed for ${formatDayLabel(date)}`);
+      setDraft(null);
+    }
   };
 
-  const onJsonChange = (value: string) => {
+  const onJsonChange = async (value: string) => {
     setJsonText(value);
     const result = parseHolidaysJson(value);
     if (result.error !== null) {
       setJsonError(result.error);
     } else {
       setJsonError(null);
-      void persist(result.holidays);
+      await persist(result.holidays);
     }
   };
 
@@ -356,16 +326,34 @@ function EditAcademicCalendarPage() {
     setJsonError(null);
   };
 
-  const resetJson = () => {
-    const defaults = buildDefaultHolidays(year);
-    const otherYears = holidays.filter((h) => !h.date.startsWith(`${year}-`));
-    const merged = [...otherYears, ...defaults];
-    void persist(merged);
-    setJsonText(JSON.stringify(merged, null, 2));
-    setJsonError(null);
-    toast.info(`Reset holidays to standard AP academic defaults for ${year}.`);
-  };
+  // ── Loading & Error States ──
+  if (isLoading) {
+    return (
+      <AppShell roles={["admin"]} title="Edit Academic Calendar">
+        <div className="surface-panel flex flex-col items-center justify-center p-16 text-center">
+          <Loader2 className="size-8 animate-spin text-muted-foreground/60 mb-3" />
+          <p className="text-sm text-muted-foreground">Loading academic calendar...</p>
+        </div>
+      </AppShell>
+    );
+  }
 
+  if (error) {
+    return (
+      <AppShell roles={["admin"]} title="Edit Academic Calendar">
+        <div className="surface-panel flex flex-col items-center justify-center p-16 text-center border-destructive/20 bg-destructive/5">
+          <AlertTriangle className="size-10 text-destructive mb-3" />
+          <h3 className="text-base font-semibold text-destructive">Unable to load calendar</h3>
+          <p className="text-sm text-muted-foreground mt-1">{error}</p>
+          <Button variant="outline" className="mt-4" onClick={() => void loadCalendar()}>
+            Retry Connection
+          </Button>
+        </div>
+      </AppShell>
+    );
+  }
+
+  // ── Render ──
   return (
     <AppShell
       roles={["admin"]}
@@ -375,7 +363,7 @@ function EditAcademicCalendarPage() {
         <div className="flex items-center gap-2">
           <Button variant="outline" asChild>
             <Link to="/calendar">
-              <ArrowLeft className="size-4" /> Back to Calendar
+              <ArrowLeft className="size-4 mr-1.5" /> Back to Calendar
             </Link>
           </Button>
           <div className="flex rounded-lg border border-border bg-muted/40 p-1">
@@ -408,297 +396,74 @@ function EditAcademicCalendarPage() {
         </div>
       }
     >
-      {/* ── Year Selector & Quick Metrics ── */}
-      <div className="surface-panel mb-6 flex flex-wrap items-center justify-between gap-4 p-4">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setYear((y) => y - 1)}
-            aria-label="Previous year"
-          >
-            <ChevronLeft className="size-4" />
-          </Button>
+      {/* ── Year Selector & Metrics ── */}
+      <YearSelector
+        year={year}
+        onYearChange={setYear}
+        totalHolidays={totalAnnualHolidays}
+        totalWorkingDays={totalAnnualWorkingDays}
+        yearOptions={yearOptions}
+        yearHolidaysCount={yearHolidaysCount}
+        onAddHoliday={handleOpenAddGeneric}
+      />
 
-          <Select value={String(year)} onValueChange={(v) => setYear(parseInt(v, 10))}>
-            <SelectTrigger className="h-9 w-32 font-mono text-base font-bold">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {yearOptions.map((y) => {
-                const count = yearHolidaysCount.get(y) ?? 0;
-                const isVerified = count >= 6;
-                return (
-                  <SelectItem key={y} value={String(y)}>
-                    <div className="flex items-center justify-between gap-2.5 w-full">
-                      <span>{y}</span>
-                      {isVerified ? (
-                        <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                          Verified
-                        </span>
-                      ) : null}
-                    </div>
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setYear((y) => y + 1)}
-            aria-label="Next year"
-          >
-            <ChevronRight className="size-4" />
-          </Button>
-
-          <span className="ml-2 font-mono text-xs font-semibold text-muted-foreground">
-            {totalAnnualHolidays} holidays · {totalAnnualWorkingDays} annual working days
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setIsNew(true);
-              setDraft({ date: iso(year, 0, 1), label: "", type: "Public holiday" });
-            }}
-          >
-            <Plus className="size-4" /> Add holiday
-          </Button>
-          <Button size="sm" variant="outline" onClick={resetJson}>
-            <RotateCcw className="size-4" /> Seed defaults ({year})
-          </Button>
-        </div>
-      </div>
-
-      {/* ── Mode 1: Two-way JSON Editor ── */}
+      {/* ── Mode 1: JSON Editor ── */}
       {mode === "json" ? (
-        <div className="surface-panel overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-4">
-            <div>
-              <h2 className="text-base font-semibold">Two-Way JSON Editor</h2>
-              <p className="text-xs text-muted-foreground">
-                Edit holiday definitions directly in JSON. Changes synchronize to MySQL and the manual view live.
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" onClick={formatJson}>
-                <Wand2 className="size-4" /> Format JSON
-              </Button>
-              <Button size="sm" variant="outline" onClick={resetJson}>
-                <RotateCcw className="size-4" /> Reset defaults
-              </Button>
-            </div>
-          </div>
-
-          <Textarea
-            value={jsonText}
-            onChange={(e) => onJsonChange(e.target.value)}
-            spellCheck={false}
-            aria-label="Holidays JSON editor"
-            className="min-h-[500px] w-full resize-y rounded-none border-0 font-mono text-xs leading-relaxed focus-visible:ring-0"
-          />
-
-          <div
-            className={`flex items-start gap-2 border-t px-5 py-3 text-xs ${
-              jsonError
-                ? "border-destructive/40 bg-destructive/10 text-destructive"
-                : "border-border bg-muted/40 text-muted-foreground"
-            }`}
-          >
-            {jsonError ? (
-              <>
-                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                <span className="font-mono">{jsonError}</span>
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" />
-                <span>
-                  Valid JSON — <strong className="text-foreground">{holidays.length}</strong> total holidays
-                  saved in database.
-                </span>
-              </>
-            )}
-          </div>
-        </div>
+        <JSONEditor
+          jsonText={jsonText}
+          onJsonChange={onJsonChange}
+          jsonError={jsonError}
+          holidayCount={holidays.length}
+          onFormat={formatJson}
+        />
       ) : (
-        /* ── Mode 2: Manual Monthly Classified Cards ── */
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {classifiedMonths.map((m) => {
-            const hasHolidays = m.holidays.length > 0;
-
-            return (
-              <div
-                key={m.monthIndex}
-                className="surface-panel flex flex-col justify-between overflow-hidden border border-border/80 transition-all hover:border-border"
-              >
-                <div>
-                  <div className="flex items-center justify-between border-b border-border bg-muted/30 px-5 py-3.5">
-                    <h3 className="font-semibold text-foreground">
-                      {m.monthName} <span className="font-mono text-xs font-normal text-muted-foreground">{year}</span>
-                    </h3>
-                    <div className="flex items-center gap-1.5 font-mono text-xs">
-                      <span className="rounded bg-accent/15 px-2 py-0.5 font-semibold text-accent-foreground">
-                        {m.workingDays} w-days
-                      </span>
-                      {hasHolidays ? (
-                        <span className="rounded bg-primary/10 px-2 py-0.5 font-semibold text-primary">
-                          {m.holidays.length} hols
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="p-4">
-                    {hasHolidays ? (
-                      <ul className="space-y-2.5">
-                        {m.holidays.map((h) => (
-                          <li
-                            key={h.date}
-                            className="group flex items-start justify-between gap-2 rounded-md border border-border/60 bg-card p-3 transition-colors hover:bg-muted/40"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono text-xs font-bold text-foreground">
-                                  {formatDayLabel(h.date)}
-                                </span>
-                                <span
-                                  className={`rounded-sm border px-1.5 py-0.5 text-[10px] font-semibold ${
-                                    typeStyles[h.type]
-                                  }`}
-                                >
-                                  {h.type}
-                                </span>
-                              </div>
-                              <p className="mt-1 truncate text-xs font-medium text-foreground">{h.label}</p>
-                            </div>
-
-                            <div className="flex shrink-0 items-center gap-0.5 opacity-80 group-hover:opacity-100">
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="size-7"
-                                onClick={() => handleEditHoliday(h)}
-                                aria-label={`Edit ${h.label}`}
-                              >
-                                <Pencil className="size-3.5 text-muted-foreground" />
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="size-7"
-                                onClick={() => removeDate(h.date)}
-                                aria-label={`Remove ${h.label}`}
-                              >
-                                <Trash2 className="size-3.5 text-destructive" />
-                              </Button>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-6 text-center text-xs text-muted-foreground">
-                        <CalendarIcon className="mb-1.5 size-5 opacity-40" />
-                        <p>No holidays mapped</p>
-                        <p className="mt-0.5 font-mono text-[11px] text-muted-foreground/80">
-                          {m.totalDays} total days · {m.sundaysCount} Sundays
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="border-t border-border/60 bg-muted/20 px-4 py-2 text-right">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs text-muted-foreground hover:text-foreground"
-                    onClick={() => handleOpenAddForMonth(m.monthIndex)}
-                  >
-                    <Plus className="mr-1 size-3" /> Add to {m.monthName}
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* ── Add / Edit Holiday Dialog Modal ── */}
-      <Dialog open={draft !== null} onOpenChange={(o) => (o ? null : setDraft(null))}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{isNew ? "Map a holiday or academic event" : "Edit holiday"}</DialogTitle>
-            <DialogDescription>
-              Mapped holidays immediately synchronize with monthly attendance calculations.
-            </DialogDescription>
-          </DialogHeader>
-
-          {draft ? (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="holiday-date">Date</Label>
-                <Input
-                  id="holiday-date"
-                  type="date"
-                  value={draft.date}
-                  onChange={(e) => setDraft({ ...draft, date: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="holiday-label">Occasion / Event Title</Label>
-                <Input
-                  id="holiday-label"
-                  value={draft.label}
-                  placeholder="e.g. Independence Day / Semester Exam Begins"
-                  onChange={(e) => setDraft({ ...draft, label: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Category</Label>
-                <Select
-                  value={draft.type}
-                  onValueChange={(v) => setDraft({ ...draft, type: v as HolidayType })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {HOLIDAY_TYPES.map((t) => (
-                      <SelectItem key={t} value={t}>
-                        {t}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+        /* ── Mode 2: Manual Monthly Cards ── */
+        <>
+          {yearHolidays.length === 0 ? (
+            <div className="surface-panel flex flex-col items-center justify-center p-16 text-center mb-6">
+              <CalendarDays className="size-12 text-muted-foreground/30 mb-3" />
+              <h3 className="text-base font-semibold">No holidays mapped for {year}</h3>
+              <p className="text-sm text-muted-foreground mt-1 max-w-md">
+                There are no public, institutional, academic, or vacation days mapped in the database for the year {year}.
+              </p>
+              <Button className="mt-4" onClick={handleOpenAddGeneric}>
+                Add first holiday for {year}
+              </Button>
             </div>
           ) : null}
 
-          <DialogFooter className="gap-2 sm:justify-between">
-            {draft && !isNew ? (
-              <Button variant="ghost" onClick={() => removeDate(draft.date)}>
-                <Trash2 className="size-4 text-destructive" /> Remove
-              </Button>
-            ) : (
-              <span />
-            )}
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setDraft(null)}>
-                Cancel
-              </Button>
-              <Button onClick={saveDraft} disabled={!draft || draft.label.trim() === ""}>
-                Save holiday
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {classifiedMonths.map((m) => (
+              <MonthlyCard
+                key={m.monthIndex}
+                monthIndex={m.monthIndex}
+                monthName={m.monthName}
+                year={year}
+                holidays={m.holidays}
+                workingDays={m.workingDays}
+                totalDays={m.totalDays}
+                sundaysCount={m.sundaysCount}
+                onAddHoliday={handleOpenAddForMonth}
+                onEditHoliday={handleEditHoliday}
+                onRemoveHoliday={removeDate}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* ── Holiday Form Dialog ── */}
+      <HolidayFormDialog
+        open={draft !== null}
+        onOpenChange={() => setDraft(null)}
+        draft={draft}
+        isNew={isNew}
+        onSave={saveDraft}
+        onRemove={removeDate}
+        onDraftChange={setDraft}
+      />
     </AppShell>
   );
 }
+
+export default EditAcademicCalendarPage;
