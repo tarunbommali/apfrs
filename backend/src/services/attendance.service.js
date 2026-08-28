@@ -214,7 +214,7 @@ class AttendanceService {
       throw new AppError(400, 'Reporting month and year are required.');
     }
 
-    const savedData = await monthlyAttendanceRepository.saveMonthlySheetAndRecords(
+    const savedResult = await monthlyAttendanceRepository.saveMonthlySheetAndRecords(
       month,
       year,
       fileName || `attendance-${year}-${month}.xlsx`,
@@ -222,10 +222,14 @@ class AttendanceService {
       uploadedBy
     );
 
+    const importedCount = savedResult.records?.length || 0;
+    const skippedCount = savedResult.warnings?.length || 0;
+
     return {
       success: true,
-      message: `Successfully seeded ${records.length} faculty attendance records into database for ${month}/${year}.`,
-      data: savedData,
+      message: `Successfully seeded ${importedCount} faculty attendance records. Skipped ${skippedCount} unregistered records.`,
+      data: savedResult,
+      warnings: savedResult.warnings || [],
     };
   }
 
