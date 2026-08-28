@@ -1,25 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Suspense, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  BarChart3,
-  Calendar,
-  Download,
-  FileSpreadsheet,
-  Layers,
-  Search,
-  Users,
-  Building2,
-  CheckCircle2,
-  AlertCircle,
-  ArrowLeft,
-  Filter,
-  Eye,
-} from "lucide-react";
+import { Download, ArrowLeft } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -33,8 +17,24 @@ import {
 } from "@/lib/queries";
 import { toast } from "sonner";
 import { MONTH_NAMES } from "@/lib/constants";
-import { getAttendancePct, tierTextClassFromPct } from "@/lib/attendance-utils";
+import {
+  getAttendancePct,
+  getPresentDays,
+  getAbsentDays,
+  getLeaveDays,
+  getJobStatus,
+} from "@/lib/attendance-utils";
 import { exportAttendanceExcel } from "@/lib/export/exportAttendanceExcel";
+
+// Subcomponents
+import { ReportSkeleton } from "./-reports-detail/ReportSkeleton";
+import { MetricCards } from "./-reports-detail/MetricCards";
+import { TabNavigation } from "./-reports-detail/TabNavigation";
+import { FacultyFilters } from "./-reports-detail/FacultyFilters";
+import { FacultyTable } from "./-reports-detail/FacultyTable";
+import { DepartmentCards } from "./-reports-detail/DepartmentCards";
+import { PDFPreviewModal } from "./-reports-detail/PDFPreviewModal";
+import { EmptyState } from "./-reports-detail/EmptyState";
 
 export const Route = createFileRoute("/reports/$month/$year")({
   head: ({ params }) => ({
@@ -71,34 +71,22 @@ function MonthReportRoute() {
   );
 }
 
-function ReportSkeleton() {
-  return (
-    <AppShell title="Attendance Report" subtitle="Loading monthly report…">
-      <div className="space-y-6">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="surface-panel h-24 animate-pulse" />
-          ))}
-        </div>
-        <div className="surface-panel h-96 animate-pulse" />
-      </div>
-    </AppShell>
-  );
-}
+type ViewTab = "summary" | "departments";
 
 function MonthReportPage({ month, year }: { month: number; year: number }) {
   const navigate = useNavigate();
   const monthName = MONTH_NAMES[month - 1] || "Monthly";
 
+  // Queries
   const { data: attendanceData, isLoading, error } = useQuery(monthlyAttendanceQuery(month, year));
   const { data: monthsData } = useQuery(attendanceMonthsQuery());
   const availableMonths = monthsData?.months || [];
 
-  const [activeTab, setActiveTab] = useState<"summary" | "departments" | "weekly">("summary");
+  // State
+  const [activeTab, setActiveTab] = useState<ViewTab>("summary");
   const [search, setSearch] = useState("");
   const [selectedDept, setSelectedDept] = useState("all");
   const [selectedCadre, setSelectedCadre] = useState("all");
-
   const [previewCfmsId, setPreviewCfmsId] = useState<string | null>(null);
 
   const records = attendanceData?.records || [];
@@ -173,37 +161,24 @@ function MonthReportPage({ month, year }: { month: number; year: number }) {
       .catch((e) => toast.error("Export failed: " + String(e.message ?? e)));
   };
 
-  if (error || (!isLoading && records.length === 0)) {
-    return (
-      <AppShell
-        roles={["admin"]}
-        title={`Reports · ${monthName} ${year}`}
-        subtitle="No attendance sheet found for this period"
-        actions={
-          <Button variant="outline" size="sm" asChild>
-            <Link to="/reports">
-              <ArrowLeft className="mr-1.5 size-3.5" /> All Reports
-            </Link>
-          </Button>
-        }
-      >
-        <div className="surface-panel p-12 text-center">
-          <AlertCircle className="mx-auto size-10 text-muted-foreground/50" />
-          <h2 className="mt-3 text-base font-semibold">No attendance sheet for {monthName} {year}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            No biometric attendance sheet has been imported for this period yet.
-          </p>
-          <div className="mt-6 flex justify-center gap-3">
-            <Button variant="outline" asChild>
-              <Link to="/reports">View Available Reports</Link>
-            </Button>
-            <Button asChild>
-              <Link to="/import">Import Biometric Sheet</Link>
-            </Button>
-          </div>
-        </div>
-      </AppShell>
+  const handlePreview = (cfmsId: string) => {
+    setPreviewCfmsId(cfmsId);
+  };
+
+  const handleDownloadPDF = (cfmsId: string) => {
+    window.open(
+      `/api/admin/attendance/report/consolidated/pdf?month=${month}&year=${year}&cfmsIds=${cfmsId}`,
+      "_blank"
     );
+  };
+
+  const handleViewDepartment = (department: string) => {
+    setSelectedDept(department);
+    setActiveTab("summary");
+  };
+
+  if (error || (!isLoading && records.length === 0)) {
+    return <EmptyState monthName={monthName} year={year} />;
   }
 
   return (
@@ -219,7 +194,7 @@ function MonthReportPage({ month, year }: { month: number; year: number }) {
             </Link>
           </Button>
 
-          {availableMonths.length > 1 ? (
+          {availableMonths.length > 1 && (
             <Select
               value={`${month}-${year}`}
               onValueChange={(val) => {
@@ -238,7 +213,7 @@ function MonthReportPage({ month, year }: { month: number; year: number }) {
                 ))}
               </SelectContent>
             </Select>
-          ) : null}
+          )}
 
           <Button size="sm" variant="outline" onClick={handleExportExcel}>
             <Download className="mr-1.5 size-3.5" /> Export Excel
@@ -247,271 +222,71 @@ function MonthReportPage({ month, year }: { month: number; year: number }) {
       }
     >
       <div className="space-y-6">
-        {/* ── Top Metric Stat Cards ── */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            label="Total Faculty"
-            value={totalFaculty}
-            hint="Enrolled in sheet"
-            icon={Users}
-          />
-          <StatCard
-            label="Official Working Days"
-            value={`${workingDays} Days`}
-            hint="Calendar synced"
-            icon={Calendar}
-          />
-          <StatCard
-            label="Average Attendance"
-            value={`${overallAvgPct}%`}
-            hint={`${departments.length} departments`}
-            icon={BarChart3}
-          />
-          <StatCard
-            label="Cumulative Attendance"
-            value={`${totalPresentDays} P / ${totalAbsentDays} A`}
-            hint={`${totalLeaves} leaves recorded`}
-            icon={CheckCircle2}
-          />
-        </div>
+        {/* Metric Cards */}
+        <MetricCards
+          totalFaculty={totalFaculty}
+          workingDays={workingDays}
+          avgAttendance={overallAvgPct}
+          departmentsCount={departments.length}
+          totalPresent={totalPresentDays}
+          totalAbsent={totalAbsentDays}
+          totalLeaves={totalLeaves}
+        />
 
-        {/* ── Navigation Tabs ── */}
-        <div className="flex border-b border-border text-sm font-medium">
-          <button
-            onClick={() => setActiveTab("summary")}
-            className={`border-b-2 px-4 py-2.5 transition-colors ${
-              activeTab === "summary"
-                ? "border-primary text-primary font-semibold"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Faculty Summary ({filteredRecords.length})
-          </button>
-          <button
-            onClick={() => setActiveTab("departments")}
-            className={`border-b-2 px-4 py-2.5 transition-colors ${
-              activeTab === "departments"
-                ? "border-primary text-primary font-semibold"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Department Breakdown ({departments.length})
-          </button>
-        </div>
+        {/* Tab Navigation */}
+        <TabNavigation
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          filteredCount={filteredRecords.length}
+          departmentsCount={departments.length}
+        />
 
-        {/* ── Tab Content: Faculty Summary ── */}
+        {/* Tab Content */}
         {activeTab === "summary" ? (
           <section className="surface-panel overflow-hidden">
-            {/* Filters Bar */}
-            <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="relative max-w-sm flex-1">
-                <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search by name, CFMS ID, department…"
-                  className="h-8 pl-8 text-xs"
-                />
-              </div>
+            <FacultyFilters
+              search={search}
+              onSearchChange={setSearch}
+              selectedDept={selectedDept}
+              onDeptChange={setSelectedDept}
+              selectedCadre={selectedCadre}
+              onCadreChange={setSelectedCadre}
+              departments={departments}
+            />
 
-              <div className="flex flex-wrap items-center gap-2">
-                <Select value={selectedDept} onValueChange={setSelectedDept}>
-                  <SelectTrigger className="h-8 w-36 text-xs bg-card">
-                    <SelectValue placeholder="Department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Departments</SelectItem>
-                    {departments.map((d) => (
-                      <SelectItem key={d.department} value={d.department}>
-                        {d.department} ({d.total})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Select value={selectedCadre} onValueChange={setSelectedCadre}>
-                  <SelectTrigger className="h-8 w-28 text-xs bg-card">
-                    <SelectValue placeholder="Cadre" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Cadres</SelectItem>
-                    <SelectItem value="regular">Regular</SelectItem>
-                    <SelectItem value="contract">Contract</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Faculty Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="border-b border-border bg-muted/50 font-medium text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-2.5">CFMS ID</th>
-                    <th className="px-4 py-2.5">Faculty Name</th>
-                    <th className="px-4 py-2.5">Department</th>
-                    <th className="px-4 py-2.5">Designation</th>
-                    <th className="px-3 py-2.5 text-center">Cadre</th>
-                    <th className="px-4 py-2.5 text-center">Present / Working</th>
-                    <th className="px-3 py-2.5 text-right">P</th>
-                    <th className="px-3 py-2.5 text-right">A</th>
-                    <th className="px-3 py-2.5 text-right">L</th>
-                    <th className="px-3 py-2.5 text-right">HD</th>
-                    <th className="px-4 py-2.5 text-right">Attendance %</th>
-                    <th className="px-4 py-2.5 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filteredRecords.map((r: any, idx: number) => {
-                    const pct = getAttendancePct(r);
-                    const pDays = getPresentDays(r);
-                    const wDays = getWorkingDays(r, workingDays);
-
-                    return (
-                      <tr key={idx} className="hover:bg-muted/40 transition-colors">
-                        <td className="px-4 py-2 font-mono text-muted-foreground">{r.cfmsId || r.cfms_id || "—"}</td>
-                        <td className="px-4 py-2">
-                          <p className="font-medium text-foreground">{r.name}</p>
-                          {r.email ? <p className="text-[10px] text-muted-foreground">{r.email}</p> : null}
-                        </td>
-                        <td className="px-4 py-2 font-medium text-foreground">{r.department || "General"}</td>
-                        <td className="px-4 py-2 text-muted-foreground">{r.designation || "Assistant Professor"}</td>
-                        <td className="px-3 py-2 text-center">
-                          <span
-                            className={`rounded-sm px-1.5 py-0.5 text-[10px] font-bold border ${
-                              getJobStatus(r).toLowerCase() === "regular"
-                                ? "bg-[var(--badge-accent-bg)] text-[var(--badge-accent-fg)] border-[rgba(94,106,210,0.2)]"
-                                : "bg-[var(--badge-muted-bg)] text-[var(--badge-muted-fg)] border-[rgba(255,255,255,0.08)]"
-                            }`}
-                          >
-                            {getJobStatus(r).toUpperCase()}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2 text-center font-mono font-semibold text-foreground">
-                          <span className="text-[var(--status-present-fg)]">{pDays}</span>
-                          <span className="text-muted-foreground"> / {wDays}</span>
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono font-semibold text-[var(--status-present-fg)]">
-                          {pDays}
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono text-muted-foreground">
-                          {getAbsentDays(r)}
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono text-muted-foreground">
-                          {getLeaveDays(r)}
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono text-muted-foreground">
-                          {r.halfDays || r.half_days || 0}
-                        </td>
-                        <td className="px-4 py-2 text-right">
-                          <span
-                            className={`font-mono text-xs font-bold ${tierTextClassFromPct(pct)}`}
-                          >
-                            {pct}%
-                          </span>
-                        </td>
-                        <td className="px-4 py-2 text-right" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex justify-end items-center gap-1">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => setPreviewCfmsId(r.cfmsId || r.cfms_id)}
-                              title="Preview Report"
-                              className="size-6 text-muted-foreground hover:text-indigo-400"
-                            >
-                              <Eye className="size-3.5" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => window.open(`/api/admin/attendance/report/consolidated/pdf?month=${month}&year=${year}&cfmsIds=${r.cfmsId || r.cfms_id}`, '_blank')}
-                              title="Download PDF"
-                              className="size-6 text-muted-foreground hover:text-indigo-400"
-                            >
-                              <Download className="size-3.5" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {previewCfmsId && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                <div className="bg-[#12121a] border border-white/10 w-full max-w-4xl h-[90vh] rounded-xl flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                  <div className="flex items-center justify-between border-b border-white/10 p-4 bg-[#1a1a25]">
-                    <div>
-                      <h3 className="font-bold text-sm text-[#e8e8ed]">Report Preview</h3>
-                      <p className="text-[11px] text-white/50">Month: {monthName} {year} · CFMS ID: {previewCfmsId}</p>
-                    </div>
-                    <Button size="sm" variant="ghost" onClick={() => setPreviewCfmsId(null)} className="text-white/60 hover:text-white">
-                      Close
-                    </Button>
-                  </div>
-                  <div className="flex-1 bg-white p-2">
-                    <iframe
-                      src={`/api/admin/attendance/report/${previewCfmsId}/preview?month=${month}&year=${year}`}
-                      className="w-full h-full border-0 rounded"
-                      title="Attendance Statement Preview"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
+            <FacultyTable
+              records={filteredRecords}
+              workingDays={workingDays}
+              month={month}
+              year={year}
+              onPreview={handlePreview}
+              onDownload={handleDownloadPDF}
+            />
 
             <div className="flex items-center justify-between border-t border-border px-4 py-2.5 text-xs text-muted-foreground">
               <span>Showing {filteredRecords.length} of {records.length} faculty members</span>
               <span>Total Working Days: <strong>{workingDays}</strong></span>
             </div>
           </section>
-        ) : null}
-
-        {/* ── Tab Content: Department Breakdown ── */}
-        {activeTab === "departments" ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {departments.map((d) => (
-              <div key={d.department} className="surface-panel p-5 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Building2 className="size-4 text-accent" />
-                      <h3 className="font-semibold text-foreground">{d.department}</h3>
-                    </div>
-                    <span className="font-mono text-sm font-bold text-foreground">{d.avgPct}%</span>
-                  </div>
-
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {d.total} Faculty ({d.regularCount} Regular · {d.contractCount} Contract)
-                  </p>
-
-                  <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-primary"
-                      style={{ width: `${Math.min(100, Math.max(0, d.avgPct))}%` }}
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-3 text-[11px] text-muted-foreground">
-                  <span>Working Days: {workingDays}</span>
-                  <button
-                    onClick={() => {
-                      setSelectedDept(d.department);
-                      setActiveTab("summary");
-                    }}
-                    className="font-semibold text-primary hover:underline"
-                  >
-                    View Faculty ({d.total}) →
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : null}
+        ) : (
+          <DepartmentCards
+            departments={departments}
+            workingDays={workingDays}
+            onViewFaculty={handleViewDepartment}
+          />
+        )}
       </div>
+
+      {/* PDF Preview Modal */}
+      <PDFPreviewModal
+        cfmsId={previewCfmsId}
+        onClose={() => setPreviewCfmsId(null)}
+        month={month}
+        year={year}
+        monthName={monthName}
+      />
     </AppShell>
   );
 }
+
+export default MonthReportRoute;
