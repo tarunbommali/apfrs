@@ -42,65 +42,27 @@ class MonthlyAttendanceRepository {
     }
     if (officialWorkingDays === 0) officialWorkingDays = 24; // Sensible fallback
 
-    // 2. Auto-sync and match faculty in `users` table primarily by CFMS ID
-    const emails = records.map((r) => r.email).filter(Boolean);
-    const cfmsIds = records.map((r) => r.cfmsId || r.cfms_id).filter(Boolean);
-    const existingFacultyMap = await userRepository.findByEmailsOrCfmsIds(emails, cfmsIds);
+    // 2. Load registered faculty by CFMS ID
+    const cfmsIds = records.map((r) => String(r.cfmsId || r.cfms_id || '').trim()).filter(Boolean);
+    const existingFacultyMap = await userRepository.findByEmailsOrCfmsIds([], cfmsIds);
 
-    const facultyIdMap = new Map(); // cfmsId or email -> user.id
+    const skippedCfmsIds = [];
+    const insertedRecords = [];
 
+    // Filter and resolve records against source of truth database registry
     for (const record of records) {
-      const email = record.email?.toLowerCase().trim() || '';
       const cfmsId = String(record.cfmsId || record.cfms_id || '').trim();
-      
-      // Match by CFMS ID first, then by email
-      const existing = (cfmsId && existingFacultyMap.get(cfmsId)) || (email && existingFacultyMap.get(email));
+      const existingFaculty = cfmsId ? existingFacultyMap.get(cfmsId) : null;
 
-      const rawStatus = String(record.jobStatus || record.job_status || '').toLowerCase();
-      const normalizedJobStatus = rawStatus === 'regular' ? 'Regular' : 'contract';
-
-      if (existing) {
-        const key = cfmsId || email;
-        facultyIdMap.set(key, existing.id);
-        if (email) facultyIdMap.set(email, existing.id);
-        if (cfmsId) facultyIdMap.set(cfmsId, existing.id);
-
-        const updates = {};
-        if (record.name && record.name !== existing.name && !existing.name.startsWith('Dr.')) updates.name = record.name;
-        if (cfmsId && !existing.cfms_id) updates.cfms_id = cfmsId;
-
-        if (Object.keys(updates).length > 0) {
-          await userRepository.update(existing.id, updates);
-        }
-      } else if (cfmsId || email) {
-        // Auto-provision new faculty in users table if not existing
-        try {
-          const generatedEmail = email || `faculty_${cfmsId || uuidv4().slice(0, 6)}@jntugvcev.edu.in`;
-          const newUser = new User({
-            id: `fac-${uuidv4().split('-')[0]}`,
-            cfms_id: cfmsId || null,
-            email: generatedEmail,
-            name: record.name || 'Faculty Member',
-            department: record.department || 'General',
-            designation: record.designation || 'Assistant Professor',
-            job_status: normalizedJobStatus,
-            role: 'faculty',
-            isActive: true,
-          });
-          await newUser.setPassword('faculty@123');
-          const created = await userRepository.create(newUser);
-          if (created) {
-            const key = cfmsId || generatedEmail;
-            facultyIdMap.set(key, created.id);
-            if (generatedEmail) facultyIdMap.set(generatedEmail, created.id);
-            if (created.cfms_id) facultyIdMap.set(created.cfms_id, created.id);
-            existingFacultyMap.set(generatedEmail, created);
-            if (created.cfms_id) existingFacultyMap.set(created.cfms_id, created);
-          }
-        } catch (createErr) {
-          logger.warn('Could not auto-create user for faculty:', { email, cfmsId, error: createErr.message });
-        }
+      if (!existingFaculty) {
+        skippedCfmsIds.push(cfmsId || 'Row without CFMS ID');
+        continue;
       }
+
+      insertedRecords.push({
+        raw: record,
+        existingFaculty
+      });
     }
 
     // 3. Upsert monthly sheet
@@ -116,21 +78,19 @@ class MonthlyAttendanceRepository {
         uploaded_by   = VALUES(uploaded_by),
         updated_at    = NOW()
     `;
-    await db.query(sheetSql, [sheetId, numMonth, numYear, fileName, records.length, officialWorkingDays, uploadedBy]);
+    await db.query(sheetSql, [sheetId, numMonth, numYear, fileName, insertedRecords.length, officialWorkingDays, uploadedBy]);
 
     // 4. Clear existing monthly records for this sheet (to allow re-upload/refresh)
     await db.query(`DELETE FROM faculty_monthly_attendance WHERE sheet_id = ?`, [sheetId]);
 
     // 5. Bulk insert faculty monthly records with calendar-synchronized working days
-    if (records.length > 0) {
-      const placeholders = records.map(() => `(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`).join(', ');
+    if (insertedRecords.length > 0) {
+      const placeholders = insertedRecords.map(() => `(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`).join(', ');
       const values = [];
 
-      for (const raw of records) {
-        const email = raw.email?.toLowerCase().trim() || '';
-        const cfmsId = String(raw.cfmsId || raw.cfms_id || '').trim();
-        const existingFaculty = (cfmsId && existingFacultyMap.get(cfmsId)) || (email && existingFacultyMap.get(email)) || null;
-        const facultyId = (cfmsId && facultyIdMap.get(cfmsId)) || (email && facultyIdMap.get(email)) || null;
+      for (const { raw, existingFaculty } of insertedRecords) {
+        const cfmsId = existingFaculty.cfms_id;
+        const facultyId = existingFaculty.id;
 
         // Auto-align daily records with calendar holidays, punch timings, and working days
         const daily = Array.isArray(raw.attendance) ? raw.attendance : [];
@@ -149,7 +109,10 @@ class MonthlyAttendanceRepository {
           const hasTiming = Boolean((d.inTime && String(d.inTime).trim()) || (d.outTime && String(d.outTime).trim()));
 
           let finalStatus = d.status || 'A';
-          if (hasTiming || d.status === 'P' || d.status === 'Late') {
+          if (isSun || isHol) {
+            finalStatus = 'H';
+            holidayDays += 1;
+          } else if (hasTiming || d.status === 'P' || d.status === 'Late') {
             finalStatus = 'P';
             presentDays += 1;
           } else if (d.status === 'HD' || d.status === 'HALF') {
@@ -158,9 +121,6 @@ class MonthlyAttendanceRepository {
           } else if (d.status === 'L' || d.status === 'CL' || d.status === 'OD' || d.status === 'LEAVE') {
             finalStatus = 'L';
             leaveDays += 1;
-          } else if (isSun || isHol) {
-            finalStatus = 'H';
-            holidayDays += 1;
           } else {
             finalStatus = 'A';
             absentDays += 1;
@@ -174,21 +134,17 @@ class MonthlyAttendanceRepository {
           ? Math.min(100, Math.round((effectivePresent / officialWorkingDays) * 1000) / 10)
           : 0;
 
-        const rawStatus = String(raw.jobStatus || raw.job_status || (existingFaculty?.job_status) || '').toLowerCase();
-        const normalizedJobStatus = rawStatus === 'contract' ? 'contract' : 'Regular';
-
         const model = new FacultyMonthlyAttendance({
-          ...raw,
           sheetId,
           facultyId,
           cfmsId,
-          name: existingFaculty?.name || raw.name,
-          email: existingFaculty?.email || raw.email || (cfmsId ? `${cfmsId}@jntugvcev.edu.in` : ''),
-          department: existingFaculty?.department || raw.department || 'General',
-          designation: existingFaculty?.designation || raw.designation || 'Assistant Professor',
-          gender: existingFaculty?.gender || raw.gender || 'male',
-          incharge: existingFaculty?.incharge || raw.incharge || 'None',
-          jobStatus: normalizedJobStatus,
+          name: existingFaculty.name,
+          email: existingFaculty.email,
+          department: existingFaculty.department,
+          designation: existingFaculty.designation,
+          gender: existingFaculty.gender,
+          incharge: existingFaculty.incharge,
+          jobStatus: existingFaculty.job_status,
           month: numMonth,
           year: numYear,
           presentDays,
@@ -244,10 +200,14 @@ class MonthlyAttendanceRepository {
       month: numMonth,
       year: numYear,
       workingDays: officialWorkingDays,
-      totalFaculty: records.length,
+      totalFaculty: insertedRecords.length,
     });
 
-    return this.getMonthlyAttendance(numMonth, numYear);
+    const savedSheet = await this.getMonthlyAttendance(numMonth, numYear);
+    return {
+      ...savedSheet,
+      warnings: skippedCfmsIds,
+    };
   }
 
   /**
