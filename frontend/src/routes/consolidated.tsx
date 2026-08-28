@@ -16,6 +16,7 @@ import {
   Clock,
   XCircle,
   AlertCircle,
+  Download,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -230,6 +231,26 @@ function DispatchPage() {
               ))}
             </SelectContent>
           </Select>
+
+          {/* Download Consolidated PDF Button */}
+          {viewTab === "recipients" && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                if (selectedIds.size === 0) {
+                  toast.error("Please select at least one faculty member.");
+                  return;
+                }
+                const idsString = Array.from(selectedIds).join(',');
+                window.open(`/api/admin/attendance/report/consolidated/pdf?month=${selectedMonth}&year=${selectedYear}&cfmsIds=${idsString}`, '_blank');
+              }}
+              disabled={selectedIds.size === 0}
+              className="gap-1.5"
+            >
+              <Download className="size-3.5" /> Download Consolidated PDF ({selectedIds.size})
+            </Button>
+          )}
 
           {/* Send Selected Button */}
           {viewTab === "recipients" && (

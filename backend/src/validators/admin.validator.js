@@ -49,12 +49,15 @@ export const attendanceSendSchema = z.object({
         employeeId: z.string(),
         employeeName: z.string(),
         email: z.string().email(),
-        month: z.string().optional(),
+        month: z.union([z.string(), z.number()]).optional(),
         year: z.union([z.string(), z.number()]).optional(),
         stats: z.any().optional(),
       })
     )
-    .min(1, 'At least one attendance record is required'),
+    .optional(),
+  month: z.union([z.string(), z.number()]).optional(),
+  year: z.union([z.string(), z.number()]).optional(),
+  facultyIds: z.array(z.string()).optional(),
   emailTemplate: z
     .object({
       subject: z.string().optional(),

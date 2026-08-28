@@ -14,6 +14,7 @@ import {
   AlertCircle,
   ArrowLeft,
   Filter,
+  Eye,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { StatCard } from "@/components/stat-card";
@@ -100,6 +101,8 @@ function MonthReportPage({ month, year }: { month: number; year: number }) {
   const [search, setSearch] = useState("");
   const [selectedDept, setSelectedDept] = useState("all");
   const [selectedCadre, setSelectedCadre] = useState("all");
+
+  const [previewCfmsId, setPreviewCfmsId] = useState<string | null>(null);
 
   const records = attendanceData?.records || [];
   const workingDays = attendanceData?.sheet?.workingDays || attendanceData?.workingDays || 27;
@@ -366,6 +369,7 @@ function MonthReportPage({ month, year }: { month: number; year: number }) {
                     <th className="px-3 py-2.5 text-right">L</th>
                     <th className="px-3 py-2.5 text-right">HD</th>
                     <th className="px-4 py-2.5 text-right">Attendance %</th>
+                    <th className="px-4 py-2.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -425,12 +429,57 @@ function MonthReportPage({ month, year }: { month: number; year: number }) {
                             {pct}%
                           </span>
                         </td>
+                        <td className="px-4 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex justify-end items-center gap-1">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => setPreviewCfmsId(r.cfmsId || r.cfms_id)}
+                              title="Preview Report"
+                              className="size-6 text-muted-foreground hover:text-indigo-400"
+                            >
+                              <Eye className="size-3.5" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => window.open(`/api/admin/attendance/report/consolidated/pdf?month=${month}&year=${year}&cfmsIds=${r.cfmsId || r.cfms_id}`, '_blank')}
+                              title="Download PDF"
+                              className="size-6 text-muted-foreground hover:text-indigo-400"
+                            >
+                              <Download className="size-3.5" />
+                            </Button>
+                          </div>
+                        </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
             </div>
+
+            {previewCfmsId && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                <div className="bg-[#12121a] border border-white/10 w-full max-w-4xl h-[90vh] rounded-xl flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                  <div className="flex items-center justify-between border-b border-white/10 p-4 bg-[#1a1a25]">
+                    <div>
+                      <h3 className="font-bold text-sm text-[#e8e8ed]">Report Preview</h3>
+                      <p className="text-[11px] text-white/50">Month: {monthName} {year} · CFMS ID: {previewCfmsId}</p>
+                    </div>
+                    <Button size="sm" variant="ghost" onClick={() => setPreviewCfmsId(null)} className="text-white/60 hover:text-white">
+                      Close
+                    </Button>
+                  </div>
+                  <div className="flex-1 bg-white p-2">
+                    <iframe
+                      src={`/api/admin/attendance/report/${previewCfmsId}/preview?month=${month}&year=${year}`}
+                      className="w-full h-full border-0 rounded"
+                      title="Attendance Statement Preview"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center justify-between border-t border-border px-4 py-2.5 text-xs text-muted-foreground">
               <span>Showing {filteredRecords.length} of {records.length} faculty members</span>
