@@ -19,7 +19,7 @@ export const Route = createFileRoute("/faculty/new")({
   component: NewFacultyPage,
 });
 
-function NewFacultyPage() {
+function useFacultyCreateHandler() {
   const navigate = useNavigate();
   const createFaculty = useCreateFaculty();
 
@@ -33,6 +33,15 @@ function NewFacultyPage() {
     }
   };
 
+  return {
+    handleSubmit,
+    isPending: createFaculty.isPending,
+  };
+}
+
+function NewFacultyPage() {
+  const { handleSubmit, isPending } = useFacultyCreateHandler();
+
   return (
     <AppShell
       title="Add Faculty"
@@ -41,10 +50,12 @@ function NewFacultyPage() {
       <div className="max-w-4xl">
         <FacultyForm
           initial={emptyFaculty}
-          submitLabel={createFaculty.isPending ? "Creating…" : "Create faculty"}
+          submitLabel={isPending ? "Creating…" : "Create faculty"}
           onSubmit={handleSubmit}
         />
       </div>
     </AppShell>
   );
 }
+
+export default NewFacultyPage;
