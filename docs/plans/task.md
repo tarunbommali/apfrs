@@ -1,13 +1,9 @@
 | id | task | status | notes |
 | --- | --- | --- | --- |
 | b-1 | Explore project context | done | |
-| b-2 | Ask clarifying questions | done | |
-| b-3 | Propose 2-3 approaches | done | |
-| b-4 | Present design | done | |
-| b-5 | Write design doc | done | |
-| b-6 | Transition to implementation | done | |
-| t-1 | Update Repository Seeding Logic | done | |
-| t-2 | Propagate Warnings in Attendance Service | done | |
-| t-3 | Align Frontend to Update Store and Toast Warnings | done | |
-| t-4 | Compilation & Build Validation | in_progress | |
-
+| b-2 | Analyze existing solutions & PDF support | done | |
+| b-3 | Raise clarifying questions | done | |
+| b-4 | Propose 2-3 approaches | done | |
+| b-5 | Present design sections | done | |
+| b-6 | Write design doc | in_progress | |
+| b-7 | Transition to implementation | pending | |
