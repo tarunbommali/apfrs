@@ -15,75 +15,8 @@ import { jobQueueService } from './services/job-queue.service.js';
 import { AttendanceService } from './services/attendance.service.js';
 import { authService } from './services/auth.service.js';
 
-const app = express();
+import { app } from './app.js';
 const server = createServer(app);
-
-// ── Middleware ─────────────────────────────────────────────
-
-// CORS
-app.use(cors({
-    origin: config.frontendUrl,
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
-}));
-
-// Body parsing — Phase 9: global limit reduced to 1 MB.
-// The /api/admin/attendance/send route applies its own 50 MB override for large payloads.
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true, limit: '1mb' }));
-
-// Request ID
-app.use((req, res, next) => {
-    req.requestId = req.headers['x-request-id'] || uuidv4();
-    res.setHeader('X-Request-ID', req.requestId);
-    next();
-});
-
-// Rate limiting
-app.use(generalLimiter);
-
-// Logging
-app.use(requestLogger);
-
-// ── Routes ──────────────────────────────────────────────────
-app.use('/api', routes);
-
-// ── Health Check ──────────────────────────────────────────
-app.get('/api/health', async (req, res) => {
-    try {
-        const dbStatus = db.getConnectionStatus();
-        res.json({
-            status: 'ok',
-            service: 'APFRS API Service',
-            version: '2.0.0',
-            timestamp: new Date().toISOString(),
-            uptime: process.uptime(),
-            database: dbStatus,
-            environment: config.nodeEnv,
-        });
-    } catch (error) {
-        res.status(503).json({
-            status: 'degraded',
-            service: 'APFRS API Service',
-            timestamp: new Date().toISOString(),
-            database: 'disconnected',
-            error: error.message,
-        });
-    }
-});
-
-// ── Error Handling ─────────────────────────────────────────
-app.use((req, res) => {
-    res.status(404).json({
-        success: false,
-        error: 'Route not found',
-        path: req.path,
-        requestId: req.requestId,
-    });
-});
-
-app.use(errorHandler);
 
 // ── Server Lifecycle ──────────────────────────────────────
 
@@ -104,29 +37,39 @@ async function startServer() {
         // Ensure default administrator account is available
         await authService.ensureDefaultAdmin();
 
-        // Register job handlers and start the durable queue worker.
-        // Handlers must be registered before start() so any jobs that
-        // survived a crash are processed immediately on restart.
-        AttendanceService.registerHandlers();
-        jobQueueService.start();
-        logger.info('✅ Job queue worker started');
-
-        // Recover any attendance_records stuck in 'processing' from a crash.
-        // If a server crash happened mid-send, items are left in 'processing'.
-        // We reset them to 'queued' so they are retried on the next job tick.
+        // 1. Recover any attendance_records stuck in 'processing' from a crash
+        // before starting the queue worker so recovered items are picked up on first tick.
         try {
+          const timeoutSec = config.attendanceProcessingTimeoutSeconds || 600;
+          // Items with attempts < 3 are reset to queued for retry
           const staleResult = await db.query(
             `UPDATE attendance_records
-             SET status = 'queued', error_message = 'Reset after server restart', updated_at = NOW()
+             SET status = 'queued', error_message = 'Reset after server restart / crash recovery', updated_at = NOW()
              WHERE status = 'processing'
-               AND updated_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)`
+               AND attempts < 3
+               AND updated_at < DATE_SUB(NOW(), INTERVAL ? SECOND)`,
+            [timeoutSec]
           );
-          if (staleResult.affectedRows > 0) {
-            logger.warn(`♻️  Reset ${staleResult.affectedRows} stale dispatch item(s) to queued after restart`);
+          // Items with attempts >= 3 are marked failed
+          const maxFailResult = await db.query(
+            `UPDATE attendance_records
+             SET status = 'failed', error_message = 'Max attempts reached after crash recovery', updated_at = NOW()
+             WHERE status = 'processing'
+               AND attempts >= 3
+               AND updated_at < DATE_SUB(NOW(), INTERVAL ? SECOND)`,
+            [timeoutSec]
+          );
+          if (staleResult.affectedRows > 0 || maxFailResult.affectedRows > 0) {
+            logger.warn(`♻️ Recovered stale dispatch items: ${staleResult.affectedRows} reset to queued, ${maxFailResult.affectedRows} marked failed.`);
           }
         } catch (err) {
           logger.warn('Stale attendance_records recovery warning:', { error: err.message });
         }
+
+        // 2. Register job handlers and start the durable queue worker.
+        AttendanceService.registerHandlers();
+        jobQueueService.start();
+        logger.info('✅ Job queue worker started');
 
         // Start server
         server.listen(config.port, '0.0.0.0', () => {
@@ -137,29 +80,48 @@ async function startServer() {
             logger.info(`🔗 Frontend URL: ${config.frontendUrl}`);
         });
 
-        // Graceful shutdown
+        // Graceful shutdown sequence
+        let isShuttingDown = false;
         const shutdown = async (signal) => {
-            logger.info(`Received ${signal}, shutting down gracefully...`);
+            if (isShuttingDown) return;
+            isShuttingDown = true;
+            logger.info(`Received ${signal}, beginning graceful shutdown sequence...`);
 
-            // Stop the job queue worker first
-            jobQueueService.stop();
-            logger.info('Job queue worker stopped');
-            
-            // Close database connection
-            await db.close();
-            logger.info('Database connection closed');
-
-            // Close server
-            server.close(() => {
-                logger.info('Server closed');
-                process.exit(0);
-            });
-
-            // Force shutdown after timeout
-            setTimeout(() => {
-                logger.warn('Force shutdown after timeout');
+            // Force shutdown timer fallback (20 seconds)
+            const forceTimer = setTimeout(() => {
+                logger.error('Graceful shutdown timed out after 20s. Forcing exit.');
                 process.exit(1);
-            }, 10000);
+            }, 20000);
+            forceTimer.unref();
+
+            try {
+                // 1. Stop accepting new incoming HTTP connections
+                await new Promise((resolve) => {
+                    server.close((err) => {
+                        if (err) {
+                            logger.error('Error closing HTTP server:', err);
+                        } else {
+                            logger.info('✅ HTTP server closed (no longer accepting new requests)');
+                        }
+                        resolve();
+                    });
+                });
+
+                // 2. Drain active background worker jobs
+                logger.info('⏳ Draining background job queue worker...');
+                await jobQueueService.drain(15000);
+                logger.info('✅ Background job queue worker drained');
+
+                // 3. Close MySQL database pool
+                await db.close();
+                logger.info('✅ Database connection pool closed');
+
+                logger.info('👋 Graceful shutdown complete. Exiting cleanly.');
+                process.exit(0);
+            } catch (err) {
+                logger.error('Error during shutdown sequence:', err);
+                process.exit(1);
+            }
         };
 
         process.on('SIGTERM', () => shutdown('SIGTERM'));

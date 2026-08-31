@@ -103,6 +103,7 @@ class EmailService {
       tags: [{ name: 'category', value: settings.resend_tag || 'apfrs-monthly' }],
     };
 
+    const timeoutMs = (settings.smtp_timeout || 30) * 1000;
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -110,6 +111,7 @@ class EmailService {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(timeoutMs),
     });
 
     const data = await res.json();

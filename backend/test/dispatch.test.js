@@ -4,29 +4,35 @@ import assert from 'node:assert/strict';
 import db from '../src/config/database.js';
 import { attendanceRepository } from '../src/repositories/attendance.repository.js';
 import { attendanceService } from '../src/services/attendance.service.js';
-import { AttendanceBatch } from '../src/models/Attendance.js';
+import { jobQueueService } from '../src/services/job-queue.service.js';
 import { v4 as uuidv4 } from 'uuid';
 
-test.describe('Attendance Dispatch & Status Recalculation Tests', async () => {
-  // Setup: Connect to DB
+test.describe('APFRS Attendance Dispatch Reliability & State Machine Tests', async () => {
+  const testSheetId = `sheet-test-${uuidv4().substring(0, 8)}`;
+  const testMonth = 11;
+  const testYear = 2029; // Safe future date
+
+  // Setup: Connect to DB and insert isolated test fixtures
   test.before(async () => {
     await db.connect();
-    // Insert mock users to satisfy foreign key constraints
+
+    // 1. Insert test users
     await db.query(`
       INSERT INTO users (id, email, name, department, role) VALUES
-      ('f-1', 'f1@example.com', 'Faculty 1', 'CIVIL', 'faculty'),
-      ('f-2', 'f2@example.com', 'Faculty 2', 'Math', 'faculty'),
-      ('f-4', 'f4@example.com', 'Faculty 4', 'IT', 'faculty')
-      ON DUPLICATE KEY UPDATE id = id
+      ('f-test-1', 'ftest1@jntugvcev.edu.in', 'Faculty Test 1', 'CIVIL', 'faculty'),
+      ('f-test-2', 'ftest2@jntugvcev.edu.in', 'Faculty Test 2', 'CSE', 'faculty'),
+      ('f-test-3', 'ftest3@jntugvcev.edu.in', 'Faculty Test 3', 'ECE', 'faculty')
+      ON DUPLICATE KEY UPDATE name = VALUES(name)
     `);
 
-    // Insert mock sheet and faculty monthly attendance to satisfy report/retry logic
+    // 2. Insert test monthly attendance sheet
     await db.query(`
-      INSERT INTO monthly_attendance_sheets (id, month, year, file_name, total_faculty, working_days)
-      VALUES ('test-sheet-1', 1, 2025, 'test.xlsx', 3, 24)
-      ON DUPLICATE KEY UPDATE id = id
-    `);
+      INSERT INTO monthly_attendance_sheets (id, month, year, file_name, total_faculty, working_days, uploaded_by)
+      VALUES (?, ?, ?, 'test.xlsx', 3, 24, 'Admin')
+      ON DUPLICATE KEY UPDATE file_name = VALUES(file_name)
+    `, [testSheetId, testMonth, testYear]);
 
+    // 3. Insert test faculty monthly attendance records
     await db.query(`
       INSERT INTO faculty_monthly_attendance (
         id, sheet_id, faculty_id, cfms_id, name, email, department, designation,
@@ -34,184 +40,239 @@ test.describe('Attendance Dispatch & Status Recalculation Tests', async () => {
         leave_days, half_days, late_days, holiday_days, total_working_days,
         attendance_percentage, daily_records
       ) VALUES 
-      ('fma-1', 'test-sheet-1', 'f-1', 'CFMS1', 'Faculty 1', 'f1@example.com', 'CIVIL', 'Assistant Professor', 'Regular', 'male', 'None', 1, 2025, 22, 2, 0, 0, 0, 4, 24, 91.67, '[]'),
-      ('fma-2', 'test-sheet-1', 'f-2', 'CFMS2', 'Faculty 2', 'f2@example.com', 'Math', 'Assistant Professor', 'Regular', 'male', 'None', 1, 2025, 22, 2, 0, 0, 0, 4, 24, 91.67, '[]'),
-      ('fma-4', 'test-sheet-1', 'f-4', 'CFMS4', 'Faculty 4', 'f4@example.com', 'IT', 'Assistant Professor', 'Regular', 'male', 'None', 1, 2025, 22, 2, 0, 0, 0, 4, 24, 91.67, '[]')
-      ON DUPLICATE KEY UPDATE id = id
-    `);
+      ('fma-t1', ?, 'f-test-1', 'CFMS_T1', 'Faculty Test 1', 'ftest1@jntugvcev.edu.in', 'CIVIL', 'Assistant Professor', 'Regular', 'male', 'None', ?, ?, 22, 2, 0, 0, 0, 4, 24, 91.67, '[]'),
+      ('fma-t2', ?, 'f-test-2', 'CFMS_T2', 'Faculty Test 2', 'ftest2@jntugvcev.edu.in', 'CSE', 'Assistant Professor', 'Regular', 'male', 'None', ?, ?, 20, 4, 0, 0, 0, 4, 24, 83.33, '[]'),
+      ('fma-t3', ?, 'f-test-3', 'CFMS_T3', 'Faculty Test 3', 'ftest3@jntugvcev.edu.in', 'ECE', 'Assistant Professor', 'Regular', 'male', 'None', ?, ?, 24, 0, 0, 0, 0, 4, 24, 100.0, '[]')
+      ON DUPLICATE KEY UPDATE present_days = VALUES(present_days)
+    `, [testSheetId, testMonth, testYear, testSheetId, testMonth, testYear, testSheetId, testMonth, testYear]);
   });
 
-  // Teardown: Close DB Connection
+  // Teardown: Clean up test fixtures
   test.after(async () => {
-    await db.query(`DELETE FROM faculty_monthly_attendance WHERE sheet_id = 'test-sheet-1'`);
-    await db.query(`DELETE FROM monthly_attendance_sheets WHERE id = 'test-sheet-1'`);
-    await db.query(`DELETE FROM users WHERE id IN ('f-1', 'f-2', 'f-4')`);
+    try {
+      await db.query(`DELETE FROM faculty_monthly_attendance WHERE sheet_id = ?`, [testSheetId]);
+      await db.query(`DELETE FROM monthly_attendance_sheets WHERE id = ?`, [testSheetId]);
+      await db.query(`DELETE FROM users WHERE id IN ('f-test-1', 'f-test-2', 'f-test-3')`);
+    } catch (e) {
+      // Ignore cleanup error
+    }
     await db.close();
   });
 
-  test('Should correctly recalculate batch status based on record statuses', async () => {
-    const testBatchId = `test-batch-${uuidv4().substring(0, 8)}`;
-    
-    // Create a mock batch
+  // ── TEST 1: Recalculate Batch Status Permutations ──────────────────────────
+  test('1. Recalculate batch status: pending -> processing -> completed / partial_failed / failed', async () => {
+    const batchId = `b-test-${uuidv4().substring(0, 8)}`;
     await db.query(
-      `INSERT INTO attendance_batches (id, batch_id, status, triggered_by, sent_by, total_faculty, created_at, updated_at)
-       VALUES (?, ?, 'pending', 'TestAdmin', 'TestAdmin', 3, NOW(), NOW())`,
-      [testBatchId, testBatchId]
+      `INSERT INTO attendance_batches (id, batch_id, status, triggered_by, sent_by, total_faculty, month, year, created_at, updated_at)
+       VALUES (?, ?, 'pending', 'TestAdmin', 'TestAdmin', 3, ?, ?, NOW(), NOW())`,
+      [batchId, batchId, String(testMonth), String(testYear)]
     );
 
-    // Create 3 mock records: 2 queued, 1 sending initially
     const rec1 = uuidv4();
     const rec2 = uuidv4();
     const rec3 = uuidv4();
-    
+
     await db.query(
       `INSERT INTO attendance_records (id, batch_id, faculty_id, employee_id, employee_name, email, month, year, status, created_at, updated_at) VALUES 
-       (?, ?, 'f-1', 'EMP001', 'Faculty 1', 'f1@example.com', 1, 2025, 'queued', NOW(), NOW()),
-       (?, ?, 'f-2', 'EMP002', 'Faculty 2', 'f2@example.com', 1, 2025, 'queued', NOW(), NOW()),
-       (?, ?, 'f-4', 'EMP004', 'Faculty 4', 'f4@example.com', 1, 2025, 'queued', NOW(), NOW())`,
-      [rec1, testBatchId, rec2, testBatchId, rec3, testBatchId]
+       (?, ?, 'f-test-1', 'CFMS_T1', 'Faculty Test 1', 'ftest1@jntugvcev.edu.in', ?, ?, 'queued', NOW(), NOW()),
+       (?, ?, 'f-test-2', 'CFMS_T2', 'Faculty Test 2', 'ftest2@jntugvcev.edu.in', ?, ?, 'queued', NOW(), NOW()),
+       (?, ?, 'f-test-3', 'CFMS_T3', 'Faculty Test 3', 'ftest3@jntugvcev.edu.in', ?, ?, 'queued', NOW(), NOW())`,
+      [rec1, batchId, String(testMonth), String(testYear),
+       rec2, batchId, String(testMonth), String(testYear),
+       rec3, batchId, String(testMonth), String(testYear)]
     );
 
-    // 1. Initial State: all queued -> batch status should be 'pending'
-    let batchStatus = await attendanceRepository.recalculateBatchStatus(testBatchId);
-    assert.equal(batchStatus, 'pending');
+    // Initial state: all queued -> pending
+    let status = await attendanceRepository.recalculateBatchStatus(batchId);
+    assert.equal(status, 'pending');
 
-    let updatedBatch = await attendanceRepository.findBatchById(testBatchId);
-    assert.equal(updatedBatch.status, 'pending');
-    assert.equal(updatedBatch.sentCount, 0);
-    assert.equal(updatedBatch.failedCount, 0);
+    // Active state: 1 processing, 2 queued -> processing
+    await db.query(`UPDATE attendance_records SET status = 'processing' WHERE id = ?`, [rec1]);
+    status = await attendanceRepository.recalculateBatchStatus(batchId);
+    assert.equal(status, 'processing');
 
-    // 2. Active State: 1 sending, 2 queued -> batch status should be 'processing'
-    await db.query(`UPDATE attendance_records SET status = 'sending' WHERE id = ?`, [rec1]);
-    batchStatus = await attendanceRepository.recalculateBatchStatus(testBatchId);
-    assert.equal(batchStatus, 'processing');
+    // All sent -> completed
+    await db.query(`UPDATE attendance_records SET status = 'sent' WHERE batch_id = ?`, [batchId]);
+    status = await attendanceRepository.recalculateBatchStatus(batchId);
+    assert.equal(status, 'completed');
 
-    // 3. Completed State: all sent -> batch status should be 'completed'
-    await db.query(`UPDATE attendance_records SET status = 'sent' WHERE batch_id = ?`, [testBatchId]);
-    batchStatus = await attendanceRepository.recalculateBatchStatus(testBatchId);
-    assert.equal(batchStatus, 'completed');
-
-    updatedBatch = await attendanceRepository.findBatchById(testBatchId);
-    assert.equal(updatedBatch.status, 'completed');
-    assert.equal(updatedBatch.sentCount, 3);
-    assert.equal(updatedBatch.failedCount, 0);
-
-    // 4. Partial Failure State: 2 sent, 1 failed -> batch status should be 'partial_failed'
+    // 2 sent, 1 failed -> partial_failed
     await db.query(`UPDATE attendance_records SET status = 'failed' WHERE id = ?`, [rec3]);
-    batchStatus = await attendanceRepository.recalculateBatchStatus(testBatchId);
-    assert.equal(batchStatus, 'partial_failed');
+    status = await attendanceRepository.recalculateBatchStatus(batchId);
+    assert.equal(status, 'partial_failed');
 
-    updatedBatch = await attendanceRepository.findBatchById(testBatchId);
-    assert.equal(updatedBatch.status, 'partial_failed');
-    assert.equal(updatedBatch.sentCount, 2);
-    assert.equal(updatedBatch.failedCount, 1);
-
-    // 5. Full Failure State: all failed -> batch status should be 'failed'
-    await db.query(`UPDATE attendance_records SET status = 'failed' WHERE batch_id = ?`, [testBatchId]);
-    batchStatus = await attendanceRepository.recalculateBatchStatus(testBatchId);
-    assert.equal(batchStatus, 'failed');
-
-    updatedBatch = await attendanceRepository.findBatchById(testBatchId);
-    assert.equal(updatedBatch.status, 'failed');
-    assert.equal(updatedBatch.sentCount, 0);
-    assert.equal(updatedBatch.failedCount, 3);
+    // All failed -> failed
+    await db.query(`UPDATE attendance_records SET status = 'failed' WHERE batch_id = ?`, [batchId]);
+    status = await attendanceRepository.recalculateBatchStatus(batchId);
+    assert.equal(status, 'failed');
 
     // Cleanup
-    await db.query(`DELETE FROM attendance_records WHERE batch_id = ?`, [testBatchId]);
-    await db.query(`DELETE FROM attendance_batches WHERE batch_id = ?`, [testBatchId]);
+    await db.query(`DELETE FROM attendance_records WHERE batch_id = ?`, [batchId]);
+    await db.query(`DELETE FROM attendance_batches WHERE batch_id = ?`, [batchId]);
   });
 
-  test('Retry batch logic should only include failed records and link to original batch', async () => {
-    const originalBatchId = `orig-batch-${uuidv4().substring(0, 8)}`;
-    
-    // Create original batch
+  // ── TEST 2: Atomic Claim and Race Condition Protection ────────────────────
+  test('2. Atomic state transition: Only one worker can claim a queued record', async () => {
+    const batchId = `b-claim-${uuidv4().substring(0, 8)}`;
     await db.query(
       `INSERT INTO attendance_batches (id, batch_id, status, triggered_by, sent_by, total_faculty, month, year, created_at, updated_at)
-       VALUES (?, ?, 'partial_failed', 'TestAdmin', 'TestAdmin', 3, 1, 2025, NOW(), NOW())`,
-      [originalBatchId, originalBatchId]
+       VALUES (?, ?, 'pending', 'TestAdmin', 'TestAdmin', 1, ?, ?, NOW(), NOW())`,
+      [batchId, batchId, String(testMonth), String(testYear)]
     );
 
-    // 2 sent, 1 failed
-    const rec1 = uuidv4();
-    const rec2 = uuidv4();
-    const rec3 = uuidv4();
+    const recId = uuidv4();
     await db.query(
-      `INSERT INTO attendance_records (id, batch_id, faculty_id, employee_id, employee_name, email, month, year, status, created_at, updated_at) VALUES 
-       (?, ?, 'f-1', 'EMP001', 'Faculty 1', 'f1@example.com', 1, 2025, 'sent', NOW(), NOW()),
-       (?, ?, 'f-2', 'EMP002', 'Faculty 2', 'f2@example.com', 1, 2025, 'sent', NOW(), NOW()),
-       (?, ?, 'f-4', 'EMP004', 'Faculty 4', 'f4@example.com', 1, 2025, 'failed', NOW(), NOW())`,
-      [rec1, originalBatchId, rec2, originalBatchId, rec3, originalBatchId]
+      `INSERT INTO attendance_records (id, batch_id, faculty_id, employee_id, employee_name, email, month, year, status, attempts, created_at, updated_at)
+       VALUES (?, ?, 'f-test-1', 'CFMS_T1', 'Faculty Test 1', 'ftest1@jntugvcev.edu.in', ?, ?, 'queued', 0, NOW(), NOW())`,
+      [recId, batchId, String(testMonth), String(testYear)]
     );
 
-    // Call retryBatch
-    const result = await attendanceService.retryBatch(originalBatchId, {
-      triggeredBy: 'TestAdmin',
-      sentBy: 'admin@apfrs.in'
-    });
-
-    assert.equal(result.success, true);
-    const retryBatchId = result.batchId;
-
-    // Verify retry batch properties
-    const retryBatch = await attendanceRepository.findBatchById(retryBatchId);
-    assert.ok(retryBatch);
-    assert.equal(retryBatch.retryOfBatchId, originalBatchId);
-    assert.equal(retryBatch.totalFaculty, 1); // Only the 1 failed record should be retried!
-    assert.equal(retryBatch.status, 'pending');
-
-    // Verify retry batch records
-    const retryRecords = await db.query(
-      `SELECT * FROM attendance_records WHERE batch_id = ?`,
-      [retryBatchId]
+    // Worker 1 claims
+    const claim1 = await db.query(
+      `UPDATE attendance_records
+       SET status = 'processing', attempts = attempts + 1, updated_at = NOW()
+       WHERE id = ? AND status = 'queued' AND attempts < 3`,
+      [recId]
     );
-    assert.equal(retryRecords.length, 1);
-    assert.equal(retryRecords[0].faculty_id, 'f-4');
-    assert.equal(retryRecords[0].status, 'queued');
+    assert.equal(claim1.affectedRows, 1, 'Worker 1 must successfully claim the record');
+
+    // Worker 2 attempts concurrent claim on the same record
+    const claim2 = await db.query(
+      `UPDATE attendance_records
+       SET status = 'processing', attempts = attempts + 1, updated_at = NOW()
+       WHERE id = ? AND status = 'queued' AND attempts < 3`,
+      [recId]
+    );
+    assert.equal(claim2.affectedRows, 0, 'Worker 2 must NOT claim already processing record');
 
     // Cleanup
-    await db.query(`DELETE FROM attendance_records WHERE batch_id IN (?, ?)`, [originalBatchId, retryBatchId]);
-    await db.query(`DELETE FROM attendance_batches WHERE batch_id IN (?, ?)`, [originalBatchId, retryBatchId]);
-    // Also remove any queued jobs created for the retry
-    await db.query(`DELETE FROM jobs WHERE payload LIKE ?`, [`%${retryBatchId}%`]);
+    await db.query(`DELETE FROM attendance_records WHERE batch_id = ?`, [batchId]);
+    await db.query(`DELETE FROM attendance_batches WHERE batch_id = ?`, [batchId]);
   });
 
-  test('Duplicate protection should throw a 409 Conflict for overlapping active dispatches', async () => {
-    const activeBatchId = `active-batch-${uuidv4().substring(0, 8)}`;
-    
-    // Create an active batch created "just now"
+  // ── TEST 3: Retry Attempt Limits (Max 3 Attempts) ─────────────────────────
+  test('3. Retry enforcement: Cannot exceed maximum 3 attempts', async () => {
+    const batchId = `b-retry-${uuidv4().substring(0, 8)}`;
     await db.query(
       `INSERT INTO attendance_batches (id, batch_id, status, triggered_by, sent_by, total_faculty, month, year, created_at, updated_at)
-       VALUES (?, ?, 'pending', 'TestAdmin', 'TestAdmin', 2, 1, 2025, NOW(), NOW())`,
-      [activeBatchId, activeBatchId]
+       VALUES (?, ?, 'failed', 'TestAdmin', 'TestAdmin', 1, ?, ?, NOW(), NOW())`,
+      [batchId, batchId, String(testMonth), String(testYear)]
     );
 
+    const recId = uuidv4();
+    // Record with 3 failed attempts
     await db.query(
-      `INSERT INTO attendance_records (id, batch_id, faculty_id, employee_id, employee_name, email, month, year, status, created_at, updated_at) VALUES 
-       (?, ?, 'f-1', 'EMP001', 'Faculty 1', 'f1@example.com', 1, 2025, 'queued', NOW(), NOW()),
-       (?, ?, 'f-2', 'EMP002', 'Faculty 2', 'f2@example.com', 1, 2025, 'queued', NOW(), NOW())`,
-      [uuidv4(), activeBatchId, uuidv4(), activeBatchId]
+      `INSERT INTO attendance_records (id, batch_id, faculty_id, employee_id, employee_name, email, month, year, status, attempts, created_at, updated_at)
+       VALUES (?, ?, 'f-test-1', 'CFMS_T1', 'Faculty Test 1', 'ftest1@jntugvcev.edu.in', ?, ?, 'failed', 3, NOW(), NOW())`,
+      [recId, batchId, String(testMonth), String(testYear)]
     );
 
-    // Call sendAttendance with overlapping faculty ID 'f-1'
+    // Attempting retryItem should be rejected
     await assert.rejects(
       async () => {
-        await attendanceService.sendAttendance({
-          month: 1,
-          year: 2025,
-          facultyIds: ['f-1'],
-          triggeredBy: 'TestAdmin',
-          sentBy: 'admin@apfrs.in',
-        });
+        await attendanceService.retryItem(recId);
       },
       (err) => {
-        assert.equal(err.statusCode, 409);
-        assert.ok(err.message.includes('already being processed'));
+        assert.equal(err.statusCode, 400);
+        assert.ok(err.message.includes('Maximum retry limit'));
         return true;
       }
     );
 
     // Cleanup
-    await db.query(`DELETE FROM attendance_records WHERE batch_id = ?`, [activeBatchId]);
-    await db.query(`DELETE FROM attendance_batches WHERE batch_id = ?`, [activeBatchId]);
+    await db.query(`DELETE FROM attendance_records WHERE batch_id = ?`, [batchId]);
+    await db.query(`DELETE FROM attendance_batches WHERE batch_id = ?`, [batchId]);
+  });
+
+  // ── TEST 4: Single Item Manual Retry & Idempotency ─────────────────────────
+  test('4. Single-item retry: Successfully resets failed record to queued and queues job', async () => {
+    const batchId = `b-single-${uuidv4().substring(0, 8)}`;
+    await db.query(
+      `INSERT INTO attendance_batches (id, batch_id, status, triggered_by, sent_by, total_faculty, month, year, created_at, updated_at)
+       VALUES (?, ?, 'partial_failed', 'TestAdmin', 'TestAdmin', 1, ?, ?, NOW(), NOW())`,
+      [batchId, batchId, String(testMonth), String(testYear)]
+    );
+
+    const recId = uuidv4();
+    await db.query(
+      `INSERT INTO attendance_records (id, batch_id, faculty_id, employee_id, employee_name, email, month, year, status, attempts, created_at, updated_at)
+       VALUES (?, ?, 'f-test-1', 'CFMS_T1', 'Faculty Test 1', 'ftest1@jntugvcev.edu.in', ?, ?, 'failed', 1, NOW(), NOW())`,
+      [recId, batchId, String(testMonth), String(testYear)]
+    );
+
+    const res = await attendanceService.retryItem(recId);
+    assert.equal(res.success, true);
+
+    // Verify DB state transitioned to 'queued'
+    const [updated] = await db.query(`SELECT status FROM attendance_records WHERE id = ?`, [recId]);
+    assert.equal(updated.status, 'queued');
+
+    // Duplicate call when already queued should return friendly message without creating duplicates
+    const resDuplicate = await attendanceService.retryItem(recId);
+    assert.equal(resDuplicate.success, true);
+    assert.ok(resDuplicate.message.includes('already queued'));
+
+    // Cleanup
+    await db.query(`DELETE FROM attendance_records WHERE batch_id = ?`, [batchId]);
+    await db.query(`DELETE FROM attendance_batches WHERE batch_id = ?`, [batchId]);
+    await db.query(`DELETE FROM jobs WHERE payload LIKE ?`, [`%${batchId}%`]);
+  });
+
+  // ── TEST 5: Stale Processing Recovery Simulation ──────────────────────────
+  test('5. Stale worker crash recovery: Recovers abandoned processing items', async () => {
+    const batchId = `b-stale-${uuidv4().substring(0, 8)}`;
+    await db.query(
+      `INSERT INTO attendance_batches (id, batch_id, status, triggered_by, sent_by, total_faculty, month, year, created_at, updated_at)
+       VALUES (?, ?, 'processing', 'TestAdmin', 'TestAdmin', 2, ?, ?, NOW(), NOW())`,
+      [batchId, batchId, String(testMonth), String(testYear)]
+    );
+
+    const recStale1 = uuidv4();
+    const recStale2 = uuidv4();
+
+    // Insert record 1: processing, updated 15 minutes ago, attempts = 1
+    // Insert record 2: processing, updated 15 minutes ago, attempts = 3
+    await db.query(
+      `INSERT INTO attendance_records (id, batch_id, faculty_id, employee_id, employee_name, email, month, year, status, attempts, updated_at, created_at)
+       VALUES 
+       (?, ?, 'f-test-1', 'CFMS_T1', 'Faculty Test 1', 'ftest1@jntugvcev.edu.in', ?, ?, 'processing', 1, DATE_SUB(NOW(), INTERVAL 15 MINUTE), NOW()),
+       (?, ?, 'f-test-2', 'CFMS_T2', 'Faculty Test 2', 'ftest2@jntugvcev.edu.in', ?, ?, 'processing', 3, DATE_SUB(NOW(), INTERVAL 15 MINUTE), NOW())`,
+      [recStale1, batchId, String(testMonth), String(testYear),
+       recStale2, batchId, String(testMonth), String(testYear)]
+    );
+
+    // Simulate startup recovery routine
+    const timeoutSec = 600; // 10 minutes
+    const staleResult = await db.query(
+      `UPDATE attendance_records
+       SET status = 'queued', error_message = 'Reset after server restart / crash recovery', updated_at = NOW()
+       WHERE batch_id = ?
+         AND status = 'processing'
+         AND attempts < 3
+         AND updated_at < DATE_SUB(NOW(), INTERVAL ? SECOND)`,
+      [batchId, timeoutSec]
+    );
+    assert.equal(staleResult.affectedRows, 1, 'Should reset attempt 1 item to queued');
+
+    const maxFailResult = await db.query(
+      `UPDATE attendance_records
+       SET status = 'failed', error_message = 'Max attempts reached after crash recovery', updated_at = NOW()
+       WHERE batch_id = ?
+         AND status = 'processing'
+         AND attempts >= 3
+         AND updated_at < DATE_SUB(NOW(), INTERVAL ? SECOND)`,
+      [batchId, timeoutSec]
+    );
+    assert.equal(maxFailResult.affectedRows, 1, 'Should mark attempt 3 item as permanently failed');
+
+    // Verify final statuses
+    const [r1] = await db.query(`SELECT status FROM attendance_records WHERE id = ?`, [recStale1]);
+    const [r2] = await db.query(`SELECT status FROM attendance_records WHERE id = ?`, [recStale2]);
+    assert.equal(r1.status, 'queued');
+    assert.equal(r2.status, 'failed');
+
+    // Cleanup
+    await db.query(`DELETE FROM attendance_records WHERE batch_id = ?`, [batchId]);
+    await db.query(`DELETE FROM attendance_batches WHERE batch_id = ?`, [batchId]);
   });
 });

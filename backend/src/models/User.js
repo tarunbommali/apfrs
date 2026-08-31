@@ -24,6 +24,8 @@ export class User {
     const rawJob = String(data.job_status || data.jobStatus || 'Regular').trim().toLowerCase();
     this.job_status = rawJob === 'regular' ? 'Regular' : 'contract';
 
+    this.higher_education = data.higher_education || data.higherEducation || null;
+
     // Legacy incharge fallback compatibility
     this.incharge = String(data.incharge || 'None').trim();
     this.currentIncharge = data.currentIncharge || null;
@@ -65,6 +67,8 @@ export class User {
       photo_url: this.photo_url || null,
       jobStatus: this.job_status,
       job_status: this.job_status,
+      higherEducation: this.higher_education || null,
+      higher_education: this.higher_education || null,
       gender: this.gender,
       incharge: this.currentIncharge?.role || (this.incharge !== 'None' ? this.incharge : 'None'),
       currentIncharge: this.currentIncharge || (this.incharge && this.incharge !== 'None' ? { role: this.incharge } : null),

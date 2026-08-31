@@ -128,10 +128,10 @@
   --status-halfday-fg: rgb(79, 70, 229);
 
   /* Badge colors (Light Mode) */
-  --badge-accent-bg: rgba(52, 78, 255, 0.1);
-  --badge-accent-fg: oklch(0.34 0.078 255);
-  --badge-muted-bg: oklch(0.94 0.011 250);
-  --badge-muted-fg: oklch(0.3 0.05 255);
+  --badge-accent-bg: rgba(94, 106, 210, 0.12);
+  --badge-accent-fg: #4351C8;
+  --badge-muted-bg: rgba(100, 116, 139, 0.12);
+  --badge-muted-fg: #475569;
 }
 
 .dark {

@@ -1,4 +1,4 @@
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useState } from "react";
 import {
   BarChart3,
@@ -55,7 +55,7 @@ const navItems: NavItem[] = [
 ];
 
 export function ChatGPTSidebar() {
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { pathname } = useLocation();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const role = user?.role ?? "admin";
@@ -83,7 +83,7 @@ export function ChatGPTSidebar() {
 
   const handleSignOut = () => {
     signOut();
-    navigate({ to: "/login", replace: true });
+    navigate("/login", { replace: true });
   };
 
   const allowedItems = navItems.filter((item) => item.roles.includes(role));

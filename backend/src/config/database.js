@@ -5,7 +5,7 @@ import { config } from './index.js';
 // Database connection pool configuration
 function getPoolConfig() {
     return {
-        host: config.db.host || process.env.DB_HOST || 'localhost',
+        host: config.db.host || process.env.DB_HOST || '127.0.0.1',
         port: config.db.port || parseInt(process.env.DB_PORT || '3306', 10),
         user: config.db.user || process.env.DB_USER || 'root',
         password: config.db.password !== undefined ? config.db.password : (process.env.DB_PASSWORD || ''),
@@ -17,7 +17,7 @@ function getPoolConfig() {
         keepAliveInitialDelay: 0,
         charset: 'utf8mb4',
         timezone: '+00:00',
-        connectTimeout: 10000,
+        connectTimeout: config.db.connectTimeout || 10000,
     };
 }
 
@@ -78,13 +78,23 @@ class Database {
         }
         
         const connection = await this.getConnection();
+        const start = Date.now();
         try {
             const [rows] = await connection.execute(sql, params);
+            const durationMs = Date.now() - start;
+            const slowQueryThreshold = config.db?.slowQueryMs || parseInt(process.env.DB_SLOW_QUERY_MS || '500', 10);
+            if (durationMs > slowQueryThreshold) {
+                logger.warn('Slow database query detected', {
+                    durationMs,
+                    thresholdMs: slowQueryThreshold,
+                    sql: sql.substring(0, 150).replace(/\s+/g, ' ').trim(),
+                });
+            }
             return rows;
         } catch (error) {
-            logger.error('Query error:', { 
-                sql: sql.substring(0, 200), 
-                params, 
+            logger.error('Query execution error:', { 
+                sql: sql.substring(0, 200).replace(/\s+/g, ' ').trim(), 
+                errorCode: error.code,
                 error: error.message 
             });
             throw error;
@@ -99,13 +109,20 @@ class Database {
         }
         
         const connection = await this.getConnection();
+        const start = Date.now();
         try {
             await connection.beginTransaction();
             const result = await callback(connection);
             await connection.commit();
+            const durationMs = Date.now() - start;
+            const slowQueryThreshold = config.db?.slowQueryMs || parseInt(process.env.DB_SLOW_QUERY_MS || '500', 10);
+            if (durationMs > slowQueryThreshold) {
+                logger.warn('Slow database transaction detected', { durationMs, thresholdMs: slowQueryThreshold });
+            }
             return result;
         } catch (error) {
             await connection.rollback();
+            logger.error('Transaction rolled back due to error:', { errorCode: error.code, error: error.message });
             throw error;
         } finally {
             connection.release();
@@ -113,7 +130,7 @@ class Database {
     }
 
     async close() {
-        if (this.pool) {
+        if (this.pool && process.env.NODE_ENV !== 'test') {
             await this.pool.end();
             this.isConnected = false;
             logger.info('Database connection closed');
@@ -138,6 +155,10 @@ class Database {
             port: poolConfig.port,
             database: poolConfig.database,
             user: poolConfig.user,
+            poolSize: poolConfig.connectionLimit,
+            activeConnections: this.pool?._allConnections?.length || 0,
+            freeConnections: this.pool?._freeConnections?.length || 0,
+            waitingRequests: this.pool?._connectionQueue?.length || 0,
         };
     }
 }

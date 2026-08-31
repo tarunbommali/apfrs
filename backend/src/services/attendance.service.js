@@ -1,7 +1,10 @@
 // backend/src/services/attendance.service.js
 import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
 import db from '../config/database.js';
+import { config } from '../config/index.js';
 import { attendanceRepository } from '../repositories/attendance.repository.js';
+import { idempotencyRepository } from '../repositories/idempotency.repository.js';
 import { monthlyAttendanceRepository } from '../repositories/monthly-attendance.repository.js';
 import { emailService } from './email.service.js';
 import { userRepository } from '../repositories/user.repository.js';
@@ -12,31 +15,32 @@ import { generateFacultyAttendanceEmailHTML, generateFacultyAttendanceEmailPlain
 import { reportService } from './report.service.js';
 
 class AttendanceService {
-  async sendAttendance(data) {
+  async sendAttendance(data, idempotencyKey = null) {
     let { attendanceData, emailTemplate, sentBy, triggeredBy, month, year, facultyIds, forceResend } = data;
 
-    // Prevent duplicate dispatches (Section 6)
-    if (month && year && facultyIds && facultyIds.length > 0) {
-      const recentBatches = await db.query(
-        `SELECT batch_id FROM attendance_batches 
-         WHERE month = ? AND year = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 30 SECOND)`,
-        [String(month), String(year)]
-      );
+    // 1. Durable Idempotency Key Evaluation
+    let requestHash = null;
+    if (idempotencyKey) {
+      const canonicalPayload = {
+        month: month || (attendanceData && attendanceData[0]?.month) || null,
+        year: year || (attendanceData && attendanceData[0]?.year) || null,
+        facultyIds: (facultyIds || []).slice().sort(),
+        forceResend: Boolean(forceResend),
+      };
+      requestHash = crypto.createHash('sha256').update(JSON.stringify(canonicalPayload)).digest('hex');
 
-      for (const b of recentBatches) {
-        const records = await db.query(
-          `SELECT faculty_id FROM attendance_records WHERE batch_id = ?`,
-          [b.batch_id]
-        );
-        const existingFacultyIds = records.map(r => r.faculty_id);
-        const hasOverlap = facultyIds.some(id => existingFacultyIds.includes(id));
-        if (hasOverlap) {
-          throw new AppError(409, 'A dispatch batch for these faculty members is already being processed. Please wait.');
+      const existing = await idempotencyRepository.get(idempotencyKey);
+      if (existing) {
+        if (existing.requestHash === requestHash) {
+          logger.info('Returning cached response for idempotency key', { idempotencyKey, batchId: existing.batchId });
+          return existing.responseBody;
+        } else {
+          throw new AppError(409, 'Idempotency key reused with a different request payload.');
         }
       }
     }
 
-    // Resolve database records if dispatched from cockpit using faculty IDs
+    // 2. Resolve database records if dispatched using faculty IDs
     if ((!attendanceData || attendanceData.length === 0) && month && year && facultyIds && facultyIds.length > 0) {
       const recordsObj = await monthlyAttendanceRepository.getMonthlyAttendance(month, year);
       if (!recordsObj) {
@@ -58,7 +62,7 @@ class AttendanceService {
         }));
     }
 
-    // Filter out already sent ones to prevent duplicate dispatch in the same month (unless forceResend is requested)
+    // 3. Filter out already sent ones to prevent duplicate dispatch in the same month (unless forceResend is requested)
     if (!forceResend) {
       let alreadySent = new Set();
       const targetMonth = month || (attendanceData && attendanceData[0]?.month);
@@ -66,10 +70,11 @@ class AttendanceService {
       if (targetMonth && targetYear) {
         try {
           const sentRows = await db.query(
-            `SELECT DISTINCT employee_id, email FROM attendance_records WHERE month = ? AND year = ? AND status = 'sent'`,
+            `SELECT DISTINCT employee_id, email, faculty_id FROM attendance_records WHERE month = ? AND year = ? AND status = 'sent'`,
             [String(targetMonth), String(targetYear)]
           );
           for (const r of sentRows) {
+            if (r.faculty_id) alreadySent.add(String(r.faculty_id).trim());
             if (r.employee_id) alreadySent.add(String(r.employee_id).trim());
             if (r.email) alreadySent.add(r.email.toLowerCase().trim());
           }
@@ -82,7 +87,8 @@ class AttendanceService {
         attendanceData = attendanceData.filter((r) => {
           const emailKey = r.email?.toLowerCase().trim();
           const cfmsKey = String(r.employeeId || r.cfmsId || '').trim();
-          return !alreadySent.has(emailKey) && !alreadySent.has(cfmsKey);
+          const facKey = String(r.facultyId || r.id || '').trim();
+          return !alreadySent.has(emailKey) && !alreadySent.has(cfmsKey) && (!facKey || !alreadySent.has(facKey));
         });
       }
 
@@ -91,7 +97,7 @@ class AttendanceService {
       }
     }
 
-    // Phase 5: one bulk IN-clause query instead of N sequential findByEmail/findByCfmsId calls
+    // 4. Resolve faculty identities
     const emails = attendanceData.map((r) => r.email).filter(Boolean);
     const cfmsIds = attendanceData.map((r) => r.employeeId).filter(Boolean);
     const facultyMap = await userRepository.findByEmailsOrCfmsIds(emails, cfmsIds);
@@ -109,47 +115,67 @@ class AttendanceService {
       };
     });
 
-    const batch = await attendanceRepository.createBatch({
-      triggeredBy,
-      sentBy: sentBy || triggeredBy,
-      totalFaculty: facultyList.length,
-      emailTemplate: emailTemplate?.subject || 'Attendance Report',
-      facultyList,
-      month: attendanceData[0]?.month,
-      year: attendanceData[0]?.year,
-    });
-
-    // Phase 6: enqueue durable job instead of fire-and-forget
-    // The job is persisted in MySQL before the response is sent, so a server
-    // crash or restart no longer silently loses the dispatch.
-    await jobQueueService.enqueue('dispatch_attendance_batch', {
-      batchId: batch.batchId,
-      attendanceData,
-      emailTemplate,
-      facultyList,
-    });
-
-    logger.info('Attendance dispatch enqueued', {
-      batchId: batch.batchId,
-      totalFaculty: facultyList.length,
-    });
-
-    return {
+    const batchId = uuidv4();
+    const maxAttempts = config.attendanceMaxAttempts || 3;
+    const responsePayload = {
       success: true,
       message: `Attendance dispatch initiated for ${facultyList.length} faculty members.`,
-      batchId: batch.batchId,
-      timestamp: batch.createdAt,
-      statusUrl: `/api/admin/attendance/send/${batch.batchId}`,
+      batchId,
+      timestamp: new Date().toISOString(),
+      statusUrl: `/api/admin/attendance/send/${batchId}`,
     };
+
+    // 5. ATOMIC TRANSACTION: Create Batch + Records + Durable Job + Idempotency Record in ONE transaction
+    await db.transaction(async (conn) => {
+      await attendanceRepository.createBatch({
+        id: batchId,
+        batchId,
+        status: 'pending',
+        triggeredBy,
+        sentBy: sentBy || triggeredBy,
+        totalFaculty: facultyList.length,
+        emailTemplate: emailTemplate?.subject || 'Attendance Report',
+        facultyList,
+        month: attendanceData[0]?.month,
+        year: attendanceData[0]?.year,
+      }, conn);
+
+      await jobQueueService.enqueue('dispatch_attendance_batch', {
+        batchId,
+        attendanceData,
+        emailTemplate,
+        facultyList,
+      }, maxAttempts, conn);
+
+      if (idempotencyKey && requestHash) {
+        await idempotencyRepository.save({
+          idempotencyKey,
+          requestPath: '/api/admin/attendance/send',
+          requestHash,
+          responseCode: 200,
+          responseBody: responsePayload,
+          batchId,
+        }, conn);
+      }
+    });
+
+    logger.info('Attendance dispatch enqueued transactionally', {
+      batchId,
+      totalFaculty: facultyList.length,
+      idempotencyKey,
+    });
+
+    return responsePayload;
   }
 
-  async dispatchBatch(batchId, attendanceData, emailTemplate, facultyList) {
+  async dispatchBatch(batchId, attendanceData, emailTemplate, facultyList, targetRecordId = null) {
     const settings = await emailService.getEffectiveSettings();
+    const maxAttempts = config.attendanceMaxAttempts || 3;
     try {
       // 1. Build lookup maps for faculty matching
       const facultyByEmail = new Map();
       const facultyByEmpId = new Map();
-      for (const f of facultyList) {
+      for (const f of (facultyList || [])) {
         if (f.email) facultyByEmail.set(f.email.toLowerCase().trim(), f);
         if (f.employeeId) facultyByEmpId.set(String(f.employeeId).trim(), f);
         if (f.cfmsId) facultyByEmpId.set(String(f.cfmsId).trim(), f);
@@ -162,12 +188,13 @@ class AttendanceService {
       const yearNum = attendanceData[0]?.year ? parseInt(attendanceData[0].year, 10) : new Date().getFullYear();
       try {
         const sentRows = await db.query(
-          `SELECT DISTINCT email, employee_id FROM attendance_records WHERE month = ? AND year = ? AND status = 'sent'`,
+          `SELECT DISTINCT email, employee_id, faculty_id FROM attendance_records WHERE month = ? AND year = ? AND status = 'sent'`,
           [String(monthNum), String(yearNum)]
         );
         for (const r of sentRows) {
           if (r.email) alreadySentEmails.add(r.email.toLowerCase().trim());
           if (r.employee_id) alreadySentEmails.add(String(r.employee_id).trim());
+          if (r.faculty_id) alreadySentEmails.add(String(r.faculty_id).trim());
         }
       } catch (err) {
         logger.warn('Could not query sent records for idempotency check:', { error: err.message });
@@ -180,14 +207,40 @@ class AttendanceService {
         const recEmail = record.email?.toLowerCase().trim() || '';
         const recEmpId = String(record.cfmsId || record.employeeId || '').trim();
 
-        // Check if already successfully sent for this month in any batch
-        if ((recEmail && alreadySentEmails.has(recEmail)) || (recEmpId && alreadySentEmails.has(recEmpId))) {
-          logger.info('Skipping already-sent email in batch retry', { batchId, email: recEmail, empId: recEmpId });
-          await db.query(
-            `UPDATE attendance_records SET status = 'sent', sent_at = NOW(), updated_at = NOW() WHERE batch_id = ? AND (email = ? OR employee_id = ?)`,
-            [batchId, recEmail, recEmpId]
+        // 3. Find specific attendance_record in DB
+        let dbRecordRows = [];
+        if (targetRecordId) {
+          dbRecordRows = await db.query(
+            `SELECT * FROM attendance_records WHERE id = ? AND batch_id = ? LIMIT 1`,
+            [targetRecordId, batchId]
           );
-          await attendanceRepository.recalculateBatchStatus(batchId);
+        } else {
+          dbRecordRows = await db.query(
+            `SELECT * FROM attendance_records WHERE batch_id = ? AND (email = ? OR employee_id = ?) LIMIT 1`,
+            [batchId, recEmail || null, recEmpId || null]
+          );
+        }
+
+        if (dbRecordRows.length === 0) continue;
+        const currentRecord = dbRecordRows[0];
+
+        // 4. Skip if already marked 'sent'
+        if (currentRecord.status === 'sent' || (recEmail && alreadySentEmails.has(recEmail)) || (recEmpId && alreadySentEmails.has(recEmpId))) {
+          if (currentRecord.status !== 'sent') {
+            logger.info('Skipping already-sent email in batch retry', { batchId, recordId: currentRecord.id, email: recEmail });
+            await attendanceRepository.markRecordSent(currentRecord.id, 'idempotent-skip', 'ALREADY_SENT');
+            await attendanceRepository.recalculateBatchStatus(batchId);
+          }
+          continue;
+        }
+
+        // 5. ATOMIC STATE TRANSITION: Only transition if status is 'queued' and attempts < maxAttempts
+        const claimed = await attendanceRepository.claimAttendanceRecord(currentRecord.id, maxAttempts);
+        if (!claimed) {
+          logger.info('Record was not claimed (concurrent worker, already sent, or max attempts reached)', {
+            recordId: currentRecord.id,
+            batchId,
+          });
           continue;
         }
 
@@ -196,43 +249,19 @@ class AttendanceService {
         const name = faculty?.name || record.name || record.employeeName || 'Faculty Member';
         const empId = faculty?.employeeId || faculty?.cfmsId || recEmpId || '';
 
-        const monthNum = record.month ? parseInt(record.month, 10) : new Date().getMonth() + 1;
-        const yearNum = record.year ? parseInt(record.year, 10) : new Date().getFullYear();
+        const recMonthNum = record.month ? parseInt(record.month, 10) : monthNum;
+        const recYearNum = record.year ? parseInt(record.year, 10) : yearNum;
         const MONTH_NAMES = [
           'January', 'February', 'March', 'April', 'May', 'June',
           'July', 'August', 'September', 'October', 'November', 'December'
         ];
-        const monthName = MONTH_NAMES[monthNum - 1] || 'Monthly';
-        const periodLabel = `${monthName} ${yearNum}`;
-
-        // Mark as processing and increment attempt counter
-        await db.query(
-          `UPDATE attendance_records
-           SET status = 'processing', attempts = attempts + 1, updated_at = NOW()
-           WHERE batch_id = ? AND (email = ? OR employee_id = ?)`,
-          [batchId, recEmail || null, recEmpId || null]
-        );
-
-        // Skip item if already at max attempts (3)
-        const [itemRow] = await db.query(
-          `SELECT attempts FROM attendance_records WHERE batch_id = ? AND (email = ? OR employee_id = ?) LIMIT 1`,
-          [batchId, recEmail || null, recEmpId || null]
-        );
-        if (itemRow && itemRow.attempts > 3) {
-          logger.warn('Skipping item: max attempts reached', { batchId, email: recEmail, empId: recEmpId });
-          await db.query(
-            `UPDATE attendance_records SET status = 'failed', error_message = 'Max attempts (3) reached', updated_at = NOW()
-             WHERE batch_id = ? AND (email = ? OR employee_id = ?)`,
-            [batchId, recEmail || null, recEmpId || null]
-          );
-          await attendanceRepository.recalculateBatchStatus(batchId);
-          continue;
-        }
+        const monthName = MONTH_NAMES[recMonthNum - 1] || 'Monthly';
+        const periodLabel = `${monthName} ${recYearNum}`;
 
         let reportData = null;
         let pdfBuffer = null;
         try {
-          reportData = await reportService.getReportData(empId, monthNum, yearNum);
+          reportData = await reportService.getReportData(empId, recMonthNum, recYearNum);
           pdfBuffer = await reportService.generatePdf(reportData);
         } catch (reportErr) {
           logger.error('Failed to generate PDF for batch faculty:', { empId, error: reportErr.message });
@@ -240,7 +269,7 @@ class AttendanceService {
 
         const attachments = pdfBuffer ? [
           {
-            filename: `attendance-${empId}-${yearNum}-${monthNum}.pdf`,
+            filename: `attendance-${empId}-${recYearNum}-${recMonthNum}.pdf`,
             content: pdfBuffer,
           }
         ] : [];
@@ -265,35 +294,48 @@ class AttendanceService {
 
         const emailOptions = {
           to: record.email || (reportData && reportData.employee?.email),
-          subject: `Attendance Report — ${monthName} ${yearNum}`,
+          subject: (emailTemplate?.subject || 'Attendance Report') + ` — ${monthName} ${recYearNum}`,
           html,
           text: plainText,
           employeeId: empId,
           employeeName: name,
           attachments,
           skipSignature: true,
-          month: monthNum,
-          year: yearNum,
+          month: recMonthNum,
+          year: recYearNum,
         };
 
+        const itemStartTime = Date.now();
         try {
           const emailRes = await emailService.sendEmail(emailOptions, settings);
-          await db.query(
-            `UPDATE attendance_records 
-             SET status = 'sent', provider = ?, message_id = ?, error_message = NULL, sent_at = NOW(), updated_at = NOW() 
-             WHERE batch_id = ? AND (email = ? OR employee_id = ?)`,
-            [emailRes.provider || 'smtp', emailRes.messageId, batchId, recEmail || null, recEmpId || null]
+          await attendanceRepository.markRecordSent(
+            currentRecord.id,
+            emailRes.providerUsed || emailRes.provider || 'smtp',
+            emailRes.messageId || null
           );
+          logger.info('Attendance record sent successfully', {
+            batchId,
+            recordId: currentRecord.id,
+            employeeId: empId,
+            attempt: currentRecord.attempts + 1,
+            provider: emailRes.providerUsed || emailRes.provider || 'smtp',
+            status: 'sent',
+            durationMs: Date.now() - itemStartTime,
+          });
         } catch (emailErr) {
-          await db.query(
-            `UPDATE attendance_records 
-             SET status = 'failed', error_message = ?, sent_at = NULL, updated_at = NOW() 
-             WHERE batch_id = ? AND (email = ? OR employee_id = ?)`,
-            [emailErr.message, batchId, recEmail || null, recEmpId || null]
-          );
+          const errorMessage = emailErr.message || 'Email delivery failed';
+          await attendanceRepository.markRecordFailed(currentRecord.id, errorMessage);
+          logger.error('Attendance record dispatch failed', {
+            batchId,
+            recordId: currentRecord.id,
+            employeeId: empId,
+            attempt: currentRecord.attempts + 1,
+            status: 'failed',
+            durationMs: Date.now() - itemStartTime,
+            errorCode: emailErr.statusCode || 500,
+            errorMessage,
+          });
         }
-
-        await attendanceRepository.recalculateBatchStatus(batchId);
 
         // Batch delay between emails
         if (i < attendanceData.length - 1) {
@@ -301,12 +343,13 @@ class AttendanceService {
         }
       }
 
+      await attendanceRepository.recalculateBatchStatus(batchId);
       logger.info('Batch processing completed', { batchId });
     } catch (error) {
       logger.error('Batch processing exception', { batchId, error: error.message });
-      // If something crashed, ensure we mark remaining queued/sending records as failed
+      // Clean up only stuck processing records for this batch
       await db.query(
-        `UPDATE attendance_records SET status = 'failed', error_message = ? WHERE batch_id = ? AND status IN ('queued', 'sending')`,
+        `UPDATE attendance_records SET status = 'failed', error_message = ? WHERE batch_id = ? AND status = 'processing'`,
         [error.message, batchId]
       );
       await attendanceRepository.recalculateBatchStatus(batchId);
@@ -378,8 +421,9 @@ class AttendanceService {
 
     const facultyIds = failedRecords.map((r) => r.faculty_id);
     const recordsObj = await monthlyAttendanceRepository.getMonthlyAttendance(originalBatch.month, originalBatch.year);
-    const targetRecords = recordsObj.records
-      .filter((r) => facultyIds.includes(r.facultyId) || facultyIds.includes(r.cfmsId) || facultyIds.includes(r.id));
+    const targetRecords = recordsObj?.records?.filter((r) =>
+      facultyIds.includes(r.facultyId) || facultyIds.includes(r.cfmsId) || facultyIds.includes(r.id)
+    ) || [];
 
     const attendanceData = targetRecords.map((r) => ({
       employeeId: r.cfmsId,
@@ -424,25 +468,39 @@ class AttendanceService {
 
   /**
    * Retry a single attendance_records item.
-   * Resets status to 'queued' and increments attempts so the batch worker picks it up.
+   * Atomically resets status from 'failed' to 'queued' and enqueues single item.
    */
   async retryItem(recordId) {
+    if (!recordId) throw new AppError(400, 'Record ID is required.');
+
     const [item] = await db.query(
       `SELECT * FROM attendance_records WHERE id = ?`,
       [recordId]
     );
     if (!item) throw new AppError(404, 'Dispatch record not found.');
     if (item.status === 'sent') throw new AppError(400, 'This report has already been sent.');
+    if (item.status === 'processing') throw new AppError(409, 'Record is currently being processed by a worker.');
+    const maxAttempts = config.attendanceMaxAttempts || 3;
+    if (item.attempts >= maxAttempts) {
+      throw new AppError(400, `Maximum retry limit (${maxAttempts} attempts) reached for this record.`);
+    }
+    if (item.status === 'queued') {
+      return { success: true, message: 'Record is already queued for dispatch.' };
+    }
 
-    // Reset to queued — re-enqueue its parent batch job
-    await db.query(
+    // Atomic reset to queued
+    const resetResult = await db.query(
       `UPDATE attendance_records
        SET status = 'queued', error_message = NULL, updated_at = NOW()
-       WHERE id = ?`,
-      [recordId]
+       WHERE id = ? AND status = 'failed' AND attempts < ?`,
+      [recordId, maxAttempts]
     );
 
-    // Pull batch info to reconstruct a minimal dispatch job
+    if (resetResult.affectedRows === 0) {
+      throw new AppError(409, 'Record status changed concurrently. Please refresh.');
+    }
+
+    // Pull batch info
     const [batch] = await db.query(
       `SELECT ab.*, ar.faculty_id, ar.employee_id, ar.employee_name, ar.email, ar.month, ar.year
        FROM attendance_batches ab
@@ -453,6 +511,8 @@ class AttendanceService {
 
     if (!batch) throw new AppError(404, 'Parent batch not found.');
 
+    await attendanceRepository.recalculateBatchStatus(batch.batch_id);
+
     const monthNum = parseInt(batch.month, 10);
     const yearNum = parseInt(batch.year, 10);
     const recordsObj = await monthlyAttendanceRepository.getMonthlyAttendance(monthNum, yearNum);
@@ -460,19 +520,17 @@ class AttendanceService {
       r => r.facultyId === batch.faculty_id || r.cfmsId === batch.employee_id || r.id === batch.faculty_id
     );
 
-    if (!targetRecord) throw new AppError(404, 'Attendance data for this faculty member not found.');
-
     const attendanceData = [{
-      employeeId: targetRecord.cfmsId,
-      employeeName: targetRecord.name,
-      email: targetRecord.email,
+      employeeId: targetRecord?.cfmsId || batch.employee_id,
+      employeeName: targetRecord?.name || batch.employee_name,
+      email: targetRecord?.email || batch.email,
       month: monthNum,
       year: yearNum,
-      presentDays: targetRecord.presentDays,
-      workingDays: targetRecord.totalWorkingDays,
-      absentDays: targetRecord.absentDays,
-      attendancePercentage: targetRecord.attendancePercentage,
-      holidays: targetRecord.holidayDays,
+      presentDays: targetRecord?.presentDays || 0,
+      workingDays: targetRecord?.totalWorkingDays || 24,
+      absentDays: targetRecord?.absentDays || 0,
+      attendancePercentage: targetRecord?.attendancePercentage || 0,
+      holidays: targetRecord?.holidayDays || 0,
     }];
 
     const facultyList = [{
@@ -488,9 +546,10 @@ class AttendanceService {
       attendanceData,
       emailTemplate: { subject: batch.email_template_subject },
       facultyList,
+      targetRecordId: recordId,
     });
 
-    logger.info('Single item retry enqueued', { recordId, batchId: batch.batch_id });
+    logger.info('Single item retry enqueued', { recordId, batchId: batch.batch_id, attempt: item.attempts });
     return { success: true, message: 'Retry queued for this faculty member.' };
   }
 
@@ -581,12 +640,12 @@ class AttendanceService {
         // Map faculty_id to its latest status
         const statusMap = new Map();
         for (const row of dispatchRows) {
-          // Priority: sent > sending > queued > failed
+          // Priority: sent > processing > queued > failed
           const existing = statusMap.get(row.faculty_id);
           if (!existing) {
             statusMap.set(row.faculty_id, row.status);
           } else {
-            const priority = { sent: 4, sending: 3, queued: 2, failed: 1 };
+            const priority = { sent: 4, processing: 3, queued: 2, failed: 1 };
             if ((priority[row.status] || 0) > (priority[existing] || 0)) {
               statusMap.set(row.faculty_id, row.status);
             }
@@ -646,8 +705,8 @@ class AttendanceService {
    */
   static registerHandlers() {
     jobQueueService.register('dispatch_attendance_batch', async (payload) => {
-      const { batchId, attendanceData, emailTemplate, facultyList } = payload;
-      await attendanceService.dispatchBatch(batchId, attendanceData, emailTemplate, facultyList);
+      const { batchId, attendanceData, emailTemplate, facultyList, targetRecordId } = payload;
+      await attendanceService.dispatchBatch(batchId, attendanceData, emailTemplate, facultyList, targetRecordId);
     });
   }
 }

@@ -115,6 +115,7 @@ class UserService {
 
     const updates = { ...data };
     if (data.photoURL !== undefined) updates.photo_url = data.photoURL;
+    if (data.higherEducation !== undefined) updates.higher_education = data.higherEducation;
 
     const updated = await userRepository.update(id, updates);
 

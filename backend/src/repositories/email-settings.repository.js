@@ -2,6 +2,7 @@
 import db from '../config/database.js';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../utils/logger.js';
+import { encryptSecret, decryptSecret } from '../utils/crypto.js';
 
 class EmailSettingsRepository {
   async ensureTables() {
@@ -52,6 +53,8 @@ class EmailSettingsRepository {
     if (rows.length === 0) {
       // Seed initial default record
       const defaultId = 'default';
+      const initialSmtp = encryptSecret(process.env.SMTP_PASSWORD || '');
+      const initialResend = encryptSecret(process.env.RESEND_API_KEY || '');
       await db.query(
         `INSERT INTO email_settings (
           id, active_provider, fallback_enabled, fallback_order,
@@ -62,12 +65,22 @@ class EmailSettingsRepository {
           'smtp.gmail.com', 587, 'tls', 'reports@jntugvcev.edu.in', ?,
           ?, 'notify.jntugvcev.edu.in', 'Digital Monitoring Cell', 'reports@jntugvcev.edu.in', 'admin@apfrs.in', 'Monthly Attendance Statement — {{month}} {{year}}'
         )`,
-        [defaultId, process.env.SMTP_PASSWORD || '', process.env.RESEND_API_KEY || '']
+        [defaultId, initialSmtp, initialResend]
       );
       const inserted = await db.query(`SELECT * FROM email_settings WHERE id = 'default' LIMIT 1`);
-      return inserted[0];
+      const row = inserted[0];
+      return {
+        ...row,
+        smtp_password: decryptSecret(row.smtp_password),
+        resend_api_key: decryptSecret(row.resend_api_key),
+      };
     }
-    return rows[0];
+    const row = rows[0];
+    return {
+      ...row,
+      smtp_password: decryptSecret(row.smtp_password),
+      resend_api_key: decryptSecret(row.resend_api_key),
+    };
   }
 
   async updateSettings(data, updatedBy = 'Admin') {
@@ -156,6 +169,9 @@ class EmailSettingsRepository {
       changedLabels.push('Resend API key updated');
     }
 
+    const encryptedSmtp = encryptSecret(smtpPass);
+    const encryptedResend = encryptSecret(resendKey);
+
     await db.query(
       `UPDATE email_settings SET
         active_provider = ?,
@@ -189,10 +205,10 @@ class EmailSettingsRepository {
         newPort,
         newEncryption,
         newUsername,
-        smtpPass,
+        encryptedSmtp,
         newPool,
         newTimeout,
-        resendKey,
+        encryptedResend,
         newResendDomain,
         newResendTag,
         newFromName,

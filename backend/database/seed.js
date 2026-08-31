@@ -31,6 +31,7 @@ const departments = [
   { id: 'dept-it', name: 'Information Technology', code: 'IT', description: 'Department of Information Technology', status: 'active', hod_id: null, eapcet_code: 'IT', branch_code: '06' },
   { id: 'dept-me', name: 'Mechanical Engineering', code: 'ME', description: 'Department of Mechanical Engineering', status: 'active', hod_id: null, eapcet_code: 'MEC', branch_code: '03' },
   { id: 'dept-civil', name: 'Civil Engineering', code: 'CIVIL', description: 'Department of Civil Engineering', status: 'active', hod_id: null, eapcet_code: 'CIV', branch_code: '01' },
+  { id: 'dept-met', name: 'Metallurgical Engineering', code: 'MET', description: 'Department of Metallurgical Engineering', status: 'active', hod_id: null, eapcet_code: 'MET', branch_code: '08' },
   { id: 'dept-bsh', name: 'Basic Sciences & Humanities', code: 'BS&HSS', description: 'Department of Basic Sciences & Humanities', status: 'active', hod_id: null, eapcet_code: 'BS&HSS', branch_code: '99' },
   { id: 'dept-admin', name: 'Administration', code: 'Administration', description: 'College Administration', status: 'active', hod_id: null, eapcet_code: 'ADMIN', branch_code: '00' }
 ];
@@ -206,20 +207,25 @@ async function seedFaculty() {
     seenCfms.add(cfmsId);
 
     const designation = String(person.designation || 'Assistant Professor').trim();
-    const department = String(person.department || 'General').trim();
+    let department = String(person.department || 'BS&HSS').trim();
+    if (department === 'CE') department = 'CIVIL';
+    else if (department === 'Computer Science and Engineering') department = 'CSE';
+    else if (['Math', 'Maths', 'Chemistry', 'Physics', 'Commerce', 'BSH', 'BS&H'].includes(department)) department = 'BS&HSS';
+
     const mobile = String(person.mobile || '').trim();
     const gender = String(person.gender || 'male').trim().toLowerCase();
     const rawStatus = String(person.job_status || '').trim().toLowerCase();
     const jobStatus = rawStatus === 'regular' ? 'Regular' : 'Contract';
+    const higherEducation = person.higher_education || (designation.includes('Professor') && !designation.includes('Assistant') ? 'Ph.D' : 'M.Tech');
 
     const userId = `fac-${person.id}`;
 
     await db.query(`
       INSERT INTO users (
         id, cfms_id, email, password_hash, name, designation,
-        department, mobile, gender, job_status, role, is_active
+        department, mobile, gender, job_status, higher_education, role, is_active
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'faculty', 1)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'faculty', 1)
       ON DUPLICATE KEY UPDATE
         cfms_id = VALUES(cfms_id),
         email = VALUES(email),
@@ -229,6 +235,7 @@ async function seedFaculty() {
         mobile = VALUES(mobile),
         gender = VALUES(gender),
         job_status = VALUES(job_status),
+        higher_education = VALUES(higher_education),
         role = 'faculty',
         is_active = 1
     `, [
@@ -241,7 +248,8 @@ async function seedFaculty() {
       department,
       mobile,
       gender,
-      jobStatus
+      jobStatus,
+      higherEducation
     ]);
 
     summary.facultyCount++;

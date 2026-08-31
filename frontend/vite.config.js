@@ -19,6 +19,10 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(__dirname, './src'),
         'layout': path.resolve(__dirname, '../.layout'),
       },
+      dedupe: ['react', 'react-dom', 'react-router', 'react-router-dom'],
+    },
+    optimizeDeps: {
+      include: ['react', 'react-dom', 'react-router-dom', '@tanstack/react-query'],
     },
     server: {
       host: '0.0.0.0',
@@ -31,6 +35,32 @@ export default defineConfig(({ mode }) => {
           secure: false,
         }
       }
-    }
+    },
+    build: {
+      chunkSizeWarningLimit: 600,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('react') || id.includes('react-dom') || id.includes('react-router') || id.includes('@tanstack/react-query')) {
+                return 'vendor-react';
+              }
+              if (id.includes('recharts') || id.includes('d3-')) {
+                return 'vendor-charts';
+              }
+              if (id.includes('xlsx')) {
+                return 'vendor-sheets';
+              }
+              if (id.includes('html-to-image') || id.includes('jspdf')) {
+                return 'vendor-export';
+              }
+              if (id.includes('lucide-react')) {
+                return 'vendor-icons';
+              }
+            }
+          },
+        },
+      },
+    },
   }
 })

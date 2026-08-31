@@ -5,6 +5,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import db from '../config/database.js';
+import { config } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 
 /** Exponential back-off delay in seconds: 30s, 5m, 30m */
@@ -35,9 +36,9 @@ class JobQueueService {
    * @param {unknown} payload - Must be JSON-serialisable
    * @param {number} [maxAttempts=3]
    */
-  async enqueue(type, payload, maxAttempts = 3) {
+  async enqueue(type, payload, maxAttempts = 3, conn = db) {
     const id = uuidv4();
-    await db.query(
+    await conn.query(
       `INSERT INTO jobs (id, type, payload, status, attempts, max_attempts, run_after, created_at, updated_at)
        VALUES (?, ?, ?, 'queued', 0, ?, NOW(), NOW(), NOW())`,
       [id, type, JSON.stringify(payload), maxAttempts]
@@ -70,10 +71,29 @@ class JobQueueService {
   }
 
   /**
+   * Stop polling and gracefully await in-flight jobs to complete.
+   * @param {number} [timeoutMs=15000]
+   */
+  async drain(timeoutMs = 15000) {
+    this.stop();
+    const start = Date.now();
+    while (this._activeJobs > 0 && Date.now() - start < timeoutMs) {
+      logger.info(`Waiting for ${this._activeJobs} in-flight job(s) to complete...`);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    if (this._activeJobs > 0) {
+      logger.warn(`Drain timeout reached with ${this._activeJobs} active job(s) still in progress.`);
+    } else {
+      logger.info('All in-flight jobs completed cleanly.');
+    }
+  }
+
+  /**
    * Reclaims jobs that were left in 'running' state if a worker instance crashed.
    */
   async _recoverStaleJobs() {
     try {
+      const timeoutSec = config.attendanceProcessingTimeoutSeconds || 600;
       await db.query(
         `UPDATE jobs
          SET status = 'queued',
@@ -81,7 +101,8 @@ class JobQueueService {
              run_after = NOW(),
              updated_at = NOW()
          WHERE status = 'running'
-           AND updated_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)`
+           AND updated_at < DATE_SUB(NOW(), INTERVAL ? SECOND)`,
+        [timeoutSec]
       );
     } catch (err) {
       logger.warn('Stale job recovery warning:', { error: err.message });

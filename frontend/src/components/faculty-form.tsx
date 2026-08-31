@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link } from "react-router-dom";
 import { Save, User as UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ export const emptyFaculty: FacultyInput = {
   email: "",
   photoURL: null,
   designation: "Assistant Professor",
+  higherEducation: "",
   department: "IT",
   mobile: "",
   gender: "male",
@@ -221,7 +222,7 @@ export function FacultyForm({
           Academic department, official designation, and employment status.
         </p>
 
-        <div className="mt-5 grid gap-5 sm:grid-cols-3">
+        <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-2">
             <Label htmlFor="department">Department</Label>
             <Select
@@ -249,8 +250,21 @@ export function FacultyForm({
               value={values.designation}
               maxLength={80}
               onChange={(e) => set("designation", e.target.value)}
+              placeholder="Assistant Professor"
             />
             {field("designation")}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="higherEducation">Higher education</Label>
+            <Input
+              id="higherEducation"
+              value={values.higherEducation || ""}
+              maxLength={100}
+              onChange={(e) => set("higherEducation", e.target.value)}
+              placeholder="e.g. Ph.D, M.Tech, M.Sc"
+            />
+            {field("higherEducation")}
           </div>
 
           <div className="space-y-2">

@@ -151,13 +151,18 @@ class MonthlyAttendanceRepository {
             ? Math.min(100, Math.round((effectivePresent / officialWorkingDays) * 1000) / 10)
             : 0;
 
+          let normalizedDept = String(existingFaculty.department || 'BS&HSS').trim();
+          if (normalizedDept === 'CE') normalizedDept = 'CIVIL';
+          else if (normalizedDept === 'Computer Science and Engineering') normalizedDept = 'CSE';
+          else if (['Math', 'Maths', 'Chemistry', 'Physics', 'Commerce', 'BSH', 'BS&H'].includes(normalizedDept)) normalizedDept = 'BS&HSS';
+
           const model = new FacultyMonthlyAttendance({
             sheetId,
             facultyId,
             cfmsId,
             name: existingFaculty.name,
             email: existingFaculty.email,
-            department: existingFaculty.department,
+            department: normalizedDept,
             designation: existingFaculty.designation,
             gender: existingFaculty.gender,
             incharge: existingFaculty.incharge,

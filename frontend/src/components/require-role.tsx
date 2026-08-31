@@ -1,4 +1,4 @@
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import type { ReactNode } from "react";
 import { Loader2 } from "lucide-react";
@@ -12,9 +12,9 @@ export function RequireRole({ roles, children }: { roles: Role[]; children: Reac
   useEffect(() => {
     if (!ready) return;
     if (!user) {
-      navigate({ to: "/login", replace: true });
+      navigate("/login", { replace: true });
     } else if (!roles.includes(user.role)) {
-      navigate({ to: landingFor(user.role), replace: true });
+      navigate(landingFor(user.role), { replace: true });
     }
   }, [ready, user, roles, navigate]);
 

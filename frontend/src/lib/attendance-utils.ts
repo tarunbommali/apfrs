@@ -84,3 +84,46 @@ export function calculateTotalWorkingHours(dailyRecords: any[]): string {
   const minutes = totalMinutes % 60;
   return `${hours}h ${minutes}m`;
 }
+
+export function normalizeDepartmentCode(
+  dept: string | null | undefined,
+  managedDepts: Array<{ code?: string; name?: string }> = []
+): string {
+  if (!dept) return "Uncategorized";
+  const clean = dept.trim();
+  const lower = clean.toLowerCase();
+
+  // 1. Direct match on code or name from managed departments
+  for (const md of managedDepts) {
+    if (md.code && md.code.toLowerCase() === lower) return md.code;
+    if (md.name && md.name.toLowerCase() === lower) return md.code || md.name;
+  }
+
+  // 2. Standard aliases mapping to college managed department codes
+  if (lower === "ce" || lower === "civil" || lower.includes("civil")) return "CIVIL";
+  if (lower === "cse" || lower.includes("computer science")) return "CSE";
+  if (lower === "ece" || lower.includes("electronics & communication") || lower.includes("electronics and communication")) return "ECE";
+  if (lower === "eee" || lower.includes("electrical & electronics") || lower.includes("electrical and electronics")) return "EEE";
+  if (lower === "it" || lower.includes("information technology")) return "IT";
+  if (lower === "me" || lower === "mech" || lower.includes("mechanical")) return "ME";
+  if (lower === "met" || lower.includes("metallurg")) return "MET";
+  if (
+    lower === "bs&hss" ||
+    lower === "bsh" ||
+    lower === "bs&h" ||
+    lower.includes("basic science") ||
+    lower === "math" ||
+    lower === "maths" ||
+    lower.includes("mathematics") ||
+    lower === "physics" ||
+    lower === "chemistry" ||
+    lower === "commerce" ||
+    lower === "humanities" ||
+    lower === "english"
+  ) {
+    return "BS&HSS";
+  }
+
+  return clean;
+}
+

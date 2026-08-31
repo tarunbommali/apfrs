@@ -1,9 +1,4 @@
 // backend/src/repositories/attendance.repository.js
-//
-// All persistence is MySQL-only. In-memory Map fallbacks have been removed
-// because the server exits at startup if MySQL is unavailable — maintaining
-// two execution modes only masked bugs and added dead code.
-
 import { BaseRepository } from './base.repository.js';
 import db from '../config/database.js';
 import { AttendanceBatch } from '../models/Attendance.js';
@@ -16,7 +11,7 @@ class AttendanceRepository extends BaseRepository {
 
   // ── Create ──────────────────────────────────────────────────────────────────
 
-  async createBatch(data) {
+  async createBatch(data, conn = db) {
     const batch = new AttendanceBatch(data);
 
     const sql = `
@@ -25,7 +20,7 @@ class AttendanceRepository extends BaseRepository {
         email_template_subject, month, year, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
     `;
-    await db.query(sql, [
+    await conn.query(sql, [
       batch.id,
       batch.batchId,
       batch.status,
@@ -37,7 +32,6 @@ class AttendanceRepository extends BaseRepository {
       batch.year,
     ]);
 
-    // Phase 5: bulk INSERT replaces the previous per-record loop.
     if (data.facultyList && data.facultyList.length > 0) {
       const placeholders = data.facultyList
         .map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())')
@@ -55,7 +49,7 @@ class AttendanceRepository extends BaseRepository {
         'queued',
       ]);
 
-      await db.query(
+      await conn.query(
         `INSERT INTO attendance_records (
            id, batch_id, faculty_id, employee_id, employee_name, email,
            month, year, status, created_at, updated_at
@@ -65,6 +59,43 @@ class AttendanceRepository extends BaseRepository {
     }
 
     return batch;
+  }
+
+  // ── Atomic Claiming & Status Operations ──────────────────────────────────────
+
+  /**
+   * Atomically claims a queued record for processing.
+   * Enforces status === 'queued' and attempts < maxAttempts.
+   * @returns {Promise<boolean>} true if worker owns the record lease
+   */
+  async claimAttendanceRecord(recordId, maxAttempts = 3, conn = db) {
+    const result = await conn.query(
+      `UPDATE attendance_records
+       SET status = 'processing', attempts = attempts + 1, updated_at = NOW()
+       WHERE id = ? AND status = 'queued' AND attempts < ?`,
+      [recordId, maxAttempts]
+    );
+    return result.affectedRows === 1;
+  }
+
+  async markRecordSent(recordId, provider, messageId, conn = db) {
+    const result = await conn.query(
+      `UPDATE attendance_records
+       SET status = 'sent', provider = ?, message_id = ?, error_message = NULL, sent_at = NOW(), updated_at = NOW()
+       WHERE id = ? AND status = 'processing'`,
+      [provider || 'smtp', messageId || null, recordId]
+    );
+    return result.affectedRows === 1;
+  }
+
+  async markRecordFailed(recordId, errorMessage, conn = db) {
+    const result = await conn.query(
+      `UPDATE attendance_records
+       SET status = 'failed', error_message = ?, sent_at = NULL, updated_at = NOW()
+       WHERE id = ? AND status = 'processing'`,
+      [errorMessage || 'Dispatch failed', recordId]
+    );
+    return result.affectedRows === 1;
   }
 
   // ── Update ──────────────────────────────────────────────────────────────────
@@ -102,7 +133,7 @@ class AttendanceRepository extends BaseRepository {
         SUM(status = 'sent') as sent,
         SUM(status = 'failed') as failed,
         SUM(status = 'queued') as queued,
-        SUM(status = 'sending') as sending
+        SUM(status = 'processing') as processing
        FROM attendance_records
        WHERE batch_id = ?`,
       [batchId]
@@ -112,16 +143,18 @@ class AttendanceRepository extends BaseRepository {
     const sent = Number(counts.sent || 0);
     const failed = Number(counts.failed || 0);
     const queued = Number(counts.queued || 0);
-    const sending = Number(counts.sending || 0);
+    const processing = Number(counts.processing || 0);
 
     let status = 'pending';
-    if (sent === total) {
+    if (total === 0) {
+      status = 'pending';
+    } else if (sent === total) {
       status = 'completed';
     } else if (failed === total) {
       status = 'failed';
     } else if (sent + failed === total) {
       status = 'partial_failed';
-    } else if (sending > 0 || sent > 0 || failed > 0) {
+    } else if (processing > 0 || (sent + failed > 0 && sent + failed < total)) {
       status = 'processing';
     } else {
       status = 'pending';
@@ -177,8 +210,6 @@ class AttendanceRepository extends BaseRepository {
     return rows.map((r) => new AttendanceBatch(r));
   }
 
-  // Phase 3 fix: was returning all-batch count regardless of facultyId.
-  // Now queries attendance_records filtered by faculty_id.
   async getFacultyAttendance(facultyId) {
     const sql = `
       SELECT
@@ -200,8 +231,6 @@ class AttendanceRepository extends BaseRepository {
     };
   }
 
-  // Phase 3 fix: was loading every batch row into JS then counting.
-  // Now uses a single SQL aggregation.
   async getStats() {
     const sql = `
       SELECT

@@ -34,6 +34,7 @@ export const facultySchema = z.object({
   mobile: z.string().trim().regex(/^[0-9]{10}$/, "Mobile must be exactly 10 digits"),
   gender: z.enum(["male", "female", "other"]).default("male"),
   jobStatus: z.enum(["Regular", "contract"]),
+  higherEducation: z.string().trim().max(100, "Higher education must be under 100 characters").optional().nullable().default(null),
   present: z.coerce.number().int().min(0).max(31).default(0),
   absent: z.coerce.number().int().min(0).max(31).default(0),
   leave: z.coerce.number().int().min(0).max(31).default(0),

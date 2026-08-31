@@ -1,4 +1,4 @@
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { Search } from "lucide-react";
 import {
@@ -38,7 +38,7 @@ export function GlobalSearch() {
 
   const go = (to: string) => {
     setOpen(false);
-    void navigate({ to });
+    navigate(to);
   };
 
   return (

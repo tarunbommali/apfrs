@@ -24,6 +24,8 @@ export const facultyCreateSchema = z.object({
   mobile: z.string().optional(),
   gender: z.enum(['male', 'female', 'other']).optional(),
   job_status: z.enum(Object.values(JOB_STATUS)).optional(),
+  higher_education: z.string().max(100).optional().nullable(),
+  higherEducation: z.string().max(100).optional().nullable(),
 });
 
 export const facultyUpdateSchema = facultyCreateSchema.partial();
@@ -65,6 +67,7 @@ export const attendanceSendSchema = z.object({
     })
     .optional(),
   sentBy: z.string().optional(),
+  forceResend: z.boolean().optional(),
 });
 
 export const departmentCreateSchema = z.object({

@@ -189,10 +189,10 @@ class UserRepository extends BaseRepository {
     const sql = `
       INSERT INTO users (
         id, cfms_id, name, email, photo_url, password_hash, role, department,
-        designation, mobile, gender, job_status, incharge, is_active,
+        designation, mobile, gender, job_status, higher_education, incharge, is_active,
         activation_token_hash, activation_expires_at, must_change_password,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
     `;
     await db.query(sql, [
       user.id,
@@ -207,6 +207,7 @@ class UserRepository extends BaseRepository {
       user.mobile,
       user.gender || 'male',
       user.job_status,
+      user.higher_education || null,
       user.incharge || 'None',
       user.isActive ? 1 : 0,
       user.activationTokenHash  || null,
@@ -237,7 +238,7 @@ class UserRepository extends BaseRepository {
 
     const allowed = [
       'name', 'email', 'photo_url', 'designation', 'department', 'mobile', 'gender',
-      'job_status', 'incharge', 'is_active', 'password_hash',
+      'job_status', 'higher_education', 'incharge', 'is_active', 'password_hash',
       // Activation fields (cleared by the activate endpoint)
       'activation_token_hash', 'activation_expires_at', 'must_change_password',
     ];

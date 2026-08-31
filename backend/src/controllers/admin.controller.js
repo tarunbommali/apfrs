@@ -9,6 +9,7 @@ import { departmentService } from '../services/department.service.js';
 import { calendarRepository } from '../repositories/calendar.repository.js';
 import { emailSettingsRepository } from '../repositories/email-settings.repository.js';
 import { sendSuccess, sendCreated } from '../utils/response.js';
+import { AppError } from '../utils/errors.js';
 
 export class AdminController {
   async getFacultyList(req, res, next) {
@@ -65,6 +66,7 @@ export class AdminController {
 
   async sendAttendance(req, res, next) {
     try {
+      const idempotencyKey = req.headers['idempotency-key'] || req.body.idempotencyKey || null;
       const result = await attendanceService.sendAttendance({
         attendanceData: req.body.attendanceData,
         emailTemplate: req.body.emailTemplate,
@@ -73,7 +75,8 @@ export class AdminController {
         month: req.body.month,
         year: req.body.year,
         facultyIds: req.body.facultyIds,
-      });
+        forceResend: req.body.forceResend,
+      }, idempotencyKey);
       return sendSuccess(res, result, 202);
     } catch (error) {
       next(error);
@@ -407,6 +410,16 @@ export class AdminController {
   async getBatchItems(req, res, next) {
     try {
       const { batchId } = req.params;
+      if (!batchId) throw new AppError(400, 'Batch ID parameter is required.');
+
+      const [batch] = await db.query(
+        `SELECT batch_id FROM attendance_batches WHERE batch_id = ?`,
+        [batchId]
+      );
+      if (!batch) {
+        throw new AppError(404, 'Attendance batch not found.');
+      }
+
       const rows = await db.query(
         `SELECT id, faculty_id, employee_id, employee_name, email, month, year,
                 status, attempts, provider, message_id, error_message, sent_at,
@@ -416,7 +429,7 @@ export class AdminController {
          ORDER BY created_at ASC`,
         [batchId]
       );
-      return sendSuccess(res, { items: rows, total: rows.length });
+      return sendSuccess(res, { items: rows, total: rows.length, batchId });
     } catch (error) {
       next(error);
     }
@@ -425,8 +438,18 @@ export class AdminController {
   async retryItem(req, res, next) {
     try {
       const { recordId } = req.params;
+      if (!recordId) throw new AppError(400, 'Record ID parameter is required.');
       const result = await attendanceService.retryItem(recordId);
       return sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getStats(req, res, next) {
+    try {
+      const stats = await attendanceService.getStats();
+      return sendSuccess(res, { stats });
     } catch (error) {
       next(error);
     }

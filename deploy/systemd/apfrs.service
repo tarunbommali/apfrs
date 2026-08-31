@@ -1,0 +1,36 @@
+[Unit]
+Description=APFRS - Attendance and Faculty Reporting System Backend API
+Documentation=https://github.com/tarunbommali/apfrs
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=apfrs
+Group=apfrs
+WorkingDirectory=/var/www/apfrs/backend
+Environment=NODE_ENV=production
+EnvironmentFile=/var/www/apfrs/backend/.env
+ExecStart=/usr/bin/node src/server.js
+
+# Process Lifecycle & Failure Recovery
+Restart=always
+RestartSec=5s
+TimeoutStopSec=30s
+KillSignal=SIGTERM
+KillMode=mixed
+
+# Security Hardening & Isolation
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+LimitNOFILE=65535
+
+# Standard Logging to journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=apfrs-api
+
+[Install]
+WantedBy=multi-user.target

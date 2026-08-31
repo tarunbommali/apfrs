@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
     mobile VARCHAR(20) DEFAULT '',
     gender ENUM('male', 'female', 'other') NOT NULL DEFAULT 'male',
     job_status ENUM('Regular', 'Contract') NOT NULL DEFAULT 'Regular',
+    higher_education VARCHAR(100) NULL,
     incharge VARCHAR(50) NOT NULL DEFAULT 'None',
     role ENUM('admin', 'faculty') NOT NULL DEFAULT 'faculty',
     is_active BOOLEAN DEFAULT TRUE,
@@ -268,3 +269,19 @@ CREATE TABLE IF NOT EXISTS email_logs (
     INDEX idx_recipient_email (recipient_email),
     INDEX idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 15. IDEMPOTENCY KEYS TABLE
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+    id VARCHAR(50) PRIMARY KEY,
+    idempotency_key VARCHAR(255) UNIQUE NOT NULL,
+    request_path VARCHAR(255) NOT NULL,
+    request_hash VARCHAR(64) NOT NULL,
+    response_code INT NOT NULL DEFAULT 200,
+    response_body JSON NOT NULL,
+    batch_id VARCHAR(50) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL,
+    INDEX idx_key (idempotency_key),
+    INDEX idx_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+

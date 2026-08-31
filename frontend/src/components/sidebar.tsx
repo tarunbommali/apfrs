@@ -1,4 +1,4 @@
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useState } from "react";
 import {
   BarChart3,
@@ -33,8 +33,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useAuth } from "@/lib/auth";
-import logoImg from "@/assests/logo.png";
+import { useAuth } from "@/hooks/useAuth";
+import { useTheme } from "@/context/ThemeContext";
+import logoImg from "@/assets/logo.png";
 
 const SIDEBAR_STORAGE_KEY = "apfrs.sidebar.collapsed";
 
@@ -64,31 +65,11 @@ const navItems: NavItem[] = [
 ];
 
 export function Sidebar() {
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { pathname } = useLocation();
   const { user, signOut } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const role = user?.role ?? "admin";
-
-  const [theme, setTheme] = useState(() => {
-    try {
-      return localStorage.getItem("apfrs.theme") === "dark" ? "dark" : "light";
-    } catch {
-      return "light";
-    }
-  });
-
-  const toggleTheme = () => {
-    const nextTheme = theme === "dark" ? "light" : "dark";
-    setTheme(nextTheme);
-    try {
-      localStorage.setItem("apfrs.theme", nextTheme);
-      if (nextTheme === "dark") {
-        document.documentElement.classList.add("dark");
-      } else {
-        document.documentElement.classList.remove("dark");
-      }
-    } catch (_) {}
-  };
 
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
@@ -113,7 +94,7 @@ export function Sidebar() {
 
   const handleSignOut = () => {
     signOut();
-    navigate({ to: "/login", replace: true });
+    navigate("/login", { replace: true });
   };
 
   const allowedItems = navItems.filter((item) => item.roles.includes(role));
